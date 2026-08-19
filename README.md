@@ -182,6 +182,26 @@ proper PWA install switch on.
 
 ## Theme
 
-Sage green surfaces, white rounded cards, thin line icons, one gold accent that
-marks the single most important thing on any screen. Money in reads green, money
-out reads clay. All tokens live at the top of `css/styles.css`.
+| Role | Colour | Where it lands |
+|---|---|---|
+| **Beige** `#FFF7E6` | canvas | Every page, the entry tray, the sheet background. Warm, not clinical white |
+| **Emerald Pine** `#084734` | primary surface | Top of the hero gradient, selected chips and account cards, icon fills |
+| **Pine** `#00311F` | deep structure | Bottom of every gradient, all body text, toasts |
+| **Lime Glow** `#CEF17B` | the one accent | FAB, save button, active toggle, the amount rule, money-in figures on pine |
+| **Green Tea** `#CDEDB3` | soft tint | Wells and tracks — secondary buttons, meter backgrounds, keypad action keys |
+
+Two working notes on how it is applied:
+
+**The accent is deliberately scarce.** Lime appears on the FAB, the primary
+button, the live indicator dot, and the one figure that matters on a screen —
+nowhere else. Category chips and account cards select in pine instead. If lime
+were used for every selected state it would stop meaning "this one".
+
+**Clay `#A8502C` is the single colour outside the brand set.** A ledger has to
+separate money in from money out at a glance, and a second green cannot do that.
+Clay is the warm complement to Beige, so it belongs to the family rather than
+fighting it. On the dark pine surfaces it lightens to `#EBAC84` to stay legible.
+
+Text contrast was checked, not eyeballed: body 13.5:1 on beige, muted labels
+4.7:1, every on-pine tone between 4.9:1 and 10:1. All tokens live at the top of
+`css/styles.css` — change them there and the whole app follows.

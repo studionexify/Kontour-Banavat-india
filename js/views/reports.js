@@ -51,7 +51,7 @@ export function render(root, ctx) {
           <div class="stat-lbl">NET</div>
         </div>
       </div>
-      ${prev.count ? `<div style="text-align:center;font-size:11.5px;color:var(--sage-200);margin-top:14px">
+      ${prev.count ? `<div style="text-align:center;font-size:11.5px;color:var(--pine-200);margin-top:14px">
         ${compare(t.net, prev.net)} than ${esc(monthShort(shiftMonth(month, -1)))}
       </div>` : ''}
     </header>

@@ -84,7 +84,7 @@ export async function render(root, ctx) {
         </div>
       </div>
       <button class="strip" data-go="reports" style="background:var(--paper);color:var(--ink);box-shadow:var(--shadow)">
-        <div class="strip-ico" style="background:var(--sage-100);color:var(--sage-700)">${icon('chart', 19)}</div>
+        <div class="strip-ico" style="background:var(--pine-100);color:var(--pine-700)">${icon('chart', 19)}</div>
         <div class="strip-txt">
           <div class="strip-t">Net this month ${m.net >= 0 ? '+' : ''}${esc(inr(m.net))}</div>
           <div class="strip-s" style="color:var(--ink-3)">${m.count} entr${m.count === 1 ? 'y' : 'ies'} · tap for the full picture</div>
@@ -182,7 +182,7 @@ function stripHTML(sync, due, m) {
   if (due.length) {
     const r = due[0];
     return `
-      <button class="strip gold" data-due="${r.id}">
+      <button class="strip accent" data-due="${r.id}">
         <div class="strip-ico">${icon('repeat', 19)}</div>
         <div class="strip-txt">
           <div class="strip-t">${esc(r.label)} is due</div>
