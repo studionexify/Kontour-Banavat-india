@@ -37,11 +37,11 @@ export function render(root, ctx) {
 
       <div class="stat-row">
         <div class="stat">
-          <div class="stat-val pos num"><span class="cur">₹</span>${num(t.in)}</div>
+          <div class="stat-val pos num" data-count="${t.in}" data-fmt="inr"></div>
           <div class="stat-lbl">IN</div>
         </div>
         <div class="stat">
-          <div class="stat-val neg num"><span class="cur">₹</span>${num(t.out)}</div>
+          <div class="stat-val neg num" data-count="${t.out}" data-fmt="inr"></div>
           <div class="stat-lbl">OUT</div>
         </div>
         <div class="stat">
@@ -79,6 +79,8 @@ export function render(root, ctx) {
       <section class="sec">
         <button class="btn sec sm" data-export>${icon('download', 16)} Export ${esc(monthShort(state.month))} to CSV</button>
       </section>` : ''}`;
+
+  ctx.setTopbar(monthLabel(state.month), `${t.net < 0 ? '−' : ''}<span class="cur">₹</span>${num(Math.abs(t.net))}`, 'NET');
 
   on(root, '[data-month]', (e, b) => {
     const next = shiftMonth(state.month, Number(b.dataset.month));
@@ -149,6 +151,7 @@ function groupByDay(list) {
 
 function dayHTML(g) {
   return `
+    <section class="daygroup">
     <div class="daybar">
       <b>${esc(dayHeading(g.date))}</b>
       <span>
@@ -157,5 +160,6 @@ function dayHTML(g) {
         ${g.t.out ? `<span style="color:var(--out)">−${esc(inr(g.t.out))}</span>` : ''}
       </span>
     </div>
-    <div class="list">${g.items.map((e) => rowHTML(e)).join('')}</div>`;
+    <div class="list">${g.items.map((e) => rowHTML(e)).join('')}</div>
+    </section>`;
 }

@@ -13,6 +13,7 @@ import { num, inr, todayISO, dmy, dayLabel } from '../format.js';
 import { pickImage, attach, detach, bindToEntry, photos, humanBytes } from '../photos.js';
 import { blobURL } from '../db.js';
 import { aiConfigured, online, readBill, driveAuthed, syncPending } from '../sync.js';
+import { burst } from '../motion.js';
 
 const RATES = [0, 5, 12, 18, 28];
 
@@ -268,6 +269,7 @@ export function openEntrySheet({ entry = null, prefill = null, onSaved } = {}) {
         if (f.jobCode) ensureJob(f.jobCode, { client: f.party });
         await bindToEntry(f.photoIds, saved.id);
         haptic(14);
+        burst();
         toast(editing ? 'Entry updated' : `${f.type === 'in' ? 'Received' : f.type === 'out' ? 'Paid' : 'Moved'} ${inr(saved.total)}`);
         if (driveAuthed() && online()) syncPending().catch(() => {});
         sheet.close();

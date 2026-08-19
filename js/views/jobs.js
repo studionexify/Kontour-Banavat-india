@@ -40,15 +40,15 @@ export function render(root, ctx) {
       </div>
       <div class="stat-row">
         <div class="stat">
-          <div class="stat-val pos num"><span class="cur">₹</span>${num(received)}</div>
+          <div class="stat-val pos num" data-count="${received}" data-fmt="inr"></div>
           <div class="stat-lbl">RECEIVED</div>
         </div>
         <div class="stat">
-          <div class="stat-val neg num"><span class="cur">₹</span>${num(spent)}</div>
+          <div class="stat-val neg num" data-count="${spent}" data-fmt="inr"></div>
           <div class="stat-lbl">SPENT</div>
         </div>
         <div class="stat">
-          <div class="stat-val num" style="color:var(--gold)"><span class="cur">₹</span>${num(owed)}</div>
+          <div class="stat-val num" style="color:var(--lime)" data-count="${owed}" data-fmt="inr"></div>
           <div class="stat-lbl">TO COLLECT</div>
         </div>
       </div>
@@ -74,6 +74,8 @@ export function render(root, ctx) {
           so ${list.length - withTarget.length === 1 ? 'it shows' : 'they show'} no outstanding figure.
         </div>
       </section>` : ''}`;
+
+  ctx.setTopbar('Jobs', `<span class="cur">₹</span>${num(owed)}`, 'TO COLLECT');
 
   on(root, '[data-sort]', (e, b) => { sort = b.dataset.sort; ctx.refresh(); });
   on(root, '[data-jobopen]', (e, b) => openJob(b.dataset.jobopen, ctx));

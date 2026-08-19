@@ -156,6 +156,7 @@ js/
   sync.js               Google Drive upload + Claude bill reading
   export.js             CSV, backup, restore
   icons.js  ui.js       line icons, sheets, toasts
+  motion.js             counters, reveals, ripple, hero↔topbar handover
   views/
     home.js             today, balances, jobs, this month
     entry.js            the add/edit sheet — the screen that matters
@@ -201,6 +202,41 @@ were used for every selected state it would stop meaning "this one".
 separate money in from money out at a glance, and a second green cannot do that.
 Clay is the warm complement to Beige, so it belongs to the family rather than
 fighting it. On the dark pine surfaces it lightens to `#EBAC84` to stay legible.
+
+### Depth, glass and movement
+
+Three rules keep the richer surface from costing legibility:
+
+**Glass floats, it never carries text.** Frosted surfaces are only used for
+chrome that passes *over* content — the top bar that appears once the hero
+scrolls away, the tab bar that content slides under, and the sticky day
+headings in the ledger. Every block of readable detail sits on an opaque card.
+
+**Gradients give depth, not noise.** They run light-to-dark along one axis so
+surfaces read as lit from above, and never travel far enough to change the
+contrast under any text. The icon tiles are the clearest case: a gradient, a
+hairline highlight on the top edge, a shade on the bottom, and a cast shadow
+tinted with the tile's own colour. That combination is what reads as a solid
+object — a bevel alone never does.
+
+**Motion explains, it does not perform.** Blocks enter from just below where
+they belong, staggered in reading order. Figures count up so a change registers
+as a change. Meter bars grow from zero so the relative sizes land. Saving draws
+a tick, because recording money is the one action worth an unambiguous yes.
+
+All of it lives in `js/motion.js` and switches off completely under
+`prefers-reduced-motion`. Every animation also degrades safely: figures paint
+their true value synchronously *before* the count begins, meters use timers
+rather than animation frames, and anything left unrevealed after 1.6s is simply
+shown. If the app is backgrounded mid-load — where the browser stops delivering
+animation frames entirely — you get a static, complete screen rather than a
+blank one.
+
+Scrolling got two specific fixes: day headings in the ledger are bounded by
+their own group so each one hands over to the next instead of every heading in
+the month piling up at the same point, and they sit below the glass bar rather
+than behind it. Secondary lines — the ones carrying job codes and particulars —
+went from 11.5px in the faintest ink to 12.5px in the mid tone.
 
 Text contrast was checked, not eyeballed: body 13.5:1 on beige, muted labels
 4.7:1, every on-pine tone between 4.9:1 and 10:1. All tokens live at the top of

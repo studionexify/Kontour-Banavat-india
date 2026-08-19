@@ -39,11 +39,11 @@ export function render(root, ctx) {
       </div>
       <div class="stat-row">
         <div class="stat">
-          <div class="stat-val pos num"><span class="cur">₹</span>${num(t.in)}</div>
+          <div class="stat-val pos num" data-count="${t.in}" data-fmt="inr"></div>
           <div class="stat-lbl">MONEY IN</div>
         </div>
         <div class="stat">
-          <div class="stat-val neg num"><span class="cur">₹</span>${num(t.out)}</div>
+          <div class="stat-val neg num" data-count="${t.out}" data-fmt="inr"></div>
           <div class="stat-lbl">MONEY OUT</div>
         </div>
         <div class="stat">
@@ -112,6 +112,8 @@ export function render(root, ctx) {
       </div>
     </section>`;
 
+  ctx.setTopbar(monthLabel(month), `${t.net < 0 ? '−' : ''}<span class="cur">₹</span>${num(Math.abs(t.net))}`, 'NET');
+
   on(root, '[data-m]', (e, b) => {
     const next = shiftMonth(month, Number(b.dataset.m));
     if (next > thisMonthKey()) return;
@@ -138,7 +140,7 @@ function meter(c, max, kind) {
         <b>${esc(c.name)}</b>
         <span class="num">${esc(inr(c.amount))}</span>
       </div>
-      <div class="meter-bar"><div class="meter-fill ${kind}" style="width:${pct}%"></div></div>
+      <div class="meter-bar"><div class="meter-fill ${kind}" data-w="${pct}"></div></div>
     </div>`;
 }
 

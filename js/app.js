@@ -10,6 +10,7 @@ import * as jobs from './views/jobs.js';
 import * as reports from './views/reports.js';
 import { openSettings } from './views/settings.js';
 import { syncPending, watchConnection, driveAuthed, online } from './sync.js';
+import { enhance, bindHeroScroll, attachRipple } from './motion.js';
 
 const TABS = [
   { id: 'home', label: 'Home', icon: 'home' },
@@ -22,6 +23,8 @@ const VIEWS = { home, ledger, jobs, reports };
 
 let route = 'home';
 let painting = false;
+let detachScroll = null;   // hero↔topbar binding for the live screen
+let revealIO = null;       // entrance observer for the live screen
 
 const ctx = {
   go(where, params) {
@@ -35,6 +38,15 @@ const ctx = {
   refresh() { return show(route); },
   openSettings() { openSettings(ctx); },
   openEntry(opts) { openEntrySheet({ ...opts, onSaved: ctx.refresh }); },
+
+  /** What the frosted bar shows once the hero has scrolled away. */
+  setTopbar(title, value, label) {
+    const t = $('#topbar');
+    t.querySelector('[data-tb-t]').textContent = title || '';
+    t.querySelector('[data-tb-v]').innerHTML = value
+      ? `${value}${label ? `<small>${label}</small>` : ''}`
+      : '';
+  },
 };
 
 /* ── PIN gate ──────────────────────────────────────────────── */
@@ -101,7 +113,7 @@ function buildTabs() {
     const t = TABS.find((x) => x.id === btn.dataset.route);
     btn.innerHTML = `${icon(t.icon, 21)}<span>${t.label}</span>`;
   });
-  $('#fab').innerHTML = icon('plus', 26, 2);
+  $('#fab').innerHTML = icon('plus', 26, 2.2);
 
   on(bar, '.tab', (e, b) => show(b.dataset.route));
   on(bar, '#fab', () => {
@@ -129,12 +141,21 @@ async function show(where) {
     screen.className = 'screen';
     screen.setAttribute('aria-live', 'polite');
 
+    ctx.setTopbar('', '');
     await VIEWS[where].render(screen, ctx);
+
+    // Tear down the previous screen's observers before it is discarded.
+    if (detachScroll) { detachScroll(); detachScroll = null; }
+    if (revealIO) { revealIO.disconnect(); revealIO = null; }
+
     old.replaceWith(screen);
 
     $('#tabbar').querySelectorAll('.tab').forEach((b) => b.classList.toggle('on', b.dataset.route === where));
     if (location.hash !== `#/${where}`) history.replaceState(null, '', `#/${where}`);
     screen.scrollTop = Math.min(keepScroll, screen.scrollHeight);
+
+    revealIO = enhance(screen, screen);
+    detachScroll = bindHeroScroll(screen, $('#topbar'));
   } catch (e) {
     console.error('[phynance] view failed', e);
     toast('Something went wrong drawing that screen', 'err');
@@ -146,6 +167,7 @@ async function show(where) {
 function start() {
   load();
   buildTabs();
+  attachRipple($('#app'));
 
   const fromHash = (location.hash || '').replace('#/', '');
   show(VIEWS[fromHash] ? fromHash : 'home');

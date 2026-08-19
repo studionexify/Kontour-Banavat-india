@@ -36,17 +36,17 @@ export async function render(root, ctx) {
       <div class="stat-row">
         <div class="stat">
           <span class="stat-ico">${icon('arrowIn', 17)}</span>
-          <div class="stat-val pos num">${t.in ? shortStat(t.in) : '—'}</div>
+          <div class="stat-val pos num" ${t.in ? `data-count="${t.in}" data-fmt="short"` : ''}>${t.in ? '' : '—'}</div>
           <div class="stat-lbl">IN TODAY</div>
         </div>
         <div class="stat">
           <span class="stat-ico">${icon('arrowOut', 17)}</span>
-          <div class="stat-val neg num">${t.out ? shortStat(t.out) : '—'}</div>
+          <div class="stat-val neg num" ${t.out ? `data-count="${t.out}" data-fmt="short"` : ''}>${t.out ? '' : '—'}</div>
           <div class="stat-lbl">OUT TODAY</div>
         </div>
         <div class="stat">
           <span class="stat-ico">${icon('wallet', 17)}</span>
-          <div class="stat-val num">${shortStat(totalOnHand())}</div>
+          <div class="stat-val num" data-count="${totalOnHand()}" data-fmt="short"></div>
           <div class="stat-lbl">IN HAND</div>
         </div>
       </div>
@@ -74,12 +74,12 @@ export async function render(root, ctx) {
       <div class="kpis">
         <div class="kpi">
           <div class="kpi-l">MONEY IN</div>
-          <div class="kpi-v in num">${inr(m.in)}</div>
+          <div class="kpi-v in num" data-count="${m.in}" data-fmt="inr"></div>
           <div class="kpi-s">${m.gstIn ? `incl. ₹${num(m.gstIn)} GST` : '&nbsp;'}</div>
         </div>
         <div class="kpi">
           <div class="kpi-l">MONEY OUT</div>
-          <div class="kpi-v out num">${inr(m.out)}</div>
+          <div class="kpi-v out num" data-count="${m.out}" data-fmt="inr"></div>
           <div class="kpi-s">${m.gstOut ? `incl. ₹${num(m.gstOut)} GST` : '&nbsp;'}</div>
         </div>
       </div>
@@ -92,6 +92,8 @@ export async function render(root, ctx) {
         <span class="strip-go" style="color:var(--ink-3)">${icon('chevR', 18)}</span>
       </button>
     </section>`;
+
+  ctx.setTopbar('Phynance', shortStat(totalOnHand()), 'IN HAND');
 
   /* ── events ─────────────────────────────────────────────── */
   on(root, '[data-tab]', (e, b) => { tab = b.dataset.tab; ctx.refresh(); });
@@ -143,7 +145,7 @@ function accountsHTML() {
           <span class="card-ico">${icon(a.icon || 'wallet', 22)}</span>
           <div class="card-name">${esc(a.name)}</div>
           <div class="card-sub">${countFor(a.id)} ${countFor(a.id) === 1 ? 'entry' : 'entries'}</div>
-          <div class="card-val num ${b < 0 ? 'neg' : ''}">${inr(b)}</div>
+          <div class="card-val num ${b < 0 ? 'neg' : ''}" data-count="${b}" data-fmt="inr"></div>
         </button>`;
       }).join('')}
     </div>`;
