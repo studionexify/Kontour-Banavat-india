@@ -11,7 +11,7 @@
  * expected — see README, "Running it".
  */
 
-const CACHE = 'phynance-v1';
+const CACHE = 'phynance-v2';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './css/styles.css',

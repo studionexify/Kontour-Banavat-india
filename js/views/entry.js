@@ -113,9 +113,7 @@ export function openEntrySheet({ entry = null, prefill = null, onSaved } = {}) {
       function paintAll() { paintDir(); paintAccounts(); paintAmount(); paintPhotos(); }
 
       /* ── numpad ───────────────────────────────────────────── */
-      on(root, '[data-key]', (e, b) => {
-        const k = b.dataset.key;
-        haptic(6);
+      function pressKey(k) {
         if (k === 'del') f.amount = f.amount.slice(0, -1);
         else if (k === '.') { if (!f.amount.includes('.')) f.amount = (f.amount || '0') + '.'; }
         else if (k === '000') { if (f.amount && f.amount !== '0') f.amount += '000'; }
@@ -125,7 +123,38 @@ export function openEntrySheet({ entry = null, prefill = null, onSaved } = {}) {
           if (/^\d{0,9}(\.\d{0,2})?$/.test(next)) f.amount = next;
         }
         paintAmount();
-      });
+      }
+
+      on(root, '[data-key]', (e, b) => { haptic(6); pressKey(b.dataset.key); });
+
+      /* On a keyboard the keypad is scaffolding, not the way in — the
+         amount is the one field with no <input> to type into, so it
+         listens for the keys it would have received if it had one.
+         Bound to the document because nothing inside the sheet holds
+         focus at rest; it stands down as soon as another sheet opens
+         over this one, or once this one is gone. */
+      function onKeydown(e) {
+        if (!document.body.contains(root)) {
+          document.removeEventListener('keydown', onKeydown);
+          return;
+        }
+        // A confirm sheet on top owns the keyboard while it is there.
+        if (root.parentElement && root.parentElement.lastElementChild !== root) return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        // Anything with its own cursor keeps its keystrokes.
+        if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+
+        if (e.key >= '0' && e.key <= '9') pressKey(e.key);
+        else if (e.key === '.') pressKey('.');
+        else if (e.key === 'Backspace') pressKey('del');
+        else if (e.key === 'Enter') {
+          const save = $('[data-save]');
+          if (save && !save.disabled) save.click();
+        } else return;
+
+        e.preventDefault();
+      }
+      document.addEventListener('keydown', onKeydown);
 
       /* ── direction / category / account ───────────────────── */
       on(root, '[data-dir]', (e, b) => {
@@ -338,7 +367,7 @@ function bodyHTML(f) {
       </div>
     </div>
 
-    <div style="flex:none;padding:0 16px 14px;background:var(--page)">
+    <div class="save-bar">
       <button class="btn" data-save disabled>Save</button>
     </div>`;
 }

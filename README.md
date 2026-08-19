@@ -7,6 +7,9 @@ and — if you photograph the bill — the bill itself.
 Offline-first. Everything lives on the device it was logged on. Nothing is sent
 anywhere unless you set up Google Drive and an API key yourself.
 
+Runs on a phone, a tablet and a computer — see
+[Phone, tablet, computer](#phone-tablet-computer) for what changes at each size.
+
 ---
 
 ## Running it
@@ -178,6 +181,47 @@ need: stable ids, timestamps, edit history, and a job code on every entry.
 Two other things to do at the same time: move the API key behind the server
 endpoint field described above, and serve over HTTPS so the service worker and
 proper PWA install switch on.
+
+---
+
+## Phone, tablet, computer
+
+One app in three shapes. Not a phone build centred in a white margin — the same
+components, re-laid-out at each size, sharing every screen and every code path.
+
+| | Under 700px | 700px and up | 1024px and up |
+|---|---|---|---|
+| **Navigation** | tab bar along the bottom | tab bar along the bottom | side rail, pine, FAB at the top |
+| **Hero** | full-bleed band | rounded card in a centred column | same, wider column |
+| **Card grids** | two up | as many as fit, min 190px | same |
+| **Sheets** | rise from the bottom edge | centred dialogs, rounded all round | same |
+| **Sections** | one column | one column | two columns on Home and Reports |
+
+At 1440px the rail widens to carry labels and the FAB says *New entry* instead
+of being a mystery circle. Home and Reports opt into the two-column layout by
+adding `.two-col` — they read as dashboards. The Ledger and Jobs do not: a list
+is a list however wide the window is, and an entry row stretched to 1120px puts
+the party and the amount at opposite ends of the desk, so those screens stay in
+a 920px column.
+
+The whole system is driven by three custom properties — `--rail-w`,
+`--content-w` and `--gutter`. Each breakpoint retunes those and the pieces
+follow; every block is centred by its own `max-width` and auto margins rather
+than by arithmetic against the window, which is why the rail can change width
+without a single other rule moving.
+
+**What the pointer gets that the finger did not.** Hover states on every
+interactive surface, behind `@media (hover:hover)` so a touchscreen never
+inherits a stuck hover. Visible focus rings on `:focus-visible`, for anyone
+driving the app by keyboard. **Escape** closes the top sheet. In the entry
+sheet the amount takes typed digits, `.` and Backspace directly — the keypad is
+still there, but it is scaffolding rather than the only way in — and **Enter**
+saves. The PIN gate takes a typed PIN too, and says so when there is a keyboard
+to say it about.
+
+Pinch-zoom is deliberately left enabled. On a phone the layout never needs it,
+but on a desktop or tablet browser, blocking it breaks the one accessibility
+control every user already knows how to reach.
 
 ---
 

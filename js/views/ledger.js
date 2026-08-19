@@ -24,7 +24,7 @@ export function render(root, ctx) {
   const months = monthsWithData();
 
   root.innerHTML = `
-    <header class="hero" style="border-radius:0 0 26px 26px;padding-bottom:18px">
+    <header class="hero tight">
       <div class="hero-bar" style="margin-bottom:14px">
         <button class="icon-btn" data-month="-1" aria-label="Previous month">${icon('back', 20)}</button>
         <div class="hero-title" style="text-align:center">

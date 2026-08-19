@@ -81,7 +81,7 @@ function startGate() {
     Array.from(dots.children).forEach((d, i) => d.classList.toggle('on', i < buf.length));
   }
 
-  buildPad($('#gate-pad'), async (k) => {
+  async function key(k) {
     if (k === 'skip') return;
     haptic(6);
     if (k === 'del') { buf = buf.slice(0, -1); paint(); return; }
@@ -93,6 +93,7 @@ function startGate() {
       if (ok) {
         gate.hidden = true;
         app.hidden = false;
+        document.removeEventListener('keydown', onKeydown);
         start();
       } else {
         dots.classList.add('shake');
@@ -101,7 +102,20 @@ function startGate() {
         setTimeout(() => { dots.classList.remove('shake'); buf = ''; paint(); }, 420);
       }
     }
-  });
+  }
+
+  // On a computer the first thing anyone does with a PIN box is type.
+  // The pad stays for touch; this is the same four keys by another route.
+  function onKeydown(e) {
+    if (gate.hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key >= '0' && e.key <= '9') key(e.key);
+    else if (e.key === 'Backspace') key('del');
+    else return;
+    e.preventDefault();
+  }
+
+  buildPad($('#gate-pad'), key);
+  document.addEventListener('keydown', onKeydown);
   paint();
 }
 
@@ -113,7 +127,9 @@ function buildTabs() {
     const t = TABS.find((x) => x.id === btn.dataset.route);
     btn.innerHTML = `${icon(t.icon, 21)}<span>${t.label}</span>`;
   });
-  $('#fab').innerHTML = icon('plus', 26, 2.2);
+  // The label only shows in the widest side rail, where the FAB has the
+  // room to stop being a mystery circle and say what it does.
+  $('#fab').innerHTML = `${icon('plus', 26, 2.2)}<span class="fab-label">New entry</span>`;
 
   on(bar, '.tab', (e, b) => show(b.dataset.route));
   on(bar, '#fab', () => {

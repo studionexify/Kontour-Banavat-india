@@ -108,6 +108,15 @@
   --topbar-h:58px;
   --safe-b:env(safe-area-inset-bottom, 0px);
   --safe-t:env(safe-area-inset-top, 0px);
+
+  /* ── Layout scale ──────────────────────────────────────────────
+     Three shell shapes, one set of knobs. On a phone the rail is
+     zero-wide (the tab bar sits along the bottom instead) and the
+     content is as wide as the screen; each breakpoint below only
+     retunes these two values and the pieces follow.               */
+  --rail-w:0px;         /* side navigation width — 0 while the tab bar is bottom-anchored */
+  --content-w:100%;     /* readable column; caps how far a line of detail may run */
+  --gutter:0px;         /* breathing room either side of that column */
 }
 
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -228,6 +237,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 }
 .numpad button:active { background:rgba(206,241,123,.24); transform:scale(.94); }
 .numpad button.ghost { background:none; border:0; font-size:15px; color:var(--pine-200); }
+/* Only worth saying where there is a keyboard to say it about. */
+.gate-hint { display:none; margin:18px 0 0; font-size:12.5px; color:var(--pine-300); }
+@media (hover:hover) and (pointer:fine) { .gate-hint { display:block; } }
 
 /* ── App shell ────────────────────────────────────────────── */
 .app { height:100%; position:relative; overflow:hidden; }
@@ -291,6 +303,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
   pointer-events:none;
 }
 .hero.with-panel { border-radius:0; padding-bottom:38px; }
+/* Screens whose hero carries only a title and the stat row — no tray
+   rising over it — sit a little shallower. */
+.hero.tight { border-radius:0 0 26px 26px; padding-bottom:18px; }
 .hero > * { position:relative; z-index:1; }
 
 /* Hero content lifts and fades as the glass bar takes over — one
@@ -553,6 +568,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 @supports not ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))) {
   .tabbar { background:var(--page); }
 }
+/* Both belong to the side rail and have nowhere to go in a bottom bar. */
+.rail-brand, .fab-label { display:none; }
 .tab {
   flex:1; height:100%;
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
@@ -615,6 +632,12 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 .sheet-head h2 { flex:1; margin:0; font-size:16.5px; font-weight:600; text-align:center; }
 .sheet-body { overflow-y:auto; padding:0 16px 18px; }
 .grab { width:40px; height:4px; border-radius:2px; background:var(--pine-200); margin:10px auto 0; flex:none; }
+
+/* The column the sheet's own content stacks in. Kept as a class rather
+   than inline styles so the wide-screen rules below can turn it into a
+   two-pane grid without an !important fight. */
+.sheet-content { display:flex; flex-direction:column; min-height:0; flex:1; }
+.save-bar { flex:none; padding:0 16px 14px; background:var(--page); }
 
 /* dark entry sheet.
    No `position` here — the base .sheet is already position:fixed, which is
@@ -950,20 +973,302 @@ select.control { padding-right:34px; background-position:right 13px center; back
 .toast.warn { background:var(--warn); border-color:transparent; }
 .toast.err { background:var(--out); border-color:transparent; }
 
-/* ── Wider screens: keep it a phone, centred ─────────────────── */
-@media (min-width:560px) {
-  body {
-    background:
-      radial-gradient(60% 50% at 50% 0%, rgba(30,115,87,.45), transparent 70%),
-      var(--pine-900);
-  }
-  .app, .gate {
-    max-width:430px; margin:0 auto;
-    box-shadow:0 0 80px rgba(0,0,0,.5);
-    background:var(--page);
-  }
-  .gate { position:fixed; left:50%; transform:translateX(-50%); }
-  /* Centred with auto margins, not translateX — the sheet's open/close
-     animation owns `transform`, and the two would fight. */
-  .sheet, .toast-root { max-width:430px; left:0; right:0; margin-left:auto; margin-right:auto; }
+/* ════════════════════════════════════════════════════════════
+   WIDER SCREENS
+
+   Phynance is one app in three shapes, not a phone build with a
+   desktop skin bolted on:
+
+     phone    < 700px   bottom tab bar, full-bleed hero, one column
+     tablet   ≥ 700px   bottom tab bar still in thumb reach, but the
+                        content sits in a centred column and the card
+                        grids open up
+     desktop  ≥ 1024px  the tab bar stands up into a side rail, the
+                        hero becomes a card, sheets become centred
+                        dialogs, and the pointer gets hover states
+
+   The shapes share every component. What changes between them is
+   --rail-w, --content-w and how many columns a grid may use.
+   ════════════════════════════════════════════════════════════ */
+
+/* ── Shared: the content column ───────────────────────────────
+   Every top-level block is capped at the same width and centred by
+   its own auto margins. Nothing computes an offset from the window,
+   so the rail can change width without a single other rule moving.
+   On a phone --content-w is 100%, and all of this is inert. */
+.screen > .hero,
+.screen > .panel,
+.screen > .sec { max-width:var(--content-w); margin-inline:auto; width:100%; }
+.topbar-in { max-width:var(--content-w); margin-inline:auto; width:100%; }
+
+/* ── Tablet ───────────────────────────────────────────────────
+   Held at the bottom, because a tablet is still held. The gain
+   here is width: the same screens, no longer pretending they are
+   360px wide. */
+@media (min-width:700px) {
+  :root { --content-w:720px; --gutter:26px; }
+
+  .screen { padding-inline:var(--gutter); }
+  .topbar { padding-inline:var(--gutter); }
+  .sec { padding-inline:0; }
+
+  /* Once the screen has side gutters the hero cannot bleed to the
+     edge, so it stops pretending to be a band and becomes a card. */
+  .hero, .hero.tight { border-radius:26px; margin-top:14px; padding:22px 22px 26px; }
+  .hero.tight { padding-bottom:22px; }
+  .hero.with-panel { border-radius:26px 26px 0 0; padding-bottom:36px; }
+  .panel { border-radius:0 0 26px 26px; padding:22px 16px 18px; }
+
+  /* Two cards to a row was a phone constraint. Let them find their own
+     count, floored at a width that still fits a rupee figure. auto-fit
+     rather than auto-fill: three accounts should finish the row, not sit
+     in the left half of five columns with two standing empty. */
+  .grid2 { grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); }
+  .kpis  { grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); }
+
+  .stat-val { font-size:26px; }
+  .hero-title { font-size:19px; }
+  .empty { padding:56px 24px; }
 }
+
+@media (min-width:900px) {
+  :root { --content-w:800px; }
+}
+
+/* ── Desktop and landscape tablet ─────────────────────────────
+   The tab bar stands up. Nothing about it changes except its axis:
+   same buttons, same routes, same FAB — which is why app.js needed
+   no branch for any of this. */
+@media (min-width:1024px) {
+  :root { --rail-w:96px; --content-w:900px; --gutter:34px; }
+
+  /* The rail is pine rather than frosted beige. Glass is for chrome
+     that passes over content; the rail sits beside content and never
+     moves, so it earns a solid surface. */
+  .tabbar {
+    top:0; bottom:0; right:auto;
+    width:var(--rail-w); height:auto;
+    flex-direction:column; justify-content:flex-start;
+    gap:4px;
+    padding:16px 12px calc(16px + var(--safe-b));
+    background:var(--grad-pine-deep);
+    -webkit-backdrop-filter:none; backdrop-filter:none;
+    border-top:0; border-right:1px solid rgba(206,241,123,.10);
+  }
+  .screen, .topbar { left:var(--rail-w); }
+  .screen { padding-bottom:44px; }
+
+  .rail-brand {
+    display:flex; align-items:center; gap:10px;
+    order:-2; width:100%; margin-bottom:14px; padding:6px 2px;
+    color:var(--beige); overflow:hidden;
+  }
+  .rail-mark {
+    width:38px; height:38px; flex:none;
+    display:grid; place-items:center; border-radius:13px;
+    font-size:19px; color:var(--lime);
+    background:linear-gradient(150deg, rgba(206,241,123,.22), rgba(206,241,123,.07));
+    border:1px solid rgba(206,241,123,.30);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.16);
+    margin-inline:auto;
+  }
+  .rail-name { display:none; font-size:15px; font-weight:600; letter-spacing:.2px; white-space:nowrap; }
+
+  /* Compose sits at the top of a rail, where the eye starts, rather
+     than floating in the middle of the list of destinations. */
+  .fab {
+    order:-1;
+    width:56px; height:56px; margin:0 auto 16px;
+    border-radius:19px; transform:none;
+  }
+  .fab:active { transform:scale(.92); }
+
+  .tab {
+    flex:none; width:100%; height:auto;
+    padding:11px 4px 10px; border-radius:16px; gap:4px;
+    color:var(--pine-200);
+    transition:color var(--t-fast), background var(--t-fast);
+  }
+  .tab.on { color:var(--lime); background:rgba(206,241,123,.13); }
+  /* The dot marked the active tab when the bar was a strip along the
+     bottom. In a rail the filled pill already says it. */
+  .tab.on::after { display:none; }
+  .tab span { font-size:10.5px; }
+
+  .hero, .hero.tight { margin-top:18px; padding:24px 26px 28px; }
+  .hero.with-panel { padding-bottom:38px; }
+  .panel { padding:24px 20px 20px; }
+
+  .toast-root { left:var(--rail-w); bottom:26px; }
+}
+
+/* Two panes, once there is genuinely room for two. Only the screens
+   that read as a dashboard opt in (home, reports); a ledger is a list
+   and a list belongs in one column however wide the window is. */
+@media (min-width:1180px) {
+  :root { --content-w:1120px; }
+
+  /* A dashboard earns the full width because it splits into two panes.
+     A ledger does not: an entry row stretched to 1120px puts its party
+     and its amount at opposite ends of the desk. */
+  .screen:not(.two-col) > .hero,
+  .screen:not(.two-col) > .panel,
+  .screen:not(.two-col) > .sec { max-width:920px; }
+
+  /* The two tracks add up to exactly --content-w and are centred as a
+     pair, so a section in either column lines up with the edges of the
+     hero spanning above them. Tracks still shrink if the window is
+     narrower than the column they were cut from. */
+  .screen.two-col {
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, calc((var(--content-w) - 26px) / 2)));
+    justify-content:center;
+    column-gap:26px;
+    row-gap:0;                 /* the sections carry their own top padding */
+    align-content:start;
+  }
+  .screen.two-col > .hero,
+  .screen.two-col > .panel { grid-column:1 / -1; }
+  .screen.two-col > .sec { grid-column:auto; min-width:0; }
+}
+
+@media (min-width:1440px) {
+  :root { --rail-w:212px; --content-w:1180px; }
+
+  /* Wide enough for the rail to say what it is. */
+  .rail-brand { padding:6px 8px; }
+  .rail-mark { margin-inline:0; }
+  .rail-name { display:block; }
+  .fab {
+    width:100%; height:50px; margin:0 0 18px;
+    display:flex; gap:9px; align-items:center; justify-content:center;
+    font-size:14.5px; font-weight:700;
+  }
+  .fab-label { display:block; }
+  .fab svg { width:20px; height:20px; }
+  .tab { flex-direction:row; justify-content:flex-start; gap:13px; padding:12px 14px; }
+  .tab span { font-size:14px; font-weight:500; }
+  .tab.on span { font-weight:600; }
+}
+
+/* ── Sheets on a pointer screen ───────────────────────────────
+   A sheet dragged up from the bottom edge is a phone gesture. On a
+   larger screen the same component becomes a dialog: centred, off
+   the bottom edge, rounded on all four corners.
+
+   Centred with auto margins, never translateX — openSheet's rise and
+   close animations own `transform`, and the two would fight.
+
+   Gated on height as well as width, because a phone held sideways is
+   wide enough to qualify and short enough that a dialog floated off
+   both edges would leave the entry sheet about 350px tall. There, the
+   sheet stays what it was. */
+@media (min-width:700px) and (min-height:600px) {
+  .sheet {
+    left:0; right:0; margin-inline:auto;
+    width:min(560px, 92vw);
+    bottom:4vh; max-height:88vh;
+    border-radius:28px;
+  }
+  .sheet.full {
+    top:auto; bottom:4vh;
+    width:min(680px, 94vw);
+    height:min(880px, 90vh); max-height:90vh;
+    border-radius:28px;
+    box-shadow:0 24px 70px -20px rgba(0,26,16,.6);
+  }
+  .sheet .grab { display:none; }      /* nothing here is dragged */
+  .sheet-head { padding-top:18px; }
+  .tray { border-radius:24px 24px 0 0; }
+}
+
+/* A phone held sideways, or a short desktop window. The entry sheet's
+   fixed-height furniture — header, direction chips, the big amount — was
+   sized for 800px of screen; on 390px it leaves the tray a slot. Every
+   figure below is the same element, just not shouting. */
+@media (max-height:520px) {
+  .sheet-head { padding:8px 16px 4px; }
+  .sheet-head h2 { font-size:15px; }
+  .dirchips { padding-bottom:8px; }
+  .dirchip { padding:8px 6px 7px; }
+  .amount-wrap { padding:2px 16px 8px; }
+  .amount { font-size:34px; min-height:40px; }
+  .amount .cur { font-size:18px; }
+  .amount-rule { margin-top:4px; }
+  .amount-note { margin-top:5px; min-height:0; }
+  .numgrid button { height:44px; font-size:19px; }
+  .save-bar { padding-bottom:10px; }
+  .btn { padding:13px; margin-top:12px; }
+}
+
+/* The entry sheet is the screen the app is judged on, so it gets the
+   real two-pane treatment: keypad and amount on the left, everything
+   the entry needs on the right, both visible at once. */
+@media (min-width:900px) and (min-height:600px) {
+  .sheet.dark.full { width:min(920px, 94vw); }
+  .sheet.dark .sheet-content {
+    display:grid;
+    grid-template-columns:minmax(0, 330px) minmax(0, 1fr);
+    grid-template-rows:auto 1fr auto;
+    grid-template-areas:
+      "dir  tray"
+      "amt  tray"
+      "save tray";
+    min-height:0; overflow:hidden;
+  }
+  .sheet.dark .dirchips    { grid-area:dir; padding-bottom:10px; }
+  .sheet.dark .amount-wrap { grid-area:amt; align-self:center; padding-bottom:8px; }
+  .sheet.dark .save-bar    { grid-area:save; background:transparent; padding:0 16px 18px; }
+  .sheet.dark .tray {
+    grid-area:tray; margin:0 0 0 4px;
+    border-radius:24px 0 0 0;
+    min-height:0;
+  }
+  /* With a keyboard right there, the keypad is a convenience rather
+     than the only way in — so it takes less of the pane. */
+  .sheet.dark .numgrid { max-width:300px; }
+  .sheet.dark .amount { font-size:44px; }
+}
+
+/* ── Pointer affordances ──────────────────────────────────────
+   Everything above this point was built for a finger: :active
+   states, ripples, 62px targets. A pointer needs the other half —
+   it asks before it commits, and it expects the answer on hover. */
+@media (hover:hover) and (pointer:fine) {
+  .row:hover        { background:var(--tea-soft); }
+  .card:hover,
+  .acct:hover       { transform:translateY(-2px); box-shadow:var(--e3); }
+  .strip:hover      { transform:translateY(-1px); box-shadow:var(--e3); }
+  .chip:hover:not(.on),
+  .cat:hover:not(.on) { background:var(--tea-soft); border-color:var(--pine-300); }
+  .btn:hover:not([disabled]) { transform:translateY(-1px); filter:brightness(1.03); }
+  .icon-btn:hover   { background:rgba(206,241,123,.18); }
+  .icon-btn.plain:hover { background:var(--tea); }
+  .numgrid button:hover,
+  .numpad  button:hover { background:var(--tea-soft); }
+  .numpad  button:hover { background:rgba(206,241,123,.16); }
+  .tab:not(.on):hover { color:var(--pine-600); }
+  .fab:hover        { filter:brightness(1.04); }
+  .sec-link:hover,
+  .seg button:hover { color:var(--pine-500); }
+  .disclose-btn:hover { background:var(--tea); }
+  .scrim:hover      { cursor:pointer; }
+
+  @media (min-width:1024px) {
+    .tab:not(.on):hover { color:var(--beige); background:rgba(255,247,230,.07); }
+  }
+}
+
+/* Keyboard users need to see where they are. Pointer and touch users
+   never see this, because :focus-visible fires only when the browser
+   judges a focus ring to be warranted. */
+:focus-visible {
+  outline:2.5px solid var(--pine-500);
+  outline-offset:2px;
+  border-radius:6px;
+}
+.sheet.dark :focus-visible,
+.hero :focus-visible,
+.tabbar :focus-visible,
+.gate :focus-visible { outline-color:var(--lime); }
+.control:focus-visible { outline-offset:0; }

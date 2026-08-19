@@ -29,7 +29,7 @@ export function render(root, ctx) {
   });
 
   root.innerHTML = `
-    <header class="hero" style="border-radius:0 0 26px 26px;padding-bottom:18px">
+    <header class="hero tight">
       <div class="hero-bar" style="margin-bottom:14px">
         <div style="width:38px"></div>
         <div class="hero-title" style="text-align:center">

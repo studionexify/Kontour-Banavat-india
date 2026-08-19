@@ -2,12 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<!-- Zoom is deliberately left enabled. On a phone the layout never needs it,
+     but on a desktop or tablet browser blocking it breaks the one
+     accessibility control every user already knows how to reach. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#084734">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Phynance">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/icon-192.png">
 <link rel="stylesheet" href="css/styles.css">
 <title>Phynance</title>
@@ -24,6 +28,7 @@
       <i></i><i></i><i></i><i></i>
     </div>
     <div class="numpad" id="gate-pad"></div>
+    <p class="gate-hint">or just type it</p>
   </div>
 </div>
 
@@ -39,6 +44,9 @@
   <main id="screen" class="screen" aria-live="polite"></main>
 
   <nav class="tabbar" id="tabbar">
+    <!-- Shown only once the tab bar becomes a side rail, where there is
+         room for it and the window has no other app title. -->
+    <div class="rail-brand" aria-hidden="true"><span class="rail-mark">₹</span><span class="rail-name">Phynance</span></div>
     <button class="tab" data-route="home"    aria-label="Home"></button>
     <button class="tab" data-route="ledger"  aria-label="Ledger"></button>
     <button class="fab" id="fab" aria-label="New entry"></button>

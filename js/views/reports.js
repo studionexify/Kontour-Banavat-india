@@ -26,8 +26,10 @@ export function render(root, ctx) {
     .sort((a, b) => b.s.outstanding - a.s.outstanding)
     .slice(0, 5);
 
+  root.classList.add('two-col');   // see home.js — the report is a dashboard too
+
   root.innerHTML = `
-    <header class="hero" style="border-radius:0 0 26px 26px;padding-bottom:20px">
+    <header class="hero tight">
       <div class="hero-bar" style="margin-bottom:14px">
         <button class="icon-btn" data-m="-1" aria-label="Previous month">${icon('back', 20)}</button>
         <div class="hero-title" style="text-align:center">

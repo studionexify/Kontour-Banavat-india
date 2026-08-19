@@ -47,6 +47,15 @@ export function toast(msg, kind = '', ms = 2400) {
 
 const stack = [];
 
+/* Escape closes the top sheet. On a phone the back gesture already does
+   this (app.js binds popstate); on a keyboard, Escape makes the same
+   promise, and a dialog that will not close on Escape feels stuck. */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !stack.length) return;
+  e.preventDefault();
+  closeTopSheet();
+});
+
 /**
  * openSheet({ title, body, dark, full, onMount, onClose })
  * Returns a handle with .close() and .el
@@ -54,15 +63,23 @@ const stack = [];
 export function openSheet({ title = '', body = '', dark = false, full = false, headRight = '', onMount, onClose } = {}) {
   const root = $('#sheet-root');
   const scrim = el('<div class="scrim"></div>');
+
+  // A full sheet covers the phone screen, so leaving it is "back". From
+  // the tablet breakpoint up the same sheet is a centred dialog floating
+  // over the app, and leaving that is "close".
+  // Must stay in step with the sheet-as-dialog breakpoint in styles.css.
+  const dialog = window.matchMedia('(min-width:700px) and (min-height:600px)').matches;
+  const closeIcon = full && !dialog ? 'back' : 'close';
+
   const sheet = el(`
     <section class="sheet ${dark ? 'dark' : ''} ${full ? 'full' : ''}" role="dialog" aria-modal="true">
       ${full ? '' : '<div class="grab"></div>'}
       <header class="sheet-head">
-        <button class="icon-btn ${dark ? '' : 'plain'}" data-sheet-close aria-label="Close">${icon(full ? 'back' : 'close', 21)}</button>
+        <button class="icon-btn ${dark ? '' : 'plain'}" data-sheet-close aria-label="Close">${icon(closeIcon, 21)}</button>
         <h2>${esc(title)}</h2>
         <div class="sheet-head-right">${headRight || '<span style="width:38px;display:block"></span>'}</div>
       </header>
-      <div class="sheet-content" style="display:flex;flex-direction:column;min-height:0;flex:1">${body}</div>
+      <div class="sheet-content">${body}</div>
     </section>`);
 
   root.appendChild(scrim);

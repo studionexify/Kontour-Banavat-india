@@ -22,6 +22,11 @@ export async function render(root, ctx) {
   const due = dueRecurring(today);
   const todays = sortedEntries().filter((e) => e.date === today);
 
+  // Home reads as a dashboard, so on a wide screen its sections sit two
+  // abreast. Opt-in per view: the ledger is a list, and a list belongs in
+  // one column however much room the window has.
+  root.classList.add('two-col');
+
   root.innerHTML = `
     <header class="hero with-panel">
       <div class="hero-bar">
