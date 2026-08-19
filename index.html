@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#47604E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Phynance">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="stylesheet" href="css/styles.css">
+<title>Phynance</title>
+</head>
+<body>
+
+<!-- ── PIN gate ─────────────────────────────────────────────── -->
+<div id="gate" class="gate" hidden>
+  <div class="gate-inner">
+    <div class="gate-mark">₹</div>
+    <h1 class="gate-title">Phynance</h1>
+    <p class="gate-sub" id="gate-sub">Enter your PIN</p>
+    <div class="pin-dots" id="pin-dots">
+      <i></i><i></i><i></i><i></i>
+    </div>
+    <div class="numpad" id="gate-pad"></div>
+  </div>
+</div>
+
+<!-- ── App shell ────────────────────────────────────────────── -->
+<div id="app" class="app" hidden>
+  <main id="screen" class="screen" aria-live="polite"></main>
+
+  <nav class="tabbar" id="tabbar">
+    <button class="tab" data-route="home"    aria-label="Home"></button>
+    <button class="tab" data-route="ledger"  aria-label="Ledger"></button>
+    <button class="fab" id="fab" aria-label="New entry"></button>
+    <button class="tab" data-route="jobs"    aria-label="Jobs"></button>
+    <button class="tab" data-route="reports" aria-label="Reports"></button>
+  </nav>
+</div>
+
+<div id="sheet-root"></div>
+<div id="toast-root" class="toast-root"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

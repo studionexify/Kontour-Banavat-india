@@ -1,0 +1,11 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Exports users generate locally — not part of the app
+*.csv
+Phynance backup*.json
+
+# Local Python cache if any tooling ever runs here
+__pycache__/
+*.pyc

@@ -1,0 +1,15 @@
+{
+  "name": "Phynance — Banavat India",
+  "short_name": "Phynance",
+  "description": "Daily money log for Banavat India.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EFF3EF",
+  "theme_color": "#47604E",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

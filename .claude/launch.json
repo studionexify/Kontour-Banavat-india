@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "phynance",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8792", "--bind", "0.0.0.0"],
+      "port": 8792
+    }
+  ]
+}
