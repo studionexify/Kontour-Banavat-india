@@ -5,6 +5,7 @@
    and no view has to be touched. */
 
 import { round2, todayISO, monthKey, isoOf } from './format.js';
+import { KINDS, snapshot, diff, enqueue, clearQueue, setCursor } from './outbox.js';
 
 const KEY = 'phynance.v1';
 const DEVICE_KEY = 'phynance.device';       // never leaves this device, never exported
@@ -126,7 +127,13 @@ export function onChange(fn) {
 }
 
 export function load() {
-  if (!state) state = read();
+  if (!state) {
+    state = read();
+    // The baseline every later commit is compared against. Taken after
+    // the read so a record that migrate() filled in does not read as a
+    // local edit and push itself on first launch.
+    shadow = snapshot(state);
+  }
   return state;
 }
 
@@ -134,9 +141,65 @@ export function raw() {
   return load();
 }
 
+/* ── Change tracking ───────────────────────────────────────────
+   The last state written, so commit() can work out what changed
+   without every mutation having to say so. See js/outbox.js. */
+let shadow = null;
+let applyingRemote = false;
+
 function commit() {
+  const next = snapshot(state);
+  if (!applyingRemote) {
+    // Before write(), because diff stamps updatedAt onto the records it
+    // finds changed and that stamp has to be what gets persisted.
+    enqueue(diff(shadow, next, state));
+  }
+  shadow = next;
   write();
   emit('change');
+}
+
+/**
+ * Folds rows pulled from the server into local state, newest write
+ * winning per record. Nothing here re-enters the outbox: these changes
+ * came from the server, and queueing them would push them straight back.
+ *
+ * Returns how many records actually moved, so the caller can skip a
+ * redraw when a pull brought back only this device's own writes.
+ */
+export function applyRemote(rows) {
+  if (!rows || !rows.length) return 0;
+  const s = load();
+  const spec = new Map(KINDS.map((k) => [k.kind, k]));
+  let changed = 0;
+
+  for (const row of rows) {
+    const k = spec.get(row.kind);
+    if (!k) continue;
+
+    const list = s[k.arr];
+    const i = list.findIndex((r) => String(r[k.key]) === String(row.id));
+    const local = i >= 0 ? list[i] : null;
+    const remoteAt = Date.parse(row.updated_at) || 0;
+
+    // A record this device has never seen has no local stamp to beat.
+    if (local && (local.updatedAt || 0) >= remoteAt) continue;
+
+    if (row.deleted_at) {
+      if (local) { list.splice(i, 1); changed++; }
+      continue;
+    }
+
+    const rec = { ...row.data, updatedAt: remoteAt };
+    if (local) list[i] = rec; else list.push(rec);
+    changed++;
+  }
+
+  if (changed) {
+    applyingRemote = true;
+    try { commit(); } finally { applyingRemote = false; }
+  }
+  return changed;
 }
 
 /* Device-local flags: PIN skip, install hints. Deliberately outside the
@@ -650,9 +713,22 @@ export function importAll(payload, { merge = false } = {}) {
   return state;
 }
 
+/**
+ * Clears this device, and only this device.
+ *
+ * Deliberately not a commit(): the diff would read an emptied ledger as
+ * "delete every record" and push tombstones for all of it, so clearing
+ * one phone would wipe the books for everyone. The queue and the pull
+ * cursor go with it, so the next sync starts from nothing and fetches
+ * the org's data back down.
+ */
 export function wipe() {
   state = blank();
-  commit();
+  shadow = snapshot(state);
+  clearQueue();
+  setCursor('');
+  write();
+  emit('change');
 }
 
 /* ── PIN ───────────────────────────────────────────────────── */
