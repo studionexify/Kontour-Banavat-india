@@ -1,0 +1,13 @@
+name = "phynance-read-bill"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://kontour.banavat-india.com"
+
+# The API key is a secret, never a var — set it with:
+#   npx wrangler secret put ANTHROPIC_API_KEY
+#
+# Optional: pin the model server-side by uncommenting below. Leave it off and
+# whatever Settings chose is used.
+# MODEL = "claude-opus-5"

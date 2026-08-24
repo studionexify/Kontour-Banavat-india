@@ -9,33 +9,35 @@ anywhere unless you set up Google Drive and an API key yourself.
 
 ---
 
-## Running it
+## Opening it
 
-Open a terminal in this folder.
+**https://kontour.banavat-india.com** — on any device, with nothing running at
+your end. Chrome menu → **Add to Home Screen** and it launches full screen, like
+an app.
+
+Because it is served over HTTPS, the service worker registers: after the first
+visit the app files are cached on the device and it opens with no internet at
+all.
+
+### Running it locally instead
+
+For development, from a terminal in this folder:
 
 ```bash
 python -m http.server 8792 --bind 0.0.0.0
 ```
 
-- **On this PC:** http://localhost:8792
-- **On your phone** (same wifi): `http://192.168.1.5:8792` — then Chrome menu →
-  **Add to Home Screen**. It launches full screen, like an app.
+Then http://localhost:8792. Note that over a plain LAN address like
+`http://192.168.1.5:8792` browsers refuse to register a service worker — only
+`https://` and `localhost` qualify — so offline caching is a subdomain-only
+feature. That is why the hosted address above is the one to use on a phone.
 
-The PC has to be running that command while you use the phone. Once Phynance is
-on the subdomain, that stops being true.
+### Data is still per-device
 
-### One caveat about the phone, stated plainly
-
-Browsers only allow offline caching (service workers) on `https://` or
-`localhost`. Over a plain LAN address like `192.168.1.5` they refuse — so on the
-phone the app loads from your PC each time and will not work with the PC off.
-Your **data** is still stored on the phone and survives fine; it is only the app
-files that need serving. The fix is the HTTPS subdomain later; nothing in the
-code changes.
-
-Data is per-device. An entry logged on the phone is not on the PC and vice versa
-until Phynance is online. Use **Settings → Backup & restore** to move a ledger
-between them in the meantime.
+Nothing syncs between devices yet. An entry logged on the phone is not on the PC
+and vice versa — the subdomain serves the *app*, not a shared ledger. Use
+**Settings → Backup & restore** to move a ledger between them. See
+[When it goes online](#when-it-goes-online) for what a shared ledger would take.
 
 ---
 
@@ -120,12 +122,12 @@ quick and cheap. Server-side fallback is enabled, so if a safety classifier ever
 declines an image the same request re-runs on a fallback model rather than
 failing.
 
-⚠️ **The API key sits in the browser.** For your own phone that is a fair
-trade. It is not acceptable on a public subdomain — anyone with the page could
-read it. The Settings screen has a **Server endpoint** field for exactly that:
-point it at your own `/api/read-bill` and the key stays on the server. The
-request body Phynance sends is the Anthropic Messages API shape, so the server
-side is a thin pass-through.
+⚠️ **Do not paste the API key into Settings now that the app is public.**
+Anyone who opens `kontour.banavat-india.com` can read a key stored in the
+browser. Use the **Server endpoint** field instead — `server/` holds a
+ready-to-deploy Cloudflare Worker that keeps the key server-side, and
+[`server/README.md`](server/README.md) is the three-command setup. With an
+endpoint set the app never sends a key at all.
 
 ---
 
@@ -146,6 +148,8 @@ side is a thin pass-through.
 index.html              app shell — PIN gate, screen, tab bar
 manifest.webmanifest    home-screen install
 sw.js                   offline cache (only active on https/localhost)
+CNAME                   the subdomain, for GitHub Pages
+server/                 Cloudflare Worker holding the Anthropic key
 css/styles.css          the whole theme, tokens at the top
 js/
   app.js                boot, PIN gate, routing
@@ -170,14 +174,24 @@ js/
 
 ## When it goes online
 
-`store.js` is written as an async API over one `read()` / `write()` pair backed
-by localStorage. Swapping that pair for API calls is the whole migration — no
-view needs touching. The data shape already carries everything a server would
-need: stable ids, timestamps, edit history, and a job code on every entry.
+Two of the three things this section used to list are done: the app is served
+over HTTPS, so the service worker and PWA install work, and the API key has a
+server-side home in `server/`.
 
-Two other things to do at the same time: move the API key behind the server
-endpoint field described above, and serve over HTTPS so the service worker and
-proper PWA install switch on.
+What remains is a **shared ledger**. `store.js` is written as an async API over
+one `read()` / `write()` pair backed by localStorage. Swapping that pair for API
+calls is the whole migration — no view needs touching. The data shape already
+carries everything a server would need: stable ids, timestamps, edit history,
+and a job code on every entry.
+
+## How it is hosted
+
+GitHub Pages, from `main`, via `.github/workflows/deploy.yml` — every push
+redeploys. `CNAME` holds the subdomain; a DNS `CNAME` record points `kontour`
+at `studionexify.github.io`.
+
+Worth knowing: `sw.js` is network-first, so a deploy reaches the phone on the
+next online open rather than needing site data cleared.
 
 ---
 
