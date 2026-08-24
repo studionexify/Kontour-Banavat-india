@@ -1,0 +1,14 @@
+{
+  "name": "phynance",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Offline-first books for Banavat India",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "comment": "No build step and no runtime dependencies, on purpose — the app is plain ES modules served as-is, and the API routes use only what Node already has. This file exists so Vercel treats api/*.js as ESM.",
+  "scripts": {
+    "dev": "python3 -m http.server 8080"
+  }
+}
