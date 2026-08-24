@@ -950,20 +950,289 @@ select.control { padding-right:34px; background-position:right 13px center; back
 .toast.warn { background:var(--warn); border-color:transparent; }
 .toast.err { background:var(--out); border-color:transparent; }
 
-/* ── Wider screens: keep it a phone, centred ─────────────────── */
-@media (min-width:560px) {
+/* ════════════════════════════════════════════════════════════
+   RESPONSIVE
+
+   One design, four shapes. Nothing below changes what Phynance
+   looks like — it changes how much room each part is given.
+
+     compact phone   ≤360px   tighten padding, shrink the chrome
+     phone           default  the design as drawn
+     large / tablet  ≥600px   a centred column, grids gain columns
+     desktop         ≥900px   the tab bar becomes a side rail
+     wide desktop    ≥1280px  a wider column, more columns again
+
+   Two orthogonal cases sit alongside those: a short landscape
+   viewport, where vertical space is the scarce thing, and a
+   pointer that hovers, which earns hover feedback a finger never
+   sees.
+
+   --content-w is the spine. Every direct child of .screen is
+   centred inside it, so a wider window gives the app more room
+   without ever stretching a line of text past reading width.
+   ════════════════════════════════════════════════════════════ */
+
+:root { --content-w:100%; --rail-w:0px; }
+
+/* The shell tracks the *dynamic* viewport, so a mobile browser
+   collapsing its toolbar cannot leave the tab bar stranded. */
+@supports (height:100dvh) {
+  html, body, .app { height:100dvh; }
+}
+
+/* ── Compact phones (small iPhone SE, older Androids) ───────── */
+@media (max-width:360px) {
+  :root { --tabbar-h:70px; --r-lg:22px; --r-md:17px; }
+
+  .sec { padding:20px 13px 0; }
+  .panel { padding:19px 12px 4px; border-radius:26px 26px 0 0; }
+  .hero { padding-left:15px; padding-right:15px; }
+
+  .stat-val { font-size:20px; }
+  .stat-val .cur { font-size:12px; }
+  .stat-lbl { font-size:9px; letter-spacing:.6px; }
+
+  .grid2 { gap:9px; }
+  .card { padding:13px 11px; border-radius:19px; }
+  .card-ico { width:38px; height:38px; margin-bottom:10px; }
+  .card-val { font-size:19px; }
+
+  .row { padding:12px 11px; gap:11px; }
+  .row-ico { width:36px; height:36px; }
+  .row-amt { font-size:15px; }
+
+  .fab { width:55px; height:55px; border-radius:20px; margin:0 3px; }
+  .tab span { font-size:9.5px; }
+
+  .numpad button { height:56px; font-size:21px; border-radius:18px; }
+  .numgrid button { height:49px; font-size:20px; }
+  .amount { font-size:42px; min-height:52px; }
+  .amount .cur { font-size:21px; }
+
+  .kpis, .field-2 { grid-template-columns:1fr; }
+  .sheet-body, .tray { padding-left:13px; padding-right:13px; }
+}
+
+/* ── Large phones and up: a centred column ──────────────────── */
+@media (min-width:600px) {
+  :root { --content-w:640px; }
+
   body {
     background:
-      radial-gradient(60% 50% at 50% 0%, rgba(30,115,87,.45), transparent 70%),
+      radial-gradient(70% 55% at 50% 0%, rgba(30,115,87,.30), transparent 72%),
       var(--pine-900);
   }
-  .app, .gate {
-    max-width:430px; margin:0 auto;
-    box-shadow:0 0 80px rgba(0,0,0,.5);
-    background:var(--page);
+  /* Until the rail arrives, the app stays one column with the pine
+     washes showing in the gutters — the phone design, given room.
+     Constraining .app rather than only its contents keeps the hero
+     full-bleed and the tab bar the width of the thing it belongs to. */
+  .app {
+    max-width:var(--content-w); margin-inline:auto;
+    background:var(--page); box-shadow:0 0 90px rgba(0,0,0,.45);
   }
-  .gate { position:fixed; left:50%; transform:translateX(-50%); }
-  /* Centred with auto margins, not translateX — the sheet's open/close
-     animation owns `transform`, and the two would fight. */
-  .sheet, .toast-root { max-width:430px; left:0; right:0; margin-left:auto; margin-right:auto; }
+
+  /* The spine. Everything a view renders sits inside it.
+     margin-inline only — .panel's negative margin-top, which
+     laps it over the hero, has to survive. */
+  .screen > * {
+    max-width:var(--content-w);
+    margin-inline:auto;
+  }
+  .hero { border-radius:0 0 34px 34px; padding-left:26px; padding-right:26px; }
+  .panel { border-radius:32px 32px 0 0; padding:24px 22px 4px; }
+  .sec { padding:26px 22px 0; }
+
+  .stat-val { font-size:26px; }
+  .stat-lbl { font-size:10.5px; }
+
+  /* Cards stop being a rigid pair and simply fill the row. */
+  .grid2 { grid-template-columns:repeat(auto-fill, minmax(168px, 1fr)); gap:13px; }
+  .kpis  { grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); }
+
+  .topbar { padding-left:26px; padding-right:26px; }
+  .topbar-in { max-width:var(--content-w); margin-inline:auto; }
+
+  /* Sheets stay bottom-anchored here, just narrower. Centred with
+     auto margins, never translateX — the open and close animations
+     own `transform`, and the two would fight. */
+  .sheet, .toast-root {
+    max-width:560px; left:0; right:0;
+    margin-left:auto; margin-right:auto;
+  }
+  .gate-inner { max-width:380px; }
+  .numpad button { height:66px; }
+}
+
+/* ── Desktop: the tab bar stands up into a side rail ──────────
+   Same markup, same buttons, same order — only the axis changes.
+   The screen and the glass bar are inset by the rail's width. */
+@media (min-width:900px) {
+  :root { --content-w:720px; --rail-w:236px; --tabbar-h:0px; }
+
+  .app { max-width:none; box-shadow:none; }
+
+  .tabbar {
+    top:0; bottom:0; left:0; right:auto;
+    width:var(--rail-w); height:100%;
+    flex-direction:column; align-items:stretch; justify-content:flex-start;
+    gap:5px;
+    padding:calc(var(--safe-t) + 22px) 14px calc(var(--safe-b) + 22px);
+    border-top:0; border-right:1px solid var(--glass-edge);
+    background:var(--page);
+    -webkit-backdrop-filter:none; backdrop-filter:none;
+  }
+  /* A wordmark where the rail has room for one. */
+  .tabbar::before {
+    content:"Phynance";
+    order:-2;                       /* ahead of the FAB, which is -1 */
+    display:block; flex:none;
+    padding:0 15px 20px;
+    font-size:19px; font-weight:700; letter-spacing:-.3px;
+    color:var(--pine-700);
+  }
+
+  .tab {
+    flex:0 0 auto; width:100%; height:auto;
+    flex-direction:row; justify-content:flex-start; gap:14px;
+    padding:13px 15px; border-radius:16px;
+    transition:background var(--t-fast), color var(--t-fast);
+  }
+  .tab span { font-size:14.5px; font-weight:600; letter-spacing:0; }
+  .tab.on { background:var(--grad-tile-tea); color:var(--pine-700); }
+  .tab.on svg { transform:none; }
+  /* The active dot moves from under the icon to the end of the row. */
+  .tab.on::after {
+    bottom:auto; top:50%; right:15px;
+    margin-top:-2.5px;
+  }
+
+  /* The FAB leads the rail as a labelled action, not a floating puck. */
+  .fab {
+    order:-1;
+    width:100%; height:auto; margin:0 0 14px;
+    border-radius:18px; padding:15px;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    font-size:15px; font-weight:700;
+    transform:none;
+  }
+  .fab::after { content:"New entry"; }
+  .fab:active { transform:scale(.97); }
+  .fab:active svg { transform:none; }
+  /* The breathing halo belonged to a floating puck; a full-width
+     button in the rail carries its own weight. */
+  .fab::before { display:none; }
+
+  .screen {
+    left:var(--rail-w);
+    padding-bottom:56px;
+  }
+  .topbar { left:var(--rail-w); }
+  .toast-root { left:var(--rail-w); bottom:26px; }
+
+  .hero { padding-top:calc(var(--safe-t) + 26px); padding-bottom:30px; }
+  .hero.with-panel { padding-bottom:42px; }
+  .stat-val { font-size:28px; }
+
+  /* Filters have room to lay themselves out rather than scroll away. */
+  .chipbar { flex-wrap:wrap; overflow-x:visible; }
+
+  /* Sheets become centred dialogs over the content area. */
+  .sheet {
+    left:var(--rail-w); right:0;
+    bottom:26px;
+    max-width:520px; max-height:min(86vh, 820px);
+    border-radius:28px;
+    /* Floating now, so scrolling content has to be clipped to the
+       radius — on a phone the sheet's bottom was the screen's. */
+    overflow:hidden;
+  }
+  .sheet-body { padding-bottom:26px; }
+  .sheet.full {
+    top:auto; height:min(86vh, 820px); max-height:none;
+    border-radius:28px; box-shadow:0 24px 60px -20px rgba(0,26,16,.55);
+  }
+  .sheet.dark { overflow:hidden; }
+  .tray { border-radius:24px 24px 0 0; }
+}
+
+/* ── Wide desktop: more column, more columns ────────────────── */
+@media (min-width:1280px) {
+  :root { --content-w:860px; --rail-w:260px; }
+
+  .grid2 { grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); }
+  .sec { padding:30px 24px 0; }
+  .hero { border-radius:0 0 38px 38px; }
+}
+
+/* ── Short viewports (a phone turned sideways) ────────────────
+   Height, not width, is what has run out. Everything vertical
+   gives ground, and the PIN gate is allowed to scroll. */
+@media (max-height:560px) and (orientation:landscape) {
+  :root { --tabbar-h:60px; }
+
+  .gate { align-items:flex-start; overflow-y:auto; padding:18px 24px; }
+  .gate-mark { width:48px; height:48px; border-radius:17px; font-size:23px; margin-bottom:10px; }
+  .gate-title { font-size:22px; }
+  .gate-sub { margin:4px 0 16px; }
+  .pin-dots { margin-bottom:20px; }
+  .numpad { gap:9px; }
+  .numpad button { height:46px; font-size:19px; border-radius:15px; }
+
+  .hero { padding-top:calc(var(--safe-t) + 12px); padding-bottom:18px; }
+  .hero.with-panel { padding-bottom:28px; }
+  .hero-bar { margin-bottom:14px; }
+  .stat-val { font-size:20px; }
+
+  .fab { width:52px; height:52px; border-radius:19px; transform:translateY(-10px); }
+  .fab:active { transform:translateY(-10px) scale(.9); }
+  .tab span { font-size:9.5px; }
+
+  .sheet { max-height:100%; }
+  .amount { font-size:34px; min-height:40px; }
+  .amount .cur { font-size:18px; }
+  .amount-wrap { padding:4px 16px 12px; }
+  .numgrid button { height:42px; font-size:19px; }
+  .dirchips { padding-bottom:10px; }
+}
+
+/* In the rail layout the FAB never floats, so it must not be
+   nudged upward by the landscape rule above either. */
+@media (min-width:900px) {
+  .fab, .fab:active { transform:none; }
+}
+
+/* ── Pointers that hover ──────────────────────────────────────
+   A finger only ever gets :active. A mouse should be told what
+   is live before it commits. */
+@media (hover:hover) and (pointer:fine) {
+  .card:hover      { transform:translateY(-2px); box-shadow:var(--e3); }
+  .strip:hover     { transform:translateY(-2px); }
+  .row:hover       { background:var(--tea-soft); }
+  .chip:hover,
+  .cat:hover       { background:var(--tea-soft); }
+  .acct:hover      { box-shadow:var(--e2); }
+  .btn:hover       { filter:brightness(1.03); }
+  .icon-btn:hover  { background:rgba(255,247,230,.14); }
+  .icon-btn.plain:hover { background:var(--tea); }
+  .tab:not(.on):hover   { color:var(--pine-600); }
+  .numpad button:hover  { background:rgba(206,241,123,.16); }
+  .numgrid button:hover { background:var(--tea-soft); }
+  .sec-link:hover  { text-decoration:underline; }
+}
+
+/* Keyboard users get the same affordance a pointer gets. */
+:focus-visible {
+  outline:2.5px solid var(--pine-500);
+  outline-offset:2px;
+  border-radius:6px;
+}
+.gate :focus-visible,
+.hero :focus-visible,
+.sheet.dark :focus-visible,
+.strip:not([style]) :focus-visible { outline-color:var(--lime); }
+
+/* Touch keyboards zoom a field whose text is under 16px. Only
+   coarse pointers pay the extra pixel; the drawn design keeps 15. */
+@media (pointer:coarse) {
+  .control { font-size:16px; }
 }
