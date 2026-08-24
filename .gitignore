@@ -9,3 +9,8 @@ Phynance backup*.json
 # Local Python cache if any tooling ever runs here
 __pycache__/
 *.pyc
+
+# Wrangler, from deploying the bill-reading proxy in server/
+node_modules/
+.wrangler/
+.dev.vars
