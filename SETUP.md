@@ -72,20 +72,36 @@ Files are owned by that account and count against its storage.
 1. In [Google Cloud Console](https://console.cloud.google.com), create a
    project and enable the **Google Drive API**.
 2. **APIs & Services → Credentials → Create OAuth client ID → Web
-   application**. Add `https://developers.google.com/oauthplayground` as
-   a redirect URI. Copy the client ID and secret.
-3. Go to the
-   [OAuth Playground](https://developers.google.com/oauthplayground),
-   open the gear icon, tick **Use your own OAuth credentials**, and
-   paste them in.
-4. Authorise the scope `https://www.googleapis.com/auth/drive`, sign in
-   as the business Google account, and exchange the code for tokens.
-   Copy the **refresh token**.
-5. Create the folder in that account's Drive that bills should go into,
-   and copy its ID out of the address bar.
+   application**.
+3. Under **Authorised redirect URIs**, add exactly:
 
-You now have `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
-`GOOGLE_REFRESH_TOKEN` and `DRIVE_ROOT_FOLDER_ID`.
+   ```
+   https://YOUR-APP.vercel.app/api/google/callback
+   ```
+
+   Use whatever domain the app is deployed on. If you later move to
+   `kontour.banavat-india.com`, add that one too.
+4. Copy the client ID and secret into Vercel as `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET`. Add `SETUP_SECRET` as well — any long random
+   string you invent. Redeploy.
+5. Visit, signed in as the **business Google account**:
+
+   ```
+   https://YOUR-APP.vercel.app/api/google/connect?secret=YOUR_SETUP_SECRET
+   ```
+
+   Approve the consent screen. The next page shows your
+   `GOOGLE_REFRESH_TOKEN` and lists that Drive's folders with their ids,
+   so you can pick `DRIVE_ROOT_FOLDER_ID` at the same time.
+6. Put both into Vercel, then **delete `SETUP_SECRET`**. That closes the
+   connect routes again.
+
+> You do not need Google's OAuth Playground. The route above does the
+> same job on your own domain.
+
+If the OAuth consent screen is still in **Testing**, add the business
+account under **OAuth consent screen → Test users** first, or Google
+refuses the sign-in.
 
 ### If the books use Google Workspace
 
@@ -96,7 +112,8 @@ You now have `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
 3. Copy the Shared Drive's folder ID.
 
 You now have `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY` (the
-`private_key` field from the JSON) and `DRIVE_ROOT_FOLDER_ID`.
+`private_key` field from the JSON) and `DRIVE_ROOT_FOLDER_ID`. The
+connect route above is not needed on this path.
 
 > A service account has no Drive storage of its own. Pointing one at a
 > folder in a *normal* Google account fails on quota at the first
@@ -120,6 +137,7 @@ You now have `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY` (the
    | `DRIVE_ROOT_FOLDER_ID` | The Drive folder from part 2 |
    | `ANTHROPIC_API_KEY` | Only if bill reading is wanted |
    | `ALLOWED_ORIGINS` | Leave unset while the app and API share a domain |
+   | `SETUP_SECRET` | Only while connecting Drive — delete it afterwards |
 
    Plus **either** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
    `GOOGLE_REFRESH_TOKEN`, **or** `GOOGLE_SERVICE_ACCOUNT_EMAIL` and
@@ -156,14 +174,13 @@ certificate is issued.
 
 ## What is not connected yet
 
-Two things are deliberately still on the old path, and both work today:
+Everything in this guide is wired. Two smaller things remain deliberate
+choices rather than gaps:
 
-- **Bill photos** still upload to each user's own Google Drive through
-  Settings, as before. The shared-folder route (`/api/bill-upload`) is
-  built and deployed but the app does not call it yet, so a photo one
-  person uploads is not visible to another.
-- **Managing people** has no screen. Invites, roles and removals work
-  through the database (`invites` and `memberships` tables in the
-  Supabase Table Editor) but there is nothing in Settings for them yet.
-
-Neither blocks using the shared ledger.
+- **Bills photographed before signing in** stay in whoever's personal
+  Drive they were uploaded to. Only bills taken after the shared folder
+  is connected land in it.
+- **Sync runs on a timer**, not a live socket — on reconnect, when the
+  app is looked at again, and every few minutes. A socket held open on a
+  phone in a workshop costs battery to hear about a ledger that changes
+  a few times a day.
