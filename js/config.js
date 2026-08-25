@@ -11,8 +11,8 @@
  * promises is that it opens with no signal.
  */
 
-export const SUPABASE_URL = '';
-export const SUPABASE_ANON_KEY = '';
+export const SUPABASE_URL = 'https://bstyhytolniibgqdcpcu.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_FDM5Sk8ooa5534e0jFrcsQ_yFzqKoKr';
 
 /* Where the API routes live. Same origin once the app is on Vercel, so
    this stays empty; set it only if the app and its API are split. */
