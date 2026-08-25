@@ -17,11 +17,11 @@ npx wrangler secret put ANTHROPIC_API_KEY   # paste the key when prompted
 npx wrangler deploy
 ```
 
-That prints a URL like `https://phynance-read-bill.<your-subdomain>.workers.dev`.
+That prints a URL like `https://kontour-read-bill.<your-subdomain>.workers.dev`.
 
 ## Point the app at it
 
-In Phynance: **Settings → Read bills with Claude**
+In Kontour: **Settings → Read bills with Claude**
 
 1. Paste the Worker URL into **Server endpoint**.
 2. Leave **API key** blank — with an endpoint set, the app never sends a key.

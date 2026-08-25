@@ -143,10 +143,10 @@ async function findOrCreateFolder(name, parentId = null) {
   return created.id;
 }
 
-/** /Phynance/2026/08 — created once, then remembered. */
+/** /Kontour/2026/08 — created once, then remembered. */
 async function folderFor(dateISO) {
   const d = settings().drive;
-  const rootName = d.folderName || 'Phynance';
+  const rootName = d.folderName || 'Kontour';
   let rootId = d.folderId;
   if (!rootId) {
     rootId = await findOrCreateFolder(rootName);
@@ -218,8 +218,8 @@ export async function uploadPhoto(rec) {
     name: fileNameFor(entry, rec),
     parents: [parent],
     description: entry
-      ? `Phynance ${entry.type} · ${dmy(entry.date)} · ₹${entry.total}${entry.note ? ' · ' + entry.note : ''}`
-      : 'Phynance bill',
+      ? `Kontour ${entry.type} · ${dmy(entry.date)} · ₹${entry.total}${entry.note ? ' · ' + entry.note : ''}`
+      : 'Kontour bill',
   };
 
   const form = new FormData();
@@ -314,7 +314,7 @@ export async function readBill(rec) {
   };
 
   // An endpoint set in Settings means "go through my server" — that is the
-  // right shape once Phynance is on the subdomain, because the API key then
+  // right shape once Kontour is on the subdomain, because the API key then
   // lives server-side instead of in this browser.
   // Signed in to shared books, this deployment's own route is the proxy,
   // and it checks membership before it will spend the key.

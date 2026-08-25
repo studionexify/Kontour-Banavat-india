@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════
--- Phynance — shared books for one business
+-- Kontour — shared books for one business
 --
 -- The shape here follows what the app already is: an offline-first
 -- ledger whose records are small JSON documents. Rather than mirror

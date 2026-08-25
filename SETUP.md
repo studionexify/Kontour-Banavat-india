@@ -1,4 +1,4 @@
-# Connecting Phynance
+# Connecting Kontour
 
 Everything in this guide is a one-time job. Until it is done the app
 runs exactly as it did before — on the device, no account, no sync — so

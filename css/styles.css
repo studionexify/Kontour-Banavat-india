@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════
-   PHYNANCE — Banavat India
+   KONTOUR — Banavat India
 
    Beige canvas, pine structure, one scarce lime accent.
 
@@ -1020,7 +1020,7 @@ select.control { padding-right:34px; background-position:right 13px center; back
 /* ════════════════════════════════════════════════════════════
    RESPONSIVE
 
-   One design, four shapes. Nothing below changes what Phynance
+   One design, four shapes. Nothing below changes what Kontour
    looks like — it changes how much room each part is given.
 
      compact phone   ≤360px   tighten padding, shrink the chrome
@@ -1150,7 +1150,7 @@ select.control { padding-right:34px; background-position:right 13px center; back
   }
   /* A wordmark where the rail has room for one. */
   .tabbar::before {
-    content:"Phynance";
+    content:"Kontour";
     order:-2;                       /* ahead of the FAB, which is -1 */
     display:block; flex:none;
     padding:0 15px 20px;

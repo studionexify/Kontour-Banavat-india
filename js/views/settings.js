@@ -66,7 +66,7 @@ export function openSettings(ctx) {
           <div class="list">
             ${navRow('lock', 'PIN lock', hasPin() ? (device.get('skipPin') ? 'On, skipped on this device' : 'On') : 'Off', 'pin')}
             ${navRow('download', 'Backup & restore', `${entries().length} entries`, 'backup')}
-            ${navRow('alert', 'About Phynance', 'Version, storage, reset', 'about')}
+            ${navRow('alert', 'About Kontour', 'Version, storage, reset', 'about')}
           </div>
 
           ${!entries().length ? `
@@ -482,7 +482,7 @@ function driveSheet(ctx, back) {
       <div class="sheet-body">
         <div class="hint" style="margin-bottom:14px">
           Bills are uploaded to a folder you own, sorted into
-          <b>${esc(s.drive.folderName || 'Phynance')}/2026/08/</b>. Phynance only ever sees the files it
+          <b>${esc(s.drive.folderName || 'Kontour')}/2026/08/</b>. Kontour only ever sees the files it
           creates itself — it cannot read the rest of your Drive.
         </div>
         <div class="field">
@@ -493,7 +493,7 @@ function driveSheet(ctx, back) {
         </div>
         <div class="field">
           <label>Folder name</label>
-          <input class="control" data-folder value="${esc(s.drive.folderName || 'Phynance')}">
+          <input class="control" data-folder value="${esc(s.drive.folderName || 'Kontour')}">
         </div>
         <button class="btn sm" data-save>Save</button>
         <button class="btn ${driveConfigured() ? '' : 'sec'} sm" data-connect>Connect Google account</button>
@@ -508,7 +508,7 @@ function driveSheet(ctx, back) {
           drive: {
             ...settings().drive,
             clientId: root.querySelector('[data-cid]').value.trim(),
-            folderName: root.querySelector('[data-folder]').value.trim() || 'Phynance',
+            folderName: root.querySelector('[data-folder]').value.trim() || 'Kontour',
             folderId: '',
           },
         });
@@ -559,7 +559,7 @@ function aiSheet(ctx, back) {
           <input class="control" data-key type="password" value="${esc(s.ai.key)}" placeholder="sk-ant-…">
           <div class="hint warn">
             The key is stored in this browser and sent straight from the phone. That is fine for your own
-            device; once Phynance is on the subdomain, move it behind your server using the field below
+            device; once Kontour is on the subdomain, move it behind your server using the field below
             so the key never reaches a browser.
           </div>
         </div>
@@ -571,7 +571,7 @@ function aiSheet(ctx, back) {
         </div>
         <div class="field">
           <label>Server endpoint (optional)</label>
-          <input class="control" data-ep value="${esc(s.ai.endpoint || '')}" placeholder="https://phynance.…/api/read-bill">
+          <input class="control" data-ep value="${esc(s.ai.endpoint || '')}" placeholder="https://kontour.…/api/read-bill">
           <div class="hint">Set this later and the key above is ignored — the request goes to your server instead.</div>
         </div>
         <button class="btn" data-save>Save</button>
@@ -678,7 +678,7 @@ function pinSheet(ctx, back) {
       on(root, '[data-off]', async () => {
         const ok = await confirmSheet({
           title: 'Turn the PIN off?',
-          message: 'Anyone who picks up this phone will be able to open Phynance.',
+          message: 'Anyone who picks up this phone will be able to open Kontour.',
           confirmLabel: 'Turn it off', danger: true,
         });
         if (!ok) return;
@@ -787,7 +787,7 @@ function backupSheet(ctx, back) {
 
 function aboutSheet(ctx, back) {
   const sheet = openSheet({
-    title: 'About Phynance',
+    title: 'About Kontour',
     body: `<div class="sheet-body" data-b></div>`,
     async onMount(root) {
       const usage = await photos.usage();
@@ -797,7 +797,7 @@ function aboutSheet(ctx, back) {
           <div class="kv"><span>Version</span><b>1.0 — offline</b></div>
           <div class="kv"><span>Entries</span><b>${entries().length}</b></div>
           <div class="kv"><span>Photos</span><b>${usage.count} · ${humanBytes(usage.bytes)}</b></div>
-          <div class="kv"><span>Ledger storage</span><b>${humanBytes(new Blob([localStorage.getItem('phynance.v1') || '']).size)}</b></div>
+          <div class="kv"><span>Ledger storage</span><b>${humanBytes(new Blob([localStorage.getItem('kontour.v1') || '']).size)}</b></div>
           <div class="kv"><span>Installed</span><b>${window.matchMedia('(display-mode: standalone)').matches ? 'As an app' : 'In the browser'}</b></div>
         </div>
         <div class="hint" style="margin-bottom:16px">
@@ -1095,7 +1095,7 @@ function accountSheet(ctx, back) {
         const ok = await confirmSheet({
           title: 'Sign out?',
           message: waiting
-            ? `${waiting} change${waiting > 1 ? 's have' : ' has'} not been uploaded yet. Phynance will try to send ${waiting > 1 ? 'them' : 'it'} first.`
+            ? `${waiting} change${waiting > 1 ? 's have' : ' has'} not been uploaded yet. Kontour will try to send ${waiting > 1 ? 'them' : 'it'} first.`
             : 'These books will be cleared from this device. Signing back in fetches them again.',
           confirmLabel: 'Sign out',
           danger: true,

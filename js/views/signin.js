@@ -33,7 +33,7 @@ function shell(inner) {
   return `
     <div class="gate-inner auth">
       <div class="gate-mark">₹</div>
-      <h1 class="gate-title">Phynance</h1>
+      <h1 class="gate-title">Kontour</h1>
       ${inner}
     </div>`;
 }

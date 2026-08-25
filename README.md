@@ -1,4 +1,4 @@
-# Phynance — Banavat India
+# Kontour — Banavat India
 
 A daily money log. Every rupee that moves through Banavat India gets one entry:
 what it was, which job it belonged to, which account it came from or went into,
@@ -71,7 +71,7 @@ a ₹50,000 cash withdrawal doesn't inflate either figure.
 
 **GST both ways.** Collected on sales and paid on purchases, kept separate, with
 a net figure at the bottom of Reports. That is data for your CA to file from —
-Phynance does not file anything.
+Kontour does not file anything.
 
 **Jobs.** Any entry can carry a job code. Give a job its order value and the
 outstanding figure keeps itself current — the same Total / Paid / Remaining
@@ -98,7 +98,7 @@ no internet. It shows as *waiting to upload*.
 
 When you are online **and** have set it up in Settings:
 
-1. The photo uploads to **your** Google Drive, into `Phynance/2026/08/`, named
+1. The photo uploads to **your** Google Drive, into `Kontour/2026/08/`, named
    `B109_2026-08-19_45000.jpg`.
 2. Claude reads the image and fills in amount, date, party, GST rate, and a
    one-line description.
@@ -113,7 +113,7 @@ exist, and the queue drains on its own when the connection comes back.
 **Google Drive** — Settings → Google Drive. You need an OAuth client ID from
 Google Cloud Console → Credentials → *OAuth client ID* → *Web application*, with
 this app's address in the allowed JavaScript origins. The scope requested is
-`drive.file`: Phynance can only ever see files it created itself, never the rest
+`drive.file`: Kontour can only ever see files it created itself, never the rest
 of your Drive.
 
 **Claude** — Settings → Read bills with Claude. Paste an Anthropic API key.

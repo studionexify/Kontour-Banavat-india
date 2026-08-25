@@ -3,14 +3,17 @@
    JSON file. Photos are binary and can be large, so they get their own
    store and are never inlined into that backup. */
 
-const DB_NAME = 'phynance';
+import { migratePhotos } from './legacy.js';
+
+const DB_NAME = 'kontour';
 const DB_VER = 1;
 const STORE = 'photos';
 
 let _db = null;
+let _migrated = null;
 
-function open() {
-  if (_db) return Promise.resolve(_db);
+/** Opens (and creates) this app's own database, schema and all. */
+function openOwn() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VER);
     req.onupgradeneeded = () => {
@@ -21,9 +24,22 @@ function open() {
         os.createIndex('status', 'status', { unique: false });
       }
     };
-    req.onsuccess = () => { _db = req.result; resolve(_db); };
+    req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+}
+
+/**
+ * Every read and write goes through here, so this is where the old
+ * pre-rename database gets emptied into this one — once, before the
+ * first query can report a phone's bills as missing.
+ */
+function open() {
+  if (_db) return Promise.resolve(_db);
+  if (!_migrated) _migrated = migratePhotos(openOwn);
+  return _migrated
+    .then(openOwn)
+    .then((db) => { _db = db; return db; });
 }
 
 function tx(mode, fn) {

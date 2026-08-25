@@ -63,7 +63,7 @@ export function page(title, bodyHtml) {
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)} — Phynance</title>
+<title>${esc(title)} — Kontour</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }

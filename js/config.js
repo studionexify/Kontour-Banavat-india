@@ -1,4 +1,4 @@
-/* config.js — where this copy of Phynance points.
+/* config.js — where this copy of Kontour points.
  *
  * Fill these in after creating the Supabase project (see SETUP.md).
  * Until they are set the app runs exactly as it always has: everything

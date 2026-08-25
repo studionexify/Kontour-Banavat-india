@@ -12,9 +12,10 @@
  */
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY, cloudConfigured } from './config.js';
+import './legacy.js';   // moves pre-rename storage across; must load first
 
-const SESSION_KEY = 'phynance.session';
-const ORG_KEY = 'phynance.org';
+const SESSION_KEY = 'kontour.session';
+const ORG_KEY = 'kontour.org';
 
 let session = null;
 let refreshing = null;          // in-flight refresh, shared by every caller

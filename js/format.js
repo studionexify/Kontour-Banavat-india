@@ -1,4 +1,4 @@
-/* format.js — money, dates and the Indian conventions Phynance speaks in. */
+/* format.js — money, dates and the Indian conventions Kontour speaks in. */
 
 const NF = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
 const NF0 = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });

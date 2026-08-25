@@ -160,7 +160,7 @@ export function openJob(code, ctx) {
           <label>Order value (₹)</label>
           <input class="control num" data-j="orderValue" type="number" inputmode="decimal"
                  value="${j.orderValue || ''}" placeholder="Leave blank for no target">
-          <div class="hint">Set this and Phynance keeps the outstanding figure current on its own.</div>
+          <div class="hint">Set this and Kontour keeps the outstanding figure current on its own.</div>
         </div>
         <button class="btn sm" data-savejob>Save job</button>
 

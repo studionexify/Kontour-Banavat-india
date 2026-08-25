@@ -12,8 +12,8 @@
  * six times offline should push once, carrying the sixth version.
  */
 
-const QUEUE_KEY = 'phynance.outbox';
-const CURSOR_KEY = 'phynance.cursor';
+const QUEUE_KEY = 'kontour.outbox';
+const CURSOR_KEY = 'kontour.cursor';
 
 /* The five kinds that sync, and what each one calls its identity.
    Jobs are keyed by code; everything else by id. Settings sync

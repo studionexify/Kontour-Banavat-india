@@ -181,7 +181,7 @@ async function show(where) {
     revealIO = enhance(screen, screen);
     detachScroll = bindHeroScroll(screen, $('#topbar'));
   } catch (e) {
-    console.error('[phynance] view failed', e);
+    console.error('[kontour] view failed', e);
     toast('Something went wrong drawing that screen', 'err');
   } finally {
     painting = false;

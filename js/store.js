@@ -1,14 +1,15 @@
 /* store.js — the ledger itself.
    Everything except photo blobs lives here, persisted to localStorage as
    one JSON document. The whole file is written as an async API on purpose:
-   when Phynance goes online, only the read()/write() pair below changes,
+   when Kontour goes online, only the read()/write() pair below changes,
    and no view has to be touched. */
 
 import { round2, todayISO, monthKey, isoOf } from './format.js';
 import { KINDS, snapshot, diff, enqueue, clearQueue, setCursor } from './outbox.js';
+import './legacy.js';   // moves pre-rename storage across; must load first
 
-const KEY = 'phynance.v1';
-const DEVICE_KEY = 'phynance.device';       // never leaves this device, never exported
+const KEY = 'kontour.v1';
+const DEVICE_KEY = 'kontour.device';       // never leaves this device, never exported
 export const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /* ── Defaults ──────────────────────────────────────────────── */
@@ -50,7 +51,7 @@ const DEFAULT_SETTINGS = {
   pinSalt: '',
   gstDefaultRate: 18,
   gstDefaultMode: 'excl',        // 'excl' = amount is before GST, 'incl' = GST inside
-  drive: { clientId: '', folderId: '', folderName: 'Phynance', token: '', tokenExp: 0 },
+  drive: { clientId: '', folderId: '', folderName: 'Kontour', token: '', tokenExp: 0 },
   ai: { key: '', model: 'claude-opus-5', enabled: true, endpoint: '' },
   autoSync: true,
 };
@@ -80,7 +81,7 @@ function read() {
     const parsed = JSON.parse(raw);
     return migrate(parsed);
   } catch (e) {
-    console.error('[phynance] could not read saved data', e);
+    console.error('[kontour] could not read saved data', e);
     return blank();
   }
 }
@@ -112,7 +113,7 @@ function write() {
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
   } catch (e) {
-    console.error('[phynance] could not save', e);
+    console.error('[kontour] could not save', e);
     emit('error', 'Storage is full — export a backup and clear old photos.');
   }
 }
@@ -682,7 +683,7 @@ export function exportAll() {
   copy.settings.drive.tokenExp = 0;
   copy.settings.ai.key = '';
   return {
-    app: 'phynance',
+    app: 'kontour',
     version: 1,
     exportedAt: new Date().toISOString(),
     data: copy,
@@ -690,8 +691,11 @@ export function exportAll() {
 }
 
 export function importAll(payload, { merge = false } = {}) {
-  if (!payload || payload.app !== 'phynance' || !payload.data) {
-    throw new Error('That file is not a Phynance backup.');
+  // 'kontour' is what backups taken before the rename say. They are
+  // still this app's own files and still restore.
+  const known = payload && (payload.app === 'kontour' || payload.app === 'kontour');
+  if (!known || !payload.data) {
+    throw new Error('That file is not a Kontour backup.');
   }
   const incoming = migrate(payload.data);
   if (!merge) {

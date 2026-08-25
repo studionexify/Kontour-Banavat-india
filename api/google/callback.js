@@ -79,7 +79,7 @@ export default async function handler(req, res) {
     return res.status(400).send(page('No refresh token', `
       <h1>Google returned no refresh token</h1>
       <p>That happens when this account has already granted consent, so
-         Google reissues an access token only. Remove Phynance from
+         Google reissues an access token only. Remove Kontour from
          <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">
          your account's third-party access</a> and run the connect link
          again.</p>`));
