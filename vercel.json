@@ -6,7 +6,6 @@
   "cleanUrls": true,
   "functions": {
     "api/**/*.js": {
-      "runtime": "@vercel/node@5.1.0",
       "maxDuration": 30
     }
   },
