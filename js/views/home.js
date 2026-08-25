@@ -27,7 +27,7 @@ export async function render(root, ctx) {
       <div class="hero-bar">
         <button class="icon-btn" data-go="reports" aria-label="Reports">${icon('chart', 21)}</button>
         <div class="hero-title" style="text-align:center">
-          Phynance
+          Kontour
           <small>Banavat India · ${esc(fyOf(today))}</small>
         </div>
         <button class="icon-btn" data-settings aria-label="Settings">${icon('gear', 21)}</button>
@@ -93,7 +93,7 @@ export async function render(root, ctx) {
       </button>
     </section>`;
 
-  ctx.setTopbar('Phynance', shortStat(totalOnHand()), 'IN HAND');
+  ctx.setTopbar('Kontour', shortStat(totalOnHand()), 'IN HAND');
 
   /* ── events ─────────────────────────────────────────────── */
   on(root, '[data-tab]', (e, b) => { tab = b.dataset.tab; ctx.refresh(); });

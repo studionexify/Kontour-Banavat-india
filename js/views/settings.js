@@ -13,7 +13,14 @@ import {
 import { inr } from '../format.js';
 import { photos, humanBytes } from '../photos.js';
 import { exportBackup, readBackupFile } from '../export.js';
-import { status, connectDrive, disconnectDrive, driveConfigured, syncPending } from '../sync.js';
+import { status, connectDrive, disconnectDrive, driveConfigured, syncPending, sharedDrive } from '../sync.js';
+import { cloudConfigured } from '../config.js';
+import { PROVIDERS, providerOf, defaultModel, isCustomModel } from '../models.js';
+import {
+  signedIn, currentUser, currentOrgId, myOrgs, myRole, canWrite, signOut,
+  members, invite, pendingInvites, revokeInvite, setRole, removeMember,
+} from '../auth.js';
+import { sync, pendingCount, lastSyncError } from '../cloud.js';
 
 export function openSettings(ctx) {
   const sheet = openSheet({
@@ -28,6 +35,7 @@ export function openSettings(ctx) {
         const s = settings();
         const sync = await status();
         const usage = await photos.usage();
+        const who = await whoAmI();
         body.innerHTML = `
           <p class="tray-lbl">Money</p>
           <div class="list">
@@ -40,16 +48,26 @@ export function openSettings(ctx) {
           <p class="tray-lbl sp">Online</p>
           <div class="list">
             ${navRow('drive', 'Google Drive', driveLabel(sync), 'drive')}
-            ${navRow('sparkle', 'Read bills with Claude', s.ai.enabled && (s.ai.key || s.ai.endpoint) ? `On · ${s.ai.model}` : 'Not set up', 'ai')}
+            ${navRow('sparkle', 'Read bills automatically', aiLabel(s), 'ai')}
             ${navRow(sync.online ? 'cloud' : 'cloudOff', 'Pending uploads',
               sync.pending ? `${sync.pending} waiting · ${humanBytes(usage.bytes)} stored` : 'Nothing waiting', 'pending')}
           </div>
+
+          ${cloudConfigured() && signedIn() ? `
+            <p class="tray-lbl sp">These books</p>
+            <div class="list">
+              ${navRow('user', 'People', peopleLabel(who), 'people')}
+              ${navRow(sync.online ? 'cloud' : 'cloudOff', 'Sync',
+                pendingCount() ? `${pendingCount()} change${pendingCount() > 1 ? 's' : ''} waiting`
+                  : lastSyncError() ? 'Last sync failed' : 'Up to date', 'sync')}
+              ${navRow('lock', 'Signed in', esc(who.email), 'account')}
+            </div>` : ''}
 
           <p class="tray-lbl sp">This device</p>
           <div class="list">
             ${navRow('lock', 'PIN lock', hasPin() ? (device.get('skipPin') ? 'On, skipped on this device' : 'On') : 'Off', 'pin')}
             ${navRow('download', 'Backup & restore', `${entries().length} entries`, 'backup')}
-            ${navRow('alert', 'About Phynance', 'Version, storage, reset', 'about')}
+            ${navRow('alert', 'About Kontour', 'Version, storage, reset', 'about')}
           </div>
 
           ${!entries().length ? `
@@ -63,6 +81,7 @@ export function openSettings(ctx) {
           accounts: accountsSheet, categories: categoriesSheet, recurring: recurringSheet,
           gst: gstSheet, drive: driveSheet, ai: aiSheet, pending: pendingSheet,
           pin: pinSheet, backup: backupSheet, about: aboutSheet,
+          people: peopleSheet, sync: syncSheet, account: accountSheet,
         };
         await map[where](ctx, paint);
       });
@@ -95,6 +114,16 @@ function navRow(ico, title, sub, nav) {
       </span>
       <span class="row-go">${icon('chevR', 17)}</span>
     </button>`;
+}
+
+/* On shared books the key is the server's, so being set up is a matter
+   of the switch rather than of anything typed on this device. */
+function aiLabel(s) {
+  if (!s.ai.enabled) return 'Off';
+  const ready = sharedDrive() || s.ai.key || s.ai.endpoint;
+  if (!ready) return 'Needs an API key';
+  const p = PROVIDERS[providerOf(s.ai.provider)];
+  return `${p.label} · ${s.ai.model}`;
 }
 
 function driveLabel(sync) {
@@ -464,7 +493,7 @@ function driveSheet(ctx, back) {
       <div class="sheet-body">
         <div class="hint" style="margin-bottom:14px">
           Bills are uploaded to a folder you own, sorted into
-          <b>${esc(s.drive.folderName || 'Phynance')}/2026/08/</b>. Phynance only ever sees the files it
+          <b>${esc(s.drive.folderName || 'Kontour')}/2026/08/</b>. Kontour only ever sees the files it
           creates itself — it cannot read the rest of your Drive.
         </div>
         <div class="field">
@@ -475,7 +504,7 @@ function driveSheet(ctx, back) {
         </div>
         <div class="field">
           <label>Folder name</label>
-          <input class="control" data-folder value="${esc(s.drive.folderName || 'Phynance')}">
+          <input class="control" data-folder value="${esc(s.drive.folderName || 'Kontour')}">
         </div>
         <button class="btn sm" data-save>Save</button>
         <button class="btn ${driveConfigured() ? '' : 'sec'} sm" data-connect>Connect Google account</button>
@@ -490,7 +519,7 @@ function driveSheet(ctx, back) {
           drive: {
             ...settings().drive,
             clientId: root.querySelector('[data-cid]').value.trim(),
-            folderName: root.querySelector('[data-folder]').value.trim() || 'Phynance',
+            folderName: root.querySelector('[data-folder]').value.trim() || 'Kontour',
             folderId: '',
           },
         });
@@ -523,55 +552,130 @@ function driveSheet(ctx, back) {
 
 function aiSheet(ctx, back) {
   const s = settings();
-  const models = ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'];
+  // Held outside the markup so switching provider can repaint the model
+  // list without losing what has been typed into the other fields.
+  let provider = providerOf(s.ai.provider);
+  let model = s.ai.model || defaultModel(provider);
+  let enabled = s.ai.enabled;
+  /* Tracked separately rather than inferred from the model string:
+     choosing "Other…" clears the field, and an empty string is not a
+     custom model id — it is someone who has not typed one yet. */
+  let custom = isCustomModel(provider, model);
+
   const sheet = openSheet({
-    title: 'Read bills with Claude',
-    body: `
-      <div class="sheet-body">
-        <div class="hint" style="margin-bottom:14px">
-          When a bill photo is added and you are online, Claude reads it and fills in the amount,
-          date, party, GST and a one-line description. Nothing is saved until you check it and tap save.
-        </div>
-        <div class="switchrow" data-en>
-          <div><div class="sw-t">Read bills automatically</div><div class="sw-s">Only when online</div></div>
-          <div class="switch ${s.ai.enabled ? 'on' : ''}"></div>
-        </div>
-        <div class="field">
-          <label>Anthropic API key</label>
-          <input class="control" data-key type="password" value="${esc(s.ai.key)}" placeholder="sk-ant-…">
-          <div class="hint warn">
-            The key is stored in this browser and sent straight from the phone. That is fine for your own
-            device; once Phynance is on the subdomain, move it behind your server using the field below
-            so the key never reaches a browser.
-          </div>
-        </div>
-        <div class="field">
-          <label>Model</label>
-          <select class="control" data-model>
-            ${models.map((m) => `<option value="${m}" ${s.ai.model === m ? 'selected' : ''}>${m}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field">
-          <label>Server endpoint (optional)</label>
-          <input class="control" data-ep value="${esc(s.ai.endpoint || '')}" placeholder="https://phynance.…/api/read-bill">
-          <div class="hint">Set this later and the key above is ignored — the request goes to your server instead.</div>
-        </div>
-        <button class="btn" data-save>Save</button>
-      </div>`,
+    title: 'Read bills automatically',
+    body: `<div class="sheet-body" data-body></div>`,
     onMount(root) {
-      let enabled = s.ai.enabled;
+      const body = root.querySelector('[data-body]');
+      paint();
+
+      function paint() {
+        const p = PROVIDERS[provider];
+        // On shared books the key lives on the server, so the field below
+        // would be asking for something nobody needs to supply.
+        const onServer = sharedDrive();
+
+        body.innerHTML = `
+          <div class="hint" style="margin-bottom:14px">
+            When a bill photo is added and you are online, the model reads it and fills in
+            the amount, date, party, GST and a one-line description. Nothing is saved until
+            you check it and tap save.
+          </div>
+
+          <div class="switchrow" data-en>
+            <div>
+              <div class="sw-t">Read bills automatically</div>
+              <div class="sw-s">Only when online</div>
+            </div>
+            <div class="switch ${enabled ? 'on' : ''}"></div>
+          </div>
+
+          <p class="tray-lbl sp">Which model reads them</p>
+          <div class="toggle2" style="margin-bottom:12px">
+            ${Object.entries(PROVIDERS).map(([id, cfg]) => `
+              <button data-provider="${id}" class="${provider === id ? 'on' : ''}">${esc(cfg.label)}</button>`).join('')}
+          </div>
+
+          <div class="catgrid" style="margin-bottom:6px">
+            ${p.models.map((m) => `
+              <button class="cat ${model === m.id ? 'on' : ''}" data-model="${esc(m.id)}"
+                      title="${esc(m.note)}">${esc(m.label)}</button>`).join('')}
+            <button class="cat ${custom ? 'on' : ''}" data-model="__custom">Other…</button>
+          </div>
+          <div class="hint">${esc((p.models.find((m) => m.id === model) || {}).note || 'Any model id this provider accepts.')}</div>
+
+          ${custom ? `
+            <div class="field" style="margin-top:12px">
+              <label>Model id</label>
+              <input class="control" data-custom value="${esc(model)}" placeholder="${esc(defaultModel(provider))}">
+              <div class="hint">Sent through as typed, so a model released since this app was built still works.</div>
+            </div>` : ''}
+
+          ${onServer ? `
+            <div class="hint" style="margin-top:16px">
+              The ${esc(p.label)} key is held by your server, not this phone — nothing to enter here.
+              It is set as <b>${esc(p.keyEnv)}</b> in the Vercel environment.
+            </div>`
+          : `
+            <div class="field sp" style="margin-top:16px">
+              <label>${esc(p.label)} API key</label>
+              <input class="control" data-key type="password" value="${esc(s.ai.key)}"
+                     placeholder="${provider === 'gemini' ? 'AIza…' : 'sk-ant-…'}">
+              <div class="hint warn">
+                Stored in this browser and sent straight from the phone. Fine on your own device;
+                once you sign in to shared books the key moves to the server instead.
+              </div>
+            </div>
+            <div class="field">
+              <label>Server endpoint (optional)</label>
+              <input class="control" data-ep value="${esc(s.ai.endpoint || '')}"
+                     placeholder="https://kontour.…/api/read-bill">
+              <div class="hint">Set this and the key above is ignored — the request goes to your server.</div>
+            </div>`}
+
+          <button class="btn" data-save>Save</button>`;
+      }
+
       on(root, '[data-en]', (e, el) => {
         enabled = !enabled;
         el.querySelector('.switch').classList.toggle('on', enabled);
       });
+
+      on(root, '[data-provider]', (e, b) => {
+        if (b.dataset.provider === provider) return;
+        provider = b.dataset.provider;
+        // The old model id means nothing to the new provider.
+        model = defaultModel(provider);
+        custom = false;
+        paint();
+      });
+
+      on(root, '[data-model]', (e, b) => {
+        const pick = b.dataset.model;
+        custom = pick === '__custom';
+        if (!custom) model = pick;
+        paint();
+        if (custom) root.querySelector('[data-custom]').focus();
+      });
+
       on(root, '[data-save]', () => {
+        const customField = root.querySelector('[data-custom]');
+        const chosen = customField ? customField.value.trim() : model;
+        if (!chosen) return toast('Pick a model, or type one in', 'warn');
+
+        const keyField = root.querySelector('[data-key]');
+        const epField = root.querySelector('[data-ep]');
+
         saveSettings({
           ai: {
             ...settings().ai,
             enabled,
-            key: root.querySelector('[data-key]').value.trim(),
-            model: root.querySelector('[data-model]').value,
-            endpoint: root.querySelector('[data-ep]').value.trim(),
+            provider,
+            model: chosen,
+            // Absent on shared books, where the server holds the key —
+            // keep whatever was there rather than blanking it.
+            ...(keyField ? { key: keyField.value.trim() } : {}),
+            ...(epField ? { endpoint: epField.value.trim() } : {}),
           },
         });
         toast('Saved');
@@ -581,8 +685,6 @@ function aiSheet(ctx, back) {
     },
   });
 }
-
-/* ── Pending uploads ───────────────────────────────────────── */
 
 function pendingSheet(ctx, back) {
   const sheet = openSheet({
@@ -660,7 +762,7 @@ function pinSheet(ctx, back) {
       on(root, '[data-off]', async () => {
         const ok = await confirmSheet({
           title: 'Turn the PIN off?',
-          message: 'Anyone who picks up this phone will be able to open Phynance.',
+          message: 'Anyone who picks up this phone will be able to open Kontour.',
           confirmLabel: 'Turn it off', danger: true,
         });
         if (!ok) return;
@@ -769,7 +871,7 @@ function backupSheet(ctx, back) {
 
 function aboutSheet(ctx, back) {
   const sheet = openSheet({
-    title: 'About Phynance',
+    title: 'About Kontour',
     body: `<div class="sheet-body" data-b></div>`,
     async onMount(root) {
       const usage = await photos.usage();
@@ -779,7 +881,7 @@ function aboutSheet(ctx, back) {
           <div class="kv"><span>Version</span><b>1.0 — offline</b></div>
           <div class="kv"><span>Entries</span><b>${entries().length}</b></div>
           <div class="kv"><span>Photos</span><b>${usage.count} · ${humanBytes(usage.bytes)}</b></div>
-          <div class="kv"><span>Ledger storage</span><b>${humanBytes(new Blob([localStorage.getItem('phynance.v1') || '']).size)}</b></div>
+          <div class="kv"><span>Ledger storage</span><b>${humanBytes(new Blob([localStorage.getItem('kontour.v1') || '']).size)}</b></div>
           <div class="kv"><span>Installed</span><b>${window.matchMedia('(display-mode: standalone)').matches ? 'As an app' : 'In the browser'}</b></div>
         </div>
         <div class="hint" style="margin-bottom:16px">
@@ -809,5 +911,302 @@ function aboutSheet(ctx, back) {
         ctx.refresh();
       });
     },
+  });
+}
+
+/* ── Shared books ─────────────────────────────────────────────
+   Only reachable when this copy is signed in, so every sheet below
+   can assume there is a session and an org. */
+
+const ROLE_NOTE = {
+  owner: 'Everything, including managing people',
+  admin: 'Everything except removing the owner',
+  staff: 'Log, edit and delete entries',
+  viewer: 'Read only — every save is refused',
+};
+
+async function whoAmI() {
+  const user = currentUser();
+  let role = '';
+  let orgName = '';
+  try {
+    role = await myRole();
+    const all = await myOrgs();
+    const here = all.find((o) => o.id === currentOrgId());
+    if (here) orgName = here.name;
+  } catch {
+    // Offline, or the session has lapsed. The screen still draws; it
+    // just cannot say what this account may do until the next sync.
+  }
+  return { email: user ? user.email : '', role, orgName };
+}
+
+function peopleLabel(who) {
+  if (!who.role) return who.orgName || 'Shared books';
+  return `${who.orgName || 'Shared books'} · you are ${who.role}`;
+}
+
+function peopleSheet(ctx, back) {
+  return openSheet({
+    title: 'People',
+    full: true,
+    body: `<div class="sheet-body" data-body><div class="empty"><p>Loading…</p></div></div>`,
+    async onMount(root) {
+      const body = root.querySelector('[data-body]');
+      await paint();
+
+      async function paint() {
+        let list = [];
+        let waiting = [];
+        let role = '';
+        try {
+          role = await myRole();
+          list = await members() || [];
+          waiting = await pendingInvites() || [];
+        } catch (e) {
+          body.innerHTML = `
+            <div class="hint warn">Could not load the people on these books — ${esc(e.message)}</div>`;
+          return;
+        }
+
+        const admin = ['owner', 'admin'].includes(role);
+        const me = currentUser();
+
+        body.innerHTML = `
+          <p class="tray-lbl">On these books</p>
+          <div class="list">
+            ${list.map((m) => {
+              const p = m.profiles || {};
+              const isMe = me && m.user_id === me.id;
+              return `
+                <button class="row" ${admin && !isMe ? `data-person="${esc(m.user_id)}"` : ''}>
+                  <span class="row-ico">${icon('user', 18)}</span>
+                  <span class="row-txt">
+                    <span class="row-t">${esc(p.full_name || p.email || 'Member')}${isMe ? ' (you)' : ''}</span>
+                    <span class="row-s">${esc(p.email || '')}</span>
+                  </span>
+                  <span class="pill ${m.role === 'viewer' ? 'mut' : 'in'}">${esc(m.role)}</span>
+                </button>`;
+            }).join('')}
+          </div>
+
+          ${waiting.length ? `
+            <p class="tray-lbl sp">Invited, not signed up yet</p>
+            <div class="list">
+              ${waiting.map((i) => `
+                <div class="row">
+                  <span class="row-ico">${icon('mail', 18)}</span>
+                  <span class="row-txt">
+                    <span class="row-t">${esc(i.email)}</span>
+                    <span class="row-s">Joins as ${esc(i.role)} when they sign up</span>
+                  </span>
+                  ${admin ? `<button class="pill warn" data-revoke="${esc(i.id)}">Cancel</button>` : ''}
+                </div>`).join('')}
+            </div>` : ''}
+
+          ${admin ? `
+            <p class="tray-lbl sp">Invite someone</p>
+            <div class="field">
+              <input class="control" data-email type="email" inputmode="email"
+                     placeholder="them@banavat-india.com" autocomplete="off">
+            </div>
+            <div class="field">
+              <label>They can</label>
+              <select class="control" data-role>
+                <option value="staff">Log and edit entries</option>
+                <option value="admin">Everything, including people</option>
+                <option value="viewer">Only read the books</option>
+              </select>
+            </div>
+            <button class="btn sm" data-invite>Send invite</button>
+            <div class="hint">
+              An invite works whether or not they already have an account. If
+              they do, they get access straight away; if not, the moment they
+              sign up with that email.
+            </div>`
+          : `<div class="hint sp">Only an owner or admin can invite people or change what someone can do.</div>`}
+        `;
+      }
+
+      on(root, '[data-invite]', async () => {
+        const email = root.querySelector('[data-email]').value.trim();
+        const r = root.querySelector('[data-role]').value;
+        if (!email || !email.includes('@')) return toast('Enter their email address', 'warn');
+        try {
+          await invite(email, r);
+          toast(`${email} invited`);
+          await paint();
+        } catch (e) {
+          // A second invite to the same address hits the unique index
+          // rather than creating a duplicate.
+          toast(/duplicate|unique/i.test(e.message) ? 'They have already been invited' : e.message, 'err');
+        }
+      });
+
+      on(root, '[data-revoke]', async (e, b) => {
+        try {
+          await revokeInvite(b.dataset.revoke);
+          toast('Invite cancelled');
+          await paint();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+
+      on(root, '[data-person]', async (e, b) => {
+        const id = b.dataset.person;
+        const m = (await members()).find((x) => x.user_id === id);
+        if (!m) return;
+        await personSheet(m, paint);
+      });
+    },
+    onClose: back,
+  });
+}
+
+function personSheet(m, back) {
+  const p = m.profiles || {};
+  return openSheet({
+    title: p.full_name || p.email || 'Member',
+    body: `
+      <div class="sheet-body">
+        <p class="tray-lbl">What they can do</p>
+        <div class="list">
+          ${['admin', 'staff', 'viewer'].map((r) => `
+            <button class="row" data-set="${r}">
+              <span class="row-ico">${icon(r === 'viewer' ? 'ledger' : 'user', 18)}</span>
+              <span class="row-txt">
+                <span class="row-t">${r[0].toUpperCase()}${r.slice(1)}</span>
+                <span class="row-s">${esc(ROLE_NOTE[r])}</span>
+              </span>
+              ${m.role === r ? `<span class="pill in">now</span>` : ''}
+            </button>`).join('')}
+        </div>
+        ${m.role === 'owner'
+          ? `<div class="hint sp">The owner's access cannot be changed here.</div>`
+          : `<button class="btn danger sm" data-remove>Remove from these books</button>
+             <div class="hint">Their entries stay in the books. They lose access on their next sync.</div>`}
+      </div>`,
+    onMount(root, handle) {
+      on(root, '[data-set]', async (e, b) => {
+        try {
+          await setRole(m.user_id, b.dataset.set);
+          toast('Updated');
+          handle.close();
+          await back();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+      on(root, '[data-remove]', async () => {
+        const ok = await confirmSheet({
+          title: 'Remove them?',
+          message: `${p.email || 'This person'} will lose access to these books. Everything they logged stays.`,
+          confirmLabel: 'Remove',
+          danger: true,
+        });
+        if (!ok) return;
+        try {
+          await removeMember(m.user_id);
+          toast('Removed');
+          handle.close();
+          await back();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+    },
+  });
+}
+
+function syncSheet(ctx, back) {
+  return openSheet({
+    title: 'Sync',
+    body: `<div class="sheet-body" data-body></div>`,
+    async onMount(root, handle) {
+      const body = root.querySelector('[data-body]');
+      paint();
+
+      function paint() {
+        const waiting = pendingCount();
+        const err = lastSyncError();
+        body.innerHTML = `
+          <div class="list" style="padding:2px 14px">
+            <div class="kv"><span>Waiting to upload</span><b>${waiting || 'nothing'}</b></div>
+            <div class="kv"><span>Connection</span><b>${navigator.onLine === false ? 'Offline' : 'Online'}</b></div>
+            ${err ? `<div class="kv"><span>Last attempt</span><b style="color:var(--out)">Failed</b></div>` : ''}
+          </div>
+          ${err ? `<div class="hint warn">${esc(err)}</div>` : ''}
+          <button class="btn sm" data-now>Sync now</button>
+          <div class="hint">
+            Entries save on this device first and go up on their own — when
+            the connection returns, when you come back to the app, and every
+            few minutes. Nothing here has to be done by hand.
+          </div>`;
+      }
+
+      on(root, '[data-now]', async () => {
+        const b = root.querySelector('[data-now]');
+        b.disabled = true;
+        b.textContent = 'Syncing…';
+        const r = await sync({ settingsToo: true });
+        b.disabled = false;
+        b.textContent = 'Sync now';
+        if (r.error) toast(r.error, 'err');
+        else if (r.skipped) toast(`Not synced — ${r.skipped}`, 'warn');
+        else toast(`${r.pushed || 0} up, ${r.pulled || 0} down`);
+        paint();
+        ctx.refresh();
+      });
+    },
+    onClose: back,
+  });
+}
+
+function accountSheet(ctx, back) {
+  const user = currentUser();
+  return openSheet({
+    title: 'Your account',
+    body: `
+      <div class="sheet-body">
+        <div class="list" style="padding:2px 14px">
+          <div class="kv"><span>Signed in as</span><b>${esc(user ? user.email : '')}</b></div>
+        </div>
+        <button class="btn danger sm" data-out>Sign out</button>
+        <div class="hint">
+          Signing out clears these books from this device. Nothing is deleted
+          — signing back in fetches them again. Anything not yet uploaded
+          goes up first.
+        </div>
+      </div>`,
+    onMount(root, handle) {
+      on(root, '[data-out]', async () => {
+        const waiting = pendingCount();
+        const ok = await confirmSheet({
+          title: 'Sign out?',
+          message: waiting
+            ? `${waiting} change${waiting > 1 ? 's have' : ' has'} not been uploaded yet. Kontour will try to send ${waiting > 1 ? 'them' : 'it'} first.`
+            : 'These books will be cleared from this device. Signing back in fetches them again.',
+          confirmLabel: 'Sign out',
+          danger: true,
+        });
+        if (!ok) return;
+
+        // One last push, so work done on a bad connection is not stranded
+        // on a device that is about to forget it.
+        if (waiting) {
+          const r = await sync();
+          if (r.error || pendingCount()) {
+            const anyway = await confirmSheet({
+              title: 'Still not uploaded',
+              message: 'Those changes could not be sent. Signing out now loses them. Staying signed in keeps them until the connection is better.',
+              confirmLabel: 'Sign out and lose them',
+              danger: true,
+            });
+            if (!anyway) return;
+          }
+        }
+
+        const { wipe } = await import('../store.js');
+        await signOut();
+        wipe();
+        location.reload();
+      });
+    },
+    onClose: back,
   });
 }

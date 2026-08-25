@@ -9,8 +9,12 @@ import * as ledger from './views/ledger.js';
 import * as jobs from './views/jobs.js';
 import * as reports from './views/reports.js';
 import { openSettings } from './views/settings.js';
-import { syncPending, watchConnection, driveAuthed, online } from './sync.js';
+import { syncPending, watchConnection, canUpload, online } from './sync.js';
 import { enhance, bindHeroScroll, attachRipple } from './motion.js';
+import { cloudConfigured } from './config.js';
+import { signedIn, currentOrgId } from './auth.js';
+import { startSync } from './cloud.js';
+import { openSignIn } from './views/signin.js';
 
 const TABS = [
   { id: 'home', label: 'Home', icon: 'home' },
@@ -58,6 +62,26 @@ function buildPad(root, onKey) {
       <button data-k="0">0</button>
       <button class="ghost" data-k="del">⌫</button>`;
   on(root, '[data-k]', (e, b) => onKey(b.dataset.k));
+}
+
+/* ── Boot ──────────────────────────────────────────────────────
+   Two doors, in this order: the account, then the PIN. The account
+   says which books these are; the PIN says this is still the person
+   who was holding the phone. A copy with no cloud configured skips
+   the first entirely and behaves exactly as it always has. */
+async function boot() {
+  const gate = $('#gate');
+  // The PIN gate's markup ships in index.html, and the sign-in screen
+  // paints over the same element. Held here so it can be put back.
+  const pinMarkup = gate.innerHTML;
+
+  if (cloudConfigured() && !(signedIn() && currentOrgId())) {
+    gate.hidden = false;
+    $('#app').hidden = true;
+    await openSignIn(gate);
+    gate.innerHTML = pinMarkup;
+  }
+  startGate();
 }
 
 function startGate() {
@@ -157,7 +181,7 @@ async function show(where) {
     revealIO = enhance(screen, screen);
     detachScroll = bindHeroScroll(screen, $('#topbar'));
   } catch (e) {
-    console.error('[phynance] view failed', e);
+    console.error('[kontour] view failed', e);
     toast('Something went wrong drawing that screen', 'err');
   } finally {
     painting = false;
@@ -190,13 +214,24 @@ function start() {
 
   // Push anything waiting whenever the connection comes back.
   watchConnection(() => {
-    if (online() && driveAuthed()) {
+    if (online() && canUpload()) {
       syncPending().then((r) => {
         if (r && r.done) toast(`${r.done} bill${r.done > 1 ? 's' : ''} uploaded`);
       }).catch(() => {});
     }
   });
-  if (online() && driveAuthed()) syncPending().catch(() => {});
+  if (online() && canUpload()) syncPending().catch(() => {});
+
+  // The shared ledger. Redraws only when a pull actually moved something,
+  // so a colleague logging an entry updates the screen you are looking at
+  // without a sync that found nothing flickering it.
+  if (cloudConfigured() && signedIn() && currentOrgId()) {
+    startSync({
+      onChange(r) {
+        if (r.pulled && !sheetCount()) show(route);
+      },
+    });
+  }
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     // Only registers on a secure context (https or localhost); over a plain
@@ -209,4 +244,4 @@ function start() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', startGate);
+document.addEventListener('DOMContentLoaded', boot);

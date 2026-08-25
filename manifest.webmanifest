@@ -1,6 +1,6 @@
 {
-  "name": "Phynance — Banavat India",
-  "short_name": "Phynance",
+  "name": "Kontour — Banavat India",
+  "short_name": "Kontour",
   "description": "Daily money log for Banavat India.",
   "start_url": "./index.html",
   "scope": "./",

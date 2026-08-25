@@ -14,3 +14,11 @@ __pycache__/
 node_modules/
 .wrangler/
 .dev.vars
+
+# Never commit service credentials — the service_role key and the Google
+# private key ignore row level security and own the Drive folder.
+.env
+.env.*
+*service-account*.json
+.vercel
+node_modules/

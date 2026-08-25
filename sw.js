@@ -1,4 +1,4 @@
-/* Phynance service worker — offline cache for the app shell.
+/* Kontour service worker — offline cache for the app shell.
  *
  * Network-first, cache-fallback. Cache-first would be marginally faster, but
  * it silently serves stale code the moment a file changes — during a build
@@ -11,7 +11,7 @@
  * expected — see README, "Running it".
  */
 
-const CACHE = 'phynance-v1';
+const CACHE = 'kontour-v1';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './css/styles.css',
@@ -55,5 +55,5 @@ self.addEventListener('fetch', (e) => {
 
 /* Lets the page force an update without the user clearing site data. */
 self.addEventListener('message', (e) => {
-  if (e.data === 'phynance:update') self.skipWaiting();
+  if (e.data === 'kontour:update') self.skipWaiting();
 });

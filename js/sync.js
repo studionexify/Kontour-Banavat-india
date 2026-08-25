@@ -12,6 +12,9 @@
 import { photos, toBase64 } from './photos.js';
 import { settings, saveSettings, getEntry, categories } from './store.js';
 import { dmy } from './format.js';
+import { providerOf, defaultModel } from './models.js';
+import { api, cloudConfigured } from './config.js';
+import { accessToken, currentOrgId, signedIn } from './auth.js';
 
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'; // only files this app creates
@@ -24,6 +27,21 @@ const ANTHROPIC_VERSION = '2023-06-01';
 
 export function online() {
   return navigator.onLine !== false;
+}
+
+/**
+ * Whether bills go to the business's shared folder rather than to the
+ * member's own Drive. True whenever this copy is signed in to shared
+ * books — the server holds the folder's credentials, so there is
+ * nothing for the member to connect.
+ */
+export function sharedDrive() {
+  return cloudConfigured() && signedIn() && Boolean(currentOrgId());
+}
+
+/** Somewhere for a bill to go, by either route. */
+export function canUpload() {
+  return sharedDrive() || driveAuthed();
 }
 
 export function driveConfigured() {
@@ -126,10 +144,10 @@ async function findOrCreateFolder(name, parentId = null) {
   return created.id;
 }
 
-/** /Phynance/2026/08 — created once, then remembered. */
+/** /Kontour/2026/08 — created once, then remembered. */
 async function folderFor(dateISO) {
   const d = settings().drive;
-  const rootName = d.folderName || 'Phynance';
+  const rootName = d.folderName || 'Kontour';
   let rootId = d.folderId;
   if (!rootId) {
     rootId = await findOrCreateFolder(rootName);
@@ -151,17 +169,58 @@ function fileNameFor(entry, rec) {
   return `${bits.join('_') || rec.id}.jpg`;
 }
 
+/**
+ * Uploads through the server, into the business's shared Drive folder.
+ *
+ * This is the path that makes a bill visible to everyone rather than
+ * only to whoever photographed it: the folder belongs to the business,
+ * not to a member's own Drive, and the credentials for it never leave
+ * the server. Used whenever there is a signed-in session on shared
+ * books; otherwise the per-user path below still applies.
+ */
+async function uploadViaServer(rec, entry) {
+  const token = await accessToken();
+  if (!token) throw new Error('Sign in to upload bills.');
+
+  const res = await fetch(api('/api/bill-upload'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      orgId: currentOrgId(),
+      name: fileNameFor(entry, rec),
+      mimeType: rec.mime || 'image/jpeg',
+      date: entry ? entry.date : new Date().toISOString().slice(0, 10),
+      dataBase64: await toBase64(rec.blob),
+    }),
+  });
+
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(out.error || `Upload failed (${res.status})`);
+
+  await photos.patch(rec.id, {
+    status: 'uploaded',
+    driveId: out.driveId,
+    driveLink: out.driveLink || '',
+    shared: true,              // came from the business folder, not a personal one
+    error: '',
+  });
+  return out;
+}
+
 export async function uploadPhoto(rec) {
-  if (!driveAuthed()) throw new Error('Google Drive is not connected.');
   const entry = rec.entryId ? getEntry(rec.entryId) : null;
+  if (sharedDrive()) return uploadViaServer(rec, entry);
+
+  if (!driveAuthed()) throw new Error('Google Drive is not connected.');
   const parent = await folderFor(entry ? entry.date : new Date().toISOString().slice(0, 10));
+
 
   const metadata = {
     name: fileNameFor(entry, rec),
     parents: [parent],
     description: entry
-      ? `Phynance ${entry.type} · ${dmy(entry.date)} · ₹${entry.total}${entry.note ? ' · ' + entry.note : ''}`
-      : 'Phynance bill',
+      ? `Kontour ${entry.type} · ${dmy(entry.date)} · ₹${entry.total}${entry.note ? ' · ' + entry.note : ''}`
+      : 'Kontour bill',
   };
 
   const form = new FormData();
@@ -228,15 +287,22 @@ function extractJSON(text) {
  */
 export async function readBill(rec) {
   const a = settings().ai;
-  if (!aiConfigured()) throw new Error('Add an API key in Settings to read bills automatically.');
+  // On shared books the key lives on this deployment's own server, so
+  // there is nothing to configure on the device.
+  if (!aiConfigured() && !sharedDrive()) {
+    throw new Error('Add an API key in Settings to read bills automatically.');
+  }
   if (!online()) throw new Error('Reading a bill needs internet.');
 
   const b64 = await toBase64(rec.blob);
+  const provider = providerOf(a.provider);
   const body = {
-    model: a.model || 'claude-opus-5',
+    model: a.model || defaultModel(provider),
     max_tokens: 2000,
     // A receipt read is a short, mechanical extraction — low effort keeps it
     // quick and cheap. Thinking is left at the model default (adaptive).
+    // Both are Anthropic's own parameters; the Gemini adapter on the
+    // server reads what it needs and ignores the rest.
     output_config: { effort: 'low' },
     // Server-side fallback: if a safety classifier ever declines, the same
     // request is re-run on a fallback model inside the same call.
@@ -252,11 +318,21 @@ export async function readBill(rec) {
   };
 
   // An endpoint set in Settings means "go through my server" — that is the
-  // right shape once Phynance is on the subdomain, because the API key then
+  // right shape once Kontour is on the subdomain, because the API key then
   // lives server-side instead of in this browser.
-  const useProxy = !!a.endpoint;
-  const url = useProxy ? a.endpoint : ANTHROPIC_URL;
+  // Signed in to shared books, this deployment's own route is the proxy,
+  // and it checks membership before it will spend the key.
+  const useOwnServer = sharedDrive() && !a.endpoint;
+  const useProxy = useOwnServer || !!a.endpoint;
+  const url = useOwnServer ? api('/api/read-bill') : (a.endpoint || ANTHROPIC_URL);
   const headers = { 'content-type': 'application/json' };
+  if (useOwnServer) {
+    const token = await accessToken();
+    if (!token) throw new Error('Sign in to read bills.');
+    headers.authorization = `Bearer ${token}`;
+    body.orgId = currentOrgId();
+    body.provider = provider;
+  }
   if (!useProxy) {
     headers['x-api-key'] = a.key;
     headers['anthropic-version'] = ANTHROPIC_VERSION;
@@ -301,7 +377,7 @@ let running = false;
  */
 export async function syncPending(onProgress) {
   if (running) return { skipped: true };
-  if (!online() || !driveAuthed()) return { skipped: true };
+  if (!online() || !canUpload()) return { skipped: true };
   running = true;
   const pending = await photos.pending();
   let done = 0, failed = 0;
@@ -327,7 +403,12 @@ export async function status() {
   const pending = await photos.pending();
   return {
     online: online(),
-    drive: driveConfigured() ? (driveAuthed() ? 'connected' : 'needs sign-in') : 'not set up',
+    // Shared books need nothing connected on the device: the folder and
+    // its credentials belong to the server.
+    drive: sharedDrive()
+      ? 'connected'
+      : driveConfigured() ? (driveAuthed() ? 'connected' : 'needs sign-in') : 'not set up',
+    sharedDrive: sharedDrive(),
     ai: aiConfigured() ? 'ready' : 'not set up',
     pending: pending.length,
   };

@@ -72,21 +72,21 @@ export function exportMonthCSV(monthKey) {
   rows.push(['', '', '', '', '', '', '', '', '', '', 'GST collected', t.gstIn]);
   rows.push(['', '', '', '', '', '', '', '', '', '', 'GST paid', t.gstOut]);
   rows.push(['', '', '', '', '', '', '', '', '', '', 'GST net', t.gstNet]);
-  download(`Phynance ${monthShort(monthKey).replace(' ', '-')}.csv`, csvOf(rows));
+  download(`Kontour ${monthShort(monthKey).replace(' ', '-')}.csv`, csvOf(rows));
   return list.length;
 }
 
 /** Everything, for the CA at year end. */
 export function exportAllCSV() {
   const list = sorted(entries());
-  download(`Phynance all entries ${new Date().toISOString().slice(0, 10)}.csv`, csvOf(rowsFor(list)));
+  download(`Kontour all entries ${new Date().toISOString().slice(0, 10)}.csv`, csvOf(rowsFor(list)));
   return list.length;
 }
 
 export function exportFYCSV(anyDateInFY) {
   const { from, to, label } = fyRange(anyDateInFY);
   const list = sorted(entries().filter((e) => e.date >= from && e.date <= to));
-  download(`Phynance ${label.replace(' ', '-')}.csv`, csvOf(rowsFor(list)));
+  download(`Kontour ${label.replace(' ', '-')}.csv`, csvOf(rowsFor(list)));
   return list.length;
 }
 
@@ -95,7 +95,7 @@ export function exportMonthSummaryCSV(monthKey) {
   const t = monthTotals(monthKey);
   const list = entries().filter((e) => e.date.slice(0, 7) === monthKey);
   const rows = [
-    [`Phynance summary — ${monthLabel(monthKey)}`],
+    [`Kontour summary — ${monthLabel(monthKey)}`],
     [],
     ['Money in', t.in],
     ['Money out', t.out],
@@ -124,7 +124,7 @@ export function exportMonthSummaryCSV(monthKey) {
     rows.push([code, rIn, rOut, j && j.orderValue ? j.orderValue : '', '']);
   }
 
-  download(`Phynance summary ${monthShort(monthKey).replace(' ', '-')}.csv`, csvOf(rows));
+  download(`Kontour summary ${monthShort(monthKey).replace(' ', '-')}.csv`, csvOf(rows));
   return t.count;
 }
 
@@ -132,7 +132,7 @@ export function exportMonthSummaryCSV(monthKey) {
 export function exportBackup() {
   const payload = exportAll();
   download(
-    `Phynance backup ${new Date().toISOString().slice(0, 10)}.json`,
+    `Kontour backup ${new Date().toISOString().slice(0, 10)}.json`,
     JSON.stringify(payload, null, 2),
     'application/json'
   );
@@ -167,7 +167,7 @@ export function readBackupFile() {
 /** A WhatsApp-ready day summary — the one thing that gets shared by hand. */
 export function dayTextSummary(iso, list) {
   const t = totals(list);
-  const lines = [`Phynance — ${dmy(iso)}`, ''];
+  const lines = [`Kontour — ${dmy(iso)}`, ''];
   for (const e of list) {
     const sign = e.type === 'in' ? '+' : e.type === 'out' ? '-' : '↔';
     const what = e.type === 'transfer'

@@ -1,4 +1,4 @@
-/* Phynance bill-reading proxy — a Cloudflare Worker.
+/* Kontour bill-reading proxy — a Cloudflare Worker.
  *
  * Why this exists: on a public subdomain an API key in the browser is
  * readable by anyone who opens the page. Settings → Read bills with Claude

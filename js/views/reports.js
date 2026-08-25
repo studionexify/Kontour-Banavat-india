@@ -86,7 +86,7 @@ export function render(root, ctx) {
             <b class="num">${inr(Math.abs(t.gstNet))}</b>
           </div>
         </div>
-        <div class="hint">Figures for your CA to work from — Phynance does not file anything.</div>
+        <div class="hint">Figures for your CA to work from — Kontour does not file anything.</div>
       </section>
     ` : emptyState('chart', `Nothing logged in ${monthShort(month)}`, 'Pick another month, or log an entry')}
 

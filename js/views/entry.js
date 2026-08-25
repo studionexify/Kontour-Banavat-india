@@ -12,7 +12,7 @@ import {
 import { num, inr, todayISO, dmy, dayLabel } from '../format.js';
 import { pickImage, attach, detach, bindToEntry, photos, humanBytes } from '../photos.js';
 import { blobURL } from '../db.js';
-import { aiConfigured, online, readBill, driveAuthed, syncPending } from '../sync.js';
+import { aiConfigured, online, readBill, canUpload, sharedDrive, syncPending } from '../sync.js';
 import { burst } from '../motion.js';
 
 const RATES = [0, 5, 12, 18, 28];
@@ -213,7 +213,7 @@ export function openEntrySheet({ entry = null, prefill = null, onSaved } = {}) {
           f.photoIds.push(rec.id);
           await paintPhotos();
           toast('Bill saved on this phone');
-          if (aiConfigured() && online()) {
+          if ((aiConfigured() || sharedDrive()) && online()) {
             reading = true;
             await paintPhotos();
             try {
@@ -271,7 +271,7 @@ export function openEntrySheet({ entry = null, prefill = null, onSaved } = {}) {
         haptic(14);
         burst();
         toast(editing ? 'Entry updated' : `${f.type === 'in' ? 'Received' : f.type === 'out' ? 'Paid' : 'Moved'} ${inr(saved.total)}`);
-        if (driveAuthed() && online()) syncPending().catch(() => {});
+        if (canUpload() && online()) syncPending().catch(() => {});
         sheet.close();
         if (onSaved) onSaved(saved);
       });
@@ -476,7 +476,7 @@ function saveLabel(f, editing) {
 
 function photoStatusText(recs, reading) {
   if (reading) return 'Reading the bill with Claude…';
-  if (!recs.length) return aiConfigured()
+  if (!recs.length) return (aiConfigured() || sharedDrive())
     ? 'Photos are read automatically when you are online.'
     : 'Photos stay on this phone. Add a Google account and API key in Settings to upload and auto-read them.';
   const pending = recs.filter((r) => r.status !== 'uploaded').length;
