@@ -18,13 +18,17 @@
 --   3. Nothing device-local ever lands here. The PIN, the Drive OAuth
 --      token and any API key stay on the device that set them —
 --      see org_settings below.
+--
+-- Safe to run more than once. Every statement is guarded, so a run that
+-- stopped half way through can simply be run again, and re-running a
+-- finished one changes nothing and keeps the data.
 -- ════════════════════════════════════════════════════════════
 
 create extension if not exists "pgcrypto";
 
 -- ── Identity ────────────────────────────────────────────────
 
-create table public.orgs (
+create table if not exists public.orgs (
   id          uuid primary key default gen_random_uuid(),
   name        text not null,
   created_at  timestamptz not null default now(),
@@ -33,16 +37,19 @@ create table public.orgs (
 
 -- Mirrors auth.users so the app can show who logged an entry without
 -- reaching into the auth schema.
-create table public.profiles (
+create table if not exists public.profiles (
   id          uuid primary key references auth.users on delete cascade,
   email       text,
   full_name   text,
   created_at  timestamptz not null default now()
 );
 
-create type public.member_role as enum ('owner', 'admin', 'staff', 'viewer');
+do $$ begin
+  create type public.member_role as enum ('owner', 'admin', 'staff', 'viewer');
+exception when duplicate_object then null;
+end $$;
 
-create table public.memberships (
+create table if not exists public.memberships (
   org_id      uuid not null references public.orgs on delete cascade,
   user_id     uuid not null references auth.users on delete cascade,
   role        public.member_role not null default 'staff',
@@ -50,12 +57,12 @@ create table public.memberships (
   primary key (org_id, user_id)
 );
 
-create index memberships_user_idx on public.memberships (user_id);
+create index if not exists memberships_user_idx on public.memberships (user_id);
 
 -- An owner names an email before that person has an account. On their
 -- first sign-in the trigger below turns any matching invite into a
 -- membership, so nobody has to be online at the same time.
-create table public.invites (
+create table if not exists public.invites (
   id          uuid primary key default gen_random_uuid(),
   org_id      uuid not null references public.orgs on delete cascade,
   email       text not null,
@@ -66,13 +73,16 @@ create table public.invites (
   unique (org_id, email)
 );
 
-create index invites_email_idx on public.invites (lower(email)) where accepted_at is null;
+create index if not exists invites_email_idx on public.invites (lower(email)) where accepted_at is null;
 
 -- ── The ledger ──────────────────────────────────────────────
 
-create type public.record_kind as enum ('account', 'category', 'job', 'entry', 'recurring');
+do $$ begin
+  create type public.record_kind as enum ('account', 'category', 'job', 'entry', 'recurring');
+exception when duplicate_object then null;
+end $$;
 
-create table public.records (
+create table if not exists public.records (
   org_id      uuid not null references public.orgs on delete cascade,
   kind        public.record_kind not null,
   -- The app's own id ('cash', 'c_mat', 'e_lz4k2ab'). Ids are unique
@@ -93,10 +103,10 @@ create table public.records (
 );
 
 -- The sync cursor: "everything that changed since I last pulled".
-create index records_sync_idx on public.records (org_id, updated_at);
-create index records_entry_date_idx on public.records (org_id, entry_date)
+create index if not exists records_sync_idx on public.records (org_id, updated_at);
+create index if not exists records_entry_date_idx on public.records (org_id, entry_date)
   where kind = 'entry' and deleted_at is null;
-create index records_job_idx on public.records (org_id, job_code)
+create index if not exists records_job_idx on public.records (org_id, job_code)
   where kind = 'entry' and deleted_at is null;
 
 create or replace function public.records_promote()
@@ -121,6 +131,7 @@ begin
 end;
 $$;
 
+drop trigger if exists records_promote_trg on public.records;
 create trigger records_promote_trg
   before insert or update on public.records
   for each row execute function public.records_promote();
@@ -130,7 +141,7 @@ create trigger records_promote_trg
 -- should look the same to everyone. Deliberately NOT here: pinHash,
 -- pinSalt, any Drive OAuth token, any API key. Those stay on the
 -- device that set them; see js/cloud.js SHARED_SETTINGS.
-create table public.org_settings (
+create table if not exists public.org_settings (
   org_id      uuid primary key references public.orgs on delete cascade,
   data        jsonb not null default '{}'::jsonb,
   updated_at  timestamptz not null default now(),
@@ -194,16 +205,20 @@ alter table public.records      enable row level security;
 alter table public.org_settings enable row level security;
 
 -- orgs
+drop policy if exists orgs_read on public.orgs;
 create policy orgs_read on public.orgs
   for select using (public.is_member(id));
+drop policy if exists orgs_update on public.orgs;
 create policy orgs_update on public.orgs
   for update using (public.is_admin(id)) with check (public.is_admin(id));
 -- Creating an org is allowed to any signed-in user; the trigger below
 -- immediately makes them its owner, so it cannot be created ownerless.
+drop policy if exists orgs_insert on public.orgs;
 create policy orgs_insert on public.orgs
   for insert with check (auth.uid() is not null and created_by = auth.uid());
 
 -- profiles: your own, plus anyone you share an org with
+drop policy if exists profiles_read_self on public.profiles;
 create policy profiles_read_self on public.profiles
   for select using (
     id = auth.uid()
@@ -214,24 +229,31 @@ create policy profiles_read_self on public.profiles
       where mine.user_id = auth.uid() and theirs.user_id = public.profiles.id
     )
   );
+drop policy if exists profiles_update_self on public.profiles;
 create policy profiles_update_self on public.profiles
   for update using (id = auth.uid()) with check (id = auth.uid());
 
 -- memberships
+drop policy if exists memberships_read on public.memberships;
 create policy memberships_read on public.memberships
   for select using (public.is_member(org_id));
+drop policy if exists memberships_write on public.memberships;
 create policy memberships_write on public.memberships
   for all using (public.is_admin(org_id)) with check (public.is_admin(org_id));
 
 -- invites
+drop policy if exists invites_admin on public.invites;
 create policy invites_admin on public.invites
   for all using (public.is_admin(org_id)) with check (public.is_admin(org_id));
 
 -- records: members read, staff and up write
+drop policy if exists records_read on public.records;
 create policy records_read on public.records
   for select using (public.is_member(org_id));
+drop policy if exists records_insert on public.records;
 create policy records_insert on public.records
   for insert with check (public.can_write(org_id));
+drop policy if exists records_update on public.records;
 create policy records_update on public.records
   for update using (public.can_write(org_id)) with check (public.can_write(org_id));
 -- No delete policy, on purpose. Rows are tombstoned by setting
@@ -239,8 +261,10 @@ create policy records_update on public.records
 -- row on its next push, because it would have nothing to sync against.
 
 -- org_settings
+drop policy if exists org_settings_read on public.org_settings;
 create policy org_settings_read on public.org_settings
   for select using (public.is_member(org_id));
+drop policy if exists org_settings_write on public.org_settings;
 create policy org_settings_write on public.org_settings
   for all using (public.can_write(org_id)) with check (public.can_write(org_id));
 
@@ -277,6 +301,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
@@ -310,6 +335,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_invite_created on public.invites;
 create trigger on_invite_created
   after insert on public.invites
   for each row execute function public.handle_new_invite();
@@ -334,6 +360,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_org_created on public.orgs;
 create trigger on_org_created
   after insert on public.orgs
   for each row execute function public.handle_new_org();
@@ -346,7 +373,10 @@ create trigger on_org_created
 -- Returns the rows that were actually applied. Anything missing from
 -- the result lost to a newer server copy, which is how the client
 -- knows to take the server's version instead.
-create or replace function public.push_records(changes jsonb)
+-- Dropped first rather than replaced: create or replace refuses a
+-- changed return type, which would strand a re-run on an older copy.
+drop function if exists public.push_records(jsonb);
+create function public.push_records(changes jsonb)
 returns table (kind public.record_kind, id text, updated_at timestamptz)
 language plpgsql
 security invoker           -- RLS still applies; this is convenience, not escalation
