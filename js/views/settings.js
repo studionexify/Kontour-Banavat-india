@@ -13,8 +13,9 @@ import {
 import { inr } from '../format.js';
 import { photos, humanBytes } from '../photos.js';
 import { exportBackup, readBackupFile } from '../export.js';
-import { status, connectDrive, disconnectDrive, driveConfigured, syncPending } from '../sync.js';
+import { status, connectDrive, disconnectDrive, driveConfigured, syncPending, sharedDrive } from '../sync.js';
 import { cloudConfigured } from '../config.js';
+import { PROVIDERS, providerOf, defaultModel, isCustomModel } from '../models.js';
 import {
   signedIn, currentUser, currentOrgId, myOrgs, myRole, canWrite, signOut,
   members, invite, pendingInvites, revokeInvite, setRole, removeMember,
@@ -47,7 +48,7 @@ export function openSettings(ctx) {
           <p class="tray-lbl sp">Online</p>
           <div class="list">
             ${navRow('drive', 'Google Drive', driveLabel(sync), 'drive')}
-            ${navRow('sparkle', 'Read bills with Claude', s.ai.enabled && (s.ai.key || s.ai.endpoint) ? `On · ${s.ai.model}` : 'Not set up', 'ai')}
+            ${navRow('sparkle', 'Read bills automatically', aiLabel(s), 'ai')}
             ${navRow(sync.online ? 'cloud' : 'cloudOff', 'Pending uploads',
               sync.pending ? `${sync.pending} waiting · ${humanBytes(usage.bytes)} stored` : 'Nothing waiting', 'pending')}
           </div>
@@ -113,6 +114,16 @@ function navRow(ico, title, sub, nav) {
       </span>
       <span class="row-go">${icon('chevR', 17)}</span>
     </button>`;
+}
+
+/* On shared books the key is the server's, so being set up is a matter
+   of the switch rather than of anything typed on this device. */
+function aiLabel(s) {
+  if (!s.ai.enabled) return 'Off';
+  const ready = sharedDrive() || s.ai.key || s.ai.endpoint;
+  if (!ready) return 'Needs an API key';
+  const p = PROVIDERS[providerOf(s.ai.provider)];
+  return `${p.label} · ${s.ai.model}`;
 }
 
 function driveLabel(sync) {
@@ -541,55 +552,130 @@ function driveSheet(ctx, back) {
 
 function aiSheet(ctx, back) {
   const s = settings();
-  const models = ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'];
+  // Held outside the markup so switching provider can repaint the model
+  // list without losing what has been typed into the other fields.
+  let provider = providerOf(s.ai.provider);
+  let model = s.ai.model || defaultModel(provider);
+  let enabled = s.ai.enabled;
+  /* Tracked separately rather than inferred from the model string:
+     choosing "Other…" clears the field, and an empty string is not a
+     custom model id — it is someone who has not typed one yet. */
+  let custom = isCustomModel(provider, model);
+
   const sheet = openSheet({
-    title: 'Read bills with Claude',
-    body: `
-      <div class="sheet-body">
-        <div class="hint" style="margin-bottom:14px">
-          When a bill photo is added and you are online, Claude reads it and fills in the amount,
-          date, party, GST and a one-line description. Nothing is saved until you check it and tap save.
-        </div>
-        <div class="switchrow" data-en>
-          <div><div class="sw-t">Read bills automatically</div><div class="sw-s">Only when online</div></div>
-          <div class="switch ${s.ai.enabled ? 'on' : ''}"></div>
-        </div>
-        <div class="field">
-          <label>Anthropic API key</label>
-          <input class="control" data-key type="password" value="${esc(s.ai.key)}" placeholder="sk-ant-…">
-          <div class="hint warn">
-            The key is stored in this browser and sent straight from the phone. That is fine for your own
-            device; once Kontour is on the subdomain, move it behind your server using the field below
-            so the key never reaches a browser.
-          </div>
-        </div>
-        <div class="field">
-          <label>Model</label>
-          <select class="control" data-model>
-            ${models.map((m) => `<option value="${m}" ${s.ai.model === m ? 'selected' : ''}>${m}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field">
-          <label>Server endpoint (optional)</label>
-          <input class="control" data-ep value="${esc(s.ai.endpoint || '')}" placeholder="https://kontour.…/api/read-bill">
-          <div class="hint">Set this later and the key above is ignored — the request goes to your server instead.</div>
-        </div>
-        <button class="btn" data-save>Save</button>
-      </div>`,
+    title: 'Read bills automatically',
+    body: `<div class="sheet-body" data-body></div>`,
     onMount(root) {
-      let enabled = s.ai.enabled;
+      const body = root.querySelector('[data-body]');
+      paint();
+
+      function paint() {
+        const p = PROVIDERS[provider];
+        // On shared books the key lives on the server, so the field below
+        // would be asking for something nobody needs to supply.
+        const onServer = sharedDrive();
+
+        body.innerHTML = `
+          <div class="hint" style="margin-bottom:14px">
+            When a bill photo is added and you are online, the model reads it and fills in
+            the amount, date, party, GST and a one-line description. Nothing is saved until
+            you check it and tap save.
+          </div>
+
+          <div class="switchrow" data-en>
+            <div>
+              <div class="sw-t">Read bills automatically</div>
+              <div class="sw-s">Only when online</div>
+            </div>
+            <div class="switch ${enabled ? 'on' : ''}"></div>
+          </div>
+
+          <p class="tray-lbl sp">Which model reads them</p>
+          <div class="toggle2" style="margin-bottom:12px">
+            ${Object.entries(PROVIDERS).map(([id, cfg]) => `
+              <button data-provider="${id}" class="${provider === id ? 'on' : ''}">${esc(cfg.label)}</button>`).join('')}
+          </div>
+
+          <div class="catgrid" style="margin-bottom:6px">
+            ${p.models.map((m) => `
+              <button class="cat ${model === m.id ? 'on' : ''}" data-model="${esc(m.id)}"
+                      title="${esc(m.note)}">${esc(m.label)}</button>`).join('')}
+            <button class="cat ${custom ? 'on' : ''}" data-model="__custom">Other…</button>
+          </div>
+          <div class="hint">${esc((p.models.find((m) => m.id === model) || {}).note || 'Any model id this provider accepts.')}</div>
+
+          ${custom ? `
+            <div class="field" style="margin-top:12px">
+              <label>Model id</label>
+              <input class="control" data-custom value="${esc(model)}" placeholder="${esc(defaultModel(provider))}">
+              <div class="hint">Sent through as typed, so a model released since this app was built still works.</div>
+            </div>` : ''}
+
+          ${onServer ? `
+            <div class="hint" style="margin-top:16px">
+              The ${esc(p.label)} key is held by your server, not this phone — nothing to enter here.
+              It is set as <b>${esc(p.keyEnv)}</b> in the Vercel environment.
+            </div>`
+          : `
+            <div class="field sp" style="margin-top:16px">
+              <label>${esc(p.label)} API key</label>
+              <input class="control" data-key type="password" value="${esc(s.ai.key)}"
+                     placeholder="${provider === 'gemini' ? 'AIza…' : 'sk-ant-…'}">
+              <div class="hint warn">
+                Stored in this browser and sent straight from the phone. Fine on your own device;
+                once you sign in to shared books the key moves to the server instead.
+              </div>
+            </div>
+            <div class="field">
+              <label>Server endpoint (optional)</label>
+              <input class="control" data-ep value="${esc(s.ai.endpoint || '')}"
+                     placeholder="https://kontour.…/api/read-bill">
+              <div class="hint">Set this and the key above is ignored — the request goes to your server.</div>
+            </div>`}
+
+          <button class="btn" data-save>Save</button>`;
+      }
+
       on(root, '[data-en]', (e, el) => {
         enabled = !enabled;
         el.querySelector('.switch').classList.toggle('on', enabled);
       });
+
+      on(root, '[data-provider]', (e, b) => {
+        if (b.dataset.provider === provider) return;
+        provider = b.dataset.provider;
+        // The old model id means nothing to the new provider.
+        model = defaultModel(provider);
+        custom = false;
+        paint();
+      });
+
+      on(root, '[data-model]', (e, b) => {
+        const pick = b.dataset.model;
+        custom = pick === '__custom';
+        if (!custom) model = pick;
+        paint();
+        if (custom) root.querySelector('[data-custom]').focus();
+      });
+
       on(root, '[data-save]', () => {
+        const customField = root.querySelector('[data-custom]');
+        const chosen = customField ? customField.value.trim() : model;
+        if (!chosen) return toast('Pick a model, or type one in', 'warn');
+
+        const keyField = root.querySelector('[data-key]');
+        const epField = root.querySelector('[data-ep]');
+
         saveSettings({
           ai: {
             ...settings().ai,
             enabled,
-            key: root.querySelector('[data-key]').value.trim(),
-            model: root.querySelector('[data-model]').value,
-            endpoint: root.querySelector('[data-ep]').value.trim(),
+            provider,
+            model: chosen,
+            // Absent on shared books, where the server holds the key —
+            // keep whatever was there rather than blanking it.
+            ...(keyField ? { key: keyField.value.trim() } : {}),
+            ...(epField ? { endpoint: epField.value.trim() } : {}),
           },
         });
         toast('Saved');
@@ -599,8 +685,6 @@ function aiSheet(ctx, back) {
     },
   });
 }
-
-/* ── Pending uploads ───────────────────────────────────────── */
 
 function pendingSheet(ctx, back) {
   const sheet = openSheet({

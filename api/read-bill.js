@@ -10,6 +10,7 @@
  */
 
 import { cors, bad, requireMember } from './_lib/auth.js';
+import { readWithGemini } from './_lib/gemini.js';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -20,7 +21,6 @@ export default async function handler(req, res) {
   if (!cors(req, res)) return bad(res, 403, 'Origin not allowed');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return bad(res, 405, 'POST only');
-  if (!process.env.ANTHROPIC_API_KEY) return bad(res, 500, 'Server is missing ANTHROPIC_API_KEY');
 
   const body = req.body;
   if (!body || typeof body !== 'object') return bad(res, 400, 'Body must be JSON');
@@ -28,8 +28,10 @@ export default async function handler(req, res) {
   const member = await requireMember(req, res, body.orgId, { write: true });
   if (!member) return;
 
-  // orgId is this endpoint's own field, not part of the Messages API.
+  // This endpoint's own fields, not part of the Messages API.
+  const provider = body.provider === 'gemini' ? 'gemini' : 'claude';
   delete body.orgId;
+  delete body.provider;
 
   /* Only ever a single-turn read. Without this the endpoint is a general
      purpose Claude API on someone else's bill. */
@@ -37,6 +39,17 @@ export default async function handler(req, res) {
     return bad(res, 400, 'Expected a single-message read request');
   }
   if (typeof body.max_tokens === 'number' && body.max_tokens > 4096) body.max_tokens = 4096;
+
+  /* Gemini answers in the Messages API's shape, so everything past this
+     point — including how the app reads the reply — is the same either
+     way. See api/_lib/gemini.js. */
+  if (provider === 'gemini') {
+    if (!process.env.GEMINI_API_KEY) return bad(res, 500, 'Server is missing GEMINI_API_KEY');
+    const out = await readWithGemini(body, process.env.GEMINI_API_KEY);
+    return res.status(out.status).json(out.json);
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) return bad(res, 500, 'Server is missing ANTHROPIC_API_KEY');
   if (process.env.MODEL) body.model = process.env.MODEL;
 
   let upstream;

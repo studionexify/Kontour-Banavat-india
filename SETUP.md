@@ -68,12 +68,17 @@ the moment they sign up with that email.
    | `SUPABASE_ANON_KEY` | Same anon key as above |
    | `SUPABASE_SERVICE_ROLE_KEY` | **Project Settings → API → service_role** |
    | `DRIVE_ROOT_FOLDER_ID` | Filled in during part 3 |
-   | `ANTHROPIC_API_KEY` | Only if bill reading is wanted |
+   | `ANTHROPIC_API_KEY` | For reading bills with Claude |
+   | `GEMINI_API_KEY` | For reading bills with Gemini |
    | `ALLOWED_ORIGINS` | Leave unset while the app and API share a domain |
    | `SETUP_SECRET` | Only while connecting Drive — delete it afterwards |
 
    The Google variables come in part 3. Deploy without them first —
    everything except bill photos works already.
+
+   Set either AI key, or both — Settings → *Read bills automatically* has a
+   toggle, so whichever are configured can be switched between per device.
+   Neither is required for the ledger itself.
 
 3. Deploy, and check it on the `*.vercel.app` URL before touching DNS.
 

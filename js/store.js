@@ -52,7 +52,7 @@ const DEFAULT_SETTINGS = {
   gstDefaultRate: 18,
   gstDefaultMode: 'excl',        // 'excl' = amount is before GST, 'incl' = GST inside
   drive: { clientId: '', folderId: '', folderName: 'Kontour', token: '', tokenExp: 0 },
-  ai: { key: '', model: 'claude-opus-5', enabled: true, endpoint: '' },
+  ai: { provider: 'claude', key: '', model: 'claude-opus-5', enabled: true, endpoint: '' },
   autoSync: true,
 };
 

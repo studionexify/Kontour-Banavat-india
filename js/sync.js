@@ -12,6 +12,7 @@
 import { photos, toBase64 } from './photos.js';
 import { settings, saveSettings, getEntry, categories } from './store.js';
 import { dmy } from './format.js';
+import { providerOf, defaultModel } from './models.js';
 import { api, cloudConfigured } from './config.js';
 import { accessToken, currentOrgId, signedIn } from './auth.js';
 
@@ -294,11 +295,14 @@ export async function readBill(rec) {
   if (!online()) throw new Error('Reading a bill needs internet.');
 
   const b64 = await toBase64(rec.blob);
+  const provider = providerOf(a.provider);
   const body = {
-    model: a.model || 'claude-opus-5',
+    model: a.model || defaultModel(provider),
     max_tokens: 2000,
     // A receipt read is a short, mechanical extraction — low effort keeps it
     // quick and cheap. Thinking is left at the model default (adaptive).
+    // Both are Anthropic's own parameters; the Gemini adapter on the
+    // server reads what it needs and ignores the rest.
     output_config: { effort: 'low' },
     // Server-side fallback: if a safety classifier ever declines, the same
     // request is re-run on a fallback model inside the same call.
@@ -327,6 +331,7 @@ export async function readBill(rec) {
     if (!token) throw new Error('Sign in to read bills.');
     headers.authorization = `Bearer ${token}`;
     body.orgId = currentOrgId();
+    body.provider = provider;
   }
   if (!useProxy) {
     headers['x-api-key'] = a.key;
