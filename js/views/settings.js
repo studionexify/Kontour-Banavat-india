@@ -14,6 +14,12 @@ import { inr } from '../format.js';
 import { photos, humanBytes } from '../photos.js';
 import { exportBackup, readBackupFile } from '../export.js';
 import { status, connectDrive, disconnectDrive, driveConfigured, syncPending } from '../sync.js';
+import { cloudConfigured } from '../config.js';
+import {
+  signedIn, currentUser, currentOrgId, myOrgs, myRole, canWrite, signOut,
+  members, invite, pendingInvites, revokeInvite, setRole, removeMember,
+} from '../auth.js';
+import { sync, pendingCount, lastSyncError } from '../cloud.js';
 
 export function openSettings(ctx) {
   const sheet = openSheet({
@@ -28,6 +34,7 @@ export function openSettings(ctx) {
         const s = settings();
         const sync = await status();
         const usage = await photos.usage();
+        const who = await whoAmI();
         body.innerHTML = `
           <p class="tray-lbl">Money</p>
           <div class="list">
@@ -44,6 +51,16 @@ export function openSettings(ctx) {
             ${navRow(sync.online ? 'cloud' : 'cloudOff', 'Pending uploads',
               sync.pending ? `${sync.pending} waiting · ${humanBytes(usage.bytes)} stored` : 'Nothing waiting', 'pending')}
           </div>
+
+          ${cloudConfigured() && signedIn() ? `
+            <p class="tray-lbl sp">These books</p>
+            <div class="list">
+              ${navRow('user', 'People', peopleLabel(who), 'people')}
+              ${navRow(sync.online ? 'cloud' : 'cloudOff', 'Sync',
+                pendingCount() ? `${pendingCount()} change${pendingCount() > 1 ? 's' : ''} waiting`
+                  : lastSyncError() ? 'Last sync failed' : 'Up to date', 'sync')}
+              ${navRow('lock', 'Signed in', esc(who.email), 'account')}
+            </div>` : ''}
 
           <p class="tray-lbl sp">This device</p>
           <div class="list">
@@ -63,6 +80,7 @@ export function openSettings(ctx) {
           accounts: accountsSheet, categories: categoriesSheet, recurring: recurringSheet,
           gst: gstSheet, drive: driveSheet, ai: aiSheet, pending: pendingSheet,
           pin: pinSheet, backup: backupSheet, about: aboutSheet,
+          people: peopleSheet, sync: syncSheet, account: accountSheet,
         };
         await map[where](ctx, paint);
       });
@@ -809,5 +827,302 @@ function aboutSheet(ctx, back) {
         ctx.refresh();
       });
     },
+  });
+}
+
+/* ── Shared books ─────────────────────────────────────────────
+   Only reachable when this copy is signed in, so every sheet below
+   can assume there is a session and an org. */
+
+const ROLE_NOTE = {
+  owner: 'Everything, including managing people',
+  admin: 'Everything except removing the owner',
+  staff: 'Log, edit and delete entries',
+  viewer: 'Read only — every save is refused',
+};
+
+async function whoAmI() {
+  const user = currentUser();
+  let role = '';
+  let orgName = '';
+  try {
+    role = await myRole();
+    const all = await myOrgs();
+    const here = all.find((o) => o.id === currentOrgId());
+    if (here) orgName = here.name;
+  } catch {
+    // Offline, or the session has lapsed. The screen still draws; it
+    // just cannot say what this account may do until the next sync.
+  }
+  return { email: user ? user.email : '', role, orgName };
+}
+
+function peopleLabel(who) {
+  if (!who.role) return who.orgName || 'Shared books';
+  return `${who.orgName || 'Shared books'} · you are ${who.role}`;
+}
+
+function peopleSheet(ctx, back) {
+  return openSheet({
+    title: 'People',
+    full: true,
+    body: `<div class="sheet-body" data-body><div class="empty"><p>Loading…</p></div></div>`,
+    async onMount(root) {
+      const body = root.querySelector('[data-body]');
+      await paint();
+
+      async function paint() {
+        let list = [];
+        let waiting = [];
+        let role = '';
+        try {
+          role = await myRole();
+          list = await members() || [];
+          waiting = await pendingInvites() || [];
+        } catch (e) {
+          body.innerHTML = `
+            <div class="hint warn">Could not load the people on these books — ${esc(e.message)}</div>`;
+          return;
+        }
+
+        const admin = ['owner', 'admin'].includes(role);
+        const me = currentUser();
+
+        body.innerHTML = `
+          <p class="tray-lbl">On these books</p>
+          <div class="list">
+            ${list.map((m) => {
+              const p = m.profiles || {};
+              const isMe = me && m.user_id === me.id;
+              return `
+                <button class="row" ${admin && !isMe ? `data-person="${esc(m.user_id)}"` : ''}>
+                  <span class="row-ico">${icon('user', 18)}</span>
+                  <span class="row-txt">
+                    <span class="row-t">${esc(p.full_name || p.email || 'Member')}${isMe ? ' (you)' : ''}</span>
+                    <span class="row-s">${esc(p.email || '')}</span>
+                  </span>
+                  <span class="pill ${m.role === 'viewer' ? 'mut' : 'in'}">${esc(m.role)}</span>
+                </button>`;
+            }).join('')}
+          </div>
+
+          ${waiting.length ? `
+            <p class="tray-lbl sp">Invited, not signed up yet</p>
+            <div class="list">
+              ${waiting.map((i) => `
+                <div class="row">
+                  <span class="row-ico">${icon('mail', 18)}</span>
+                  <span class="row-txt">
+                    <span class="row-t">${esc(i.email)}</span>
+                    <span class="row-s">Joins as ${esc(i.role)} when they sign up</span>
+                  </span>
+                  ${admin ? `<button class="pill warn" data-revoke="${esc(i.id)}">Cancel</button>` : ''}
+                </div>`).join('')}
+            </div>` : ''}
+
+          ${admin ? `
+            <p class="tray-lbl sp">Invite someone</p>
+            <div class="field">
+              <input class="control" data-email type="email" inputmode="email"
+                     placeholder="them@banavat-india.com" autocomplete="off">
+            </div>
+            <div class="field">
+              <label>They can</label>
+              <select class="control" data-role>
+                <option value="staff">Log and edit entries</option>
+                <option value="admin">Everything, including people</option>
+                <option value="viewer">Only read the books</option>
+              </select>
+            </div>
+            <button class="btn sm" data-invite>Send invite</button>
+            <div class="hint">
+              An invite works whether or not they already have an account. If
+              they do, they get access straight away; if not, the moment they
+              sign up with that email.
+            </div>`
+          : `<div class="hint sp">Only an owner or admin can invite people or change what someone can do.</div>`}
+        `;
+      }
+
+      on(root, '[data-invite]', async () => {
+        const email = root.querySelector('[data-email]').value.trim();
+        const r = root.querySelector('[data-role]').value;
+        if (!email || !email.includes('@')) return toast('Enter their email address', 'warn');
+        try {
+          await invite(email, r);
+          toast(`${email} invited`);
+          await paint();
+        } catch (e) {
+          // A second invite to the same address hits the unique index
+          // rather than creating a duplicate.
+          toast(/duplicate|unique/i.test(e.message) ? 'They have already been invited' : e.message, 'err');
+        }
+      });
+
+      on(root, '[data-revoke]', async (e, b) => {
+        try {
+          await revokeInvite(b.dataset.revoke);
+          toast('Invite cancelled');
+          await paint();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+
+      on(root, '[data-person]', async (e, b) => {
+        const id = b.dataset.person;
+        const m = (await members()).find((x) => x.user_id === id);
+        if (!m) return;
+        await personSheet(m, paint);
+      });
+    },
+    onClose: back,
+  });
+}
+
+function personSheet(m, back) {
+  const p = m.profiles || {};
+  return openSheet({
+    title: p.full_name || p.email || 'Member',
+    body: `
+      <div class="sheet-body">
+        <p class="tray-lbl">What they can do</p>
+        <div class="list">
+          ${['admin', 'staff', 'viewer'].map((r) => `
+            <button class="row" data-set="${r}">
+              <span class="row-ico">${icon(r === 'viewer' ? 'ledger' : 'user', 18)}</span>
+              <span class="row-txt">
+                <span class="row-t">${r[0].toUpperCase()}${r.slice(1)}</span>
+                <span class="row-s">${esc(ROLE_NOTE[r])}</span>
+              </span>
+              ${m.role === r ? `<span class="pill in">now</span>` : ''}
+            </button>`).join('')}
+        </div>
+        ${m.role === 'owner'
+          ? `<div class="hint sp">The owner's access cannot be changed here.</div>`
+          : `<button class="btn danger sm" data-remove>Remove from these books</button>
+             <div class="hint">Their entries stay in the books. They lose access on their next sync.</div>`}
+      </div>`,
+    onMount(root, handle) {
+      on(root, '[data-set]', async (e, b) => {
+        try {
+          await setRole(m.user_id, b.dataset.set);
+          toast('Updated');
+          handle.close();
+          await back();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+      on(root, '[data-remove]', async () => {
+        const ok = await confirmSheet({
+          title: 'Remove them?',
+          message: `${p.email || 'This person'} will lose access to these books. Everything they logged stays.`,
+          confirmLabel: 'Remove',
+          danger: true,
+        });
+        if (!ok) return;
+        try {
+          await removeMember(m.user_id);
+          toast('Removed');
+          handle.close();
+          await back();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+    },
+  });
+}
+
+function syncSheet(ctx, back) {
+  return openSheet({
+    title: 'Sync',
+    body: `<div class="sheet-body" data-body></div>`,
+    async onMount(root, handle) {
+      const body = root.querySelector('[data-body]');
+      paint();
+
+      function paint() {
+        const waiting = pendingCount();
+        const err = lastSyncError();
+        body.innerHTML = `
+          <div class="list" style="padding:2px 14px">
+            <div class="kv"><span>Waiting to upload</span><b>${waiting || 'nothing'}</b></div>
+            <div class="kv"><span>Connection</span><b>${navigator.onLine === false ? 'Offline' : 'Online'}</b></div>
+            ${err ? `<div class="kv"><span>Last attempt</span><b style="color:var(--out)">Failed</b></div>` : ''}
+          </div>
+          ${err ? `<div class="hint warn">${esc(err)}</div>` : ''}
+          <button class="btn sm" data-now>Sync now</button>
+          <div class="hint">
+            Entries save on this device first and go up on their own — when
+            the connection returns, when you come back to the app, and every
+            few minutes. Nothing here has to be done by hand.
+          </div>`;
+      }
+
+      on(root, '[data-now]', async () => {
+        const b = root.querySelector('[data-now]');
+        b.disabled = true;
+        b.textContent = 'Syncing…';
+        const r = await sync({ settingsToo: true });
+        b.disabled = false;
+        b.textContent = 'Sync now';
+        if (r.error) toast(r.error, 'err');
+        else if (r.skipped) toast(`Not synced — ${r.skipped}`, 'warn');
+        else toast(`${r.pushed || 0} up, ${r.pulled || 0} down`);
+        paint();
+        ctx.refresh();
+      });
+    },
+    onClose: back,
+  });
+}
+
+function accountSheet(ctx, back) {
+  const user = currentUser();
+  return openSheet({
+    title: 'Your account',
+    body: `
+      <div class="sheet-body">
+        <div class="list" style="padding:2px 14px">
+          <div class="kv"><span>Signed in as</span><b>${esc(user ? user.email : '')}</b></div>
+        </div>
+        <button class="btn danger sm" data-out>Sign out</button>
+        <div class="hint">
+          Signing out clears these books from this device. Nothing is deleted
+          — signing back in fetches them again. Anything not yet uploaded
+          goes up first.
+        </div>
+      </div>`,
+    onMount(root, handle) {
+      on(root, '[data-out]', async () => {
+        const waiting = pendingCount();
+        const ok = await confirmSheet({
+          title: 'Sign out?',
+          message: waiting
+            ? `${waiting} change${waiting > 1 ? 's have' : ' has'} not been uploaded yet. Phynance will try to send ${waiting > 1 ? 'them' : 'it'} first.`
+            : 'These books will be cleared from this device. Signing back in fetches them again.',
+          confirmLabel: 'Sign out',
+          danger: true,
+        });
+        if (!ok) return;
+
+        // One last push, so work done on a bad connection is not stranded
+        // on a device that is about to forget it.
+        if (waiting) {
+          const r = await sync();
+          if (r.error || pendingCount()) {
+            const anyway = await confirmSheet({
+              title: 'Still not uploaded',
+              message: 'Those changes could not be sent. Signing out now loses them. Staying signed in keeps them until the connection is better.',
+              confirmLabel: 'Sign out and lose them',
+              danger: true,
+            });
+            if (!anyway) return;
+          }
+        }
+
+        const { wipe } = await import('../store.js');
+        await signOut();
+        wipe();
+        location.reload();
+      });
+    },
+    onClose: back,
   });
 }

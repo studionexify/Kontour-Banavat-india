@@ -9,7 +9,7 @@ import * as ledger from './views/ledger.js';
 import * as jobs from './views/jobs.js';
 import * as reports from './views/reports.js';
 import { openSettings } from './views/settings.js';
-import { syncPending, watchConnection, driveAuthed, online } from './sync.js';
+import { syncPending, watchConnection, canUpload, online } from './sync.js';
 import { enhance, bindHeroScroll, attachRipple } from './motion.js';
 import { cloudConfigured } from './config.js';
 import { signedIn, currentOrgId } from './auth.js';
@@ -214,13 +214,13 @@ function start() {
 
   // Push anything waiting whenever the connection comes back.
   watchConnection(() => {
-    if (online() && driveAuthed()) {
+    if (online() && canUpload()) {
       syncPending().then((r) => {
         if (r && r.done) toast(`${r.done} bill${r.done > 1 ? 's' : ''} uploaded`);
       }).catch(() => {});
     }
   });
-  if (online() && driveAuthed()) syncPending().catch(() => {});
+  if (online() && canUpload()) syncPending().catch(() => {});
 
   // The shared ledger. Redraws only when a pull actually moved something,
   // so a colleague logging an entry updates the screen you are looking at
