@@ -56,11 +56,50 @@ the moment they sign up with that email.
 
 ---
 
-## 2. Google Drive — where the bills go
+## 2. Vercel — hosting and the API
+
+1. Import the repository at [vercel.com](https://vercel.com). There is
+   no build step; the defaults in `vercel.json` are correct.
+2. Add these under **Settings → Environment Variables**:
+
+   | Name | Value |
+   |---|---|
+   | `SUPABASE_URL` | Same project URL as above |
+   | `SUPABASE_ANON_KEY` | Same anon key as above |
+   | `SUPABASE_SERVICE_ROLE_KEY` | **Project Settings → API → service_role** |
+   | `DRIVE_ROOT_FOLDER_ID` | Filled in during part 3 |
+   | `ANTHROPIC_API_KEY` | Only if bill reading is wanted |
+   | `ALLOWED_ORIGINS` | Leave unset while the app and API share a domain |
+   | `SETUP_SECRET` | Only while connecting Drive — delete it afterwards |
+
+   The Google variables come in part 3. Deploy without them first —
+   everything except bill photos works already.
+
+3. Deploy, and check it on the `*.vercel.app` URL before touching DNS.
+
+### Moving the domain
+
+`kontour.banavat-india.com` currently points at GitHub Pages. Once the
+Vercel deployment is working:
+
+1. Add the domain in **Vercel → Settings → Domains**.
+2. Repoint the DNS `CNAME` record to the target Vercel gives you.
+3. Delete `.github/workflows/deploy.yml` and `CNAME` from the
+   repository, so two hosts are not fighting over the same domain.
+
+Do those in that order. Repointing DNS first means downtime while the
+certificate is issued.
+
+---
+
+## 3. Google Drive — where the bills go
 
 Bills stay in Drive rather than the database, so Supabase storage stays
 empty and the photos live where the storage is already paid for. Only
 the file id goes into the database.
+
+This part needs the Vercel deployment from part 2, because the consent
+route runs on it.
 
 Pick **one** of these two, depending on the Google account the folder
 lives in.
@@ -120,43 +159,6 @@ connect route above is not needed on this path.
 > upload rather than at setup, which is why the two paths above are
 > kept separate. If both are configured the refresh token is used,
 > because it is the one that works everywhere.
-
----
-
-## 3. Vercel — hosting and the API
-
-1. Import the repository at [vercel.com](https://vercel.com). There is
-   no build step; the defaults in `vercel.json` are correct.
-2. Add these under **Settings → Environment Variables**:
-
-   | Name | Value |
-   |---|---|
-   | `SUPABASE_URL` | Same project URL as above |
-   | `SUPABASE_ANON_KEY` | Same anon key as above |
-   | `SUPABASE_SERVICE_ROLE_KEY` | **Project Settings → API → service_role** |
-   | `DRIVE_ROOT_FOLDER_ID` | The Drive folder from part 2 |
-   | `ANTHROPIC_API_KEY` | Only if bill reading is wanted |
-   | `ALLOWED_ORIGINS` | Leave unset while the app and API share a domain |
-   | `SETUP_SECRET` | Only while connecting Drive — delete it afterwards |
-
-   Plus **either** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
-   `GOOGLE_REFRESH_TOKEN`, **or** `GOOGLE_SERVICE_ACCOUNT_EMAIL` and
-   `GOOGLE_PRIVATE_KEY`.
-
-3. Deploy, and check it on the `*.vercel.app` URL before touching DNS.
-
-### Moving the domain
-
-`kontour.banavat-india.com` currently points at GitHub Pages. Once the
-Vercel deployment is working:
-
-1. Add the domain in **Vercel → Settings → Domains**.
-2. Repoint the DNS `CNAME` record to the target Vercel gives you.
-3. Delete `.github/workflows/deploy.yml` and `CNAME` from the
-   repository, so two hosts are not fighting over the same domain.
-
-Do those in that order. Repointing DNS first means downtime while the
-certificate is issued.
 
 ---
 
