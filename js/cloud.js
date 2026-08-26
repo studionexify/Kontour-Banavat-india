@@ -16,7 +16,7 @@
 
 import { cloudConfigured } from './config.js';
 import {
-  accessToken, rest, currentOrgId, signedIn, myRole, canWrite,
+  accessToken, rest, currentOrgId, signedIn, myRole, canWrite, refreshMemberCache,
 } from './auth.js';
 import {
   queued, queuedCount, resolve, cursor, setCursor, KINDS,
@@ -94,7 +94,7 @@ async function pull(orgId) {
   const since = cursor();
   const filter = since ? `&updated_at=gt.${encodeURIComponent(since)}` : '';
   const rows = await rest(
-    `/records?select=kind,id,data,updated_at,deleted_at&org_id=eq.${orgId}${filter}`
+    `/records?select=kind,id,data,updated_at,deleted_at,created_by&org_id=eq.${orgId}${filter}`
     + '&order=updated_at.asc&limit=2000'
   );
 
@@ -163,9 +163,14 @@ export function sync({ settingsToo = false } = {}) {
     if (!token) return { skipped: 'session expired' };
 
     try {
-      if (!role) role = await myRole(orgId);
+      // Once per session outright, and again whenever a pull actually
+      // brought something back — that is when a new member, a role
+      // change, or a renamed profile is likeliest to have happened.
+      const firstRun = !role;
+      if (firstRun) role = await myRole(orgId);
       const up = await push(orgId);
       const down = await pull(orgId);
+      if (firstRun || down.pulled) refreshMemberCache().catch(() => {});
       if (settingsToo) await syncSettings(orgId);
       lastError = '';
       return { ...up, ...down };

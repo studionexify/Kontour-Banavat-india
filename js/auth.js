@@ -257,6 +257,52 @@ export async function members(orgId = currentOrgId()) {
   return rest(`/memberships?select=role,user_id,profiles(email,full_name)&org_id=eq.${orgId}`);
 }
 
+/* ── Who's who, for attributing an entry to a person ──────────────
+   A small cache rather than a lookup per row: rendering a list of
+   entries reads this many times a second, and a member list changes
+   at most a few times a day. Refreshed alongside sync — see cloud.js —
+   never on its own network round trip from inside a render. */
+let memberCache = new Map();       // user_id -> display name
+let memberCacheOrg = '';
+
+export async function refreshMemberCache() {
+  const orgId = currentOrgId();
+  if (!orgId) { memberCache = new Map(); memberCacheOrg = ''; return; }
+  try {
+    const rows = await members(orgId);
+    const next = new Map();
+    for (const m of rows || []) {
+      const p = m.profiles || {};
+      next.set(m.user_id, p.full_name || p.email || 'Member');
+    }
+    memberCache = next;
+    memberCacheOrg = orgId;
+  } catch {
+    // Left as whatever it was — a stale name is better than every row
+    // suddenly reading "Someone" because one refresh failed offline.
+  }
+}
+
+/** How many people are on these books, from the cache — used to decide
+    whether showing "who logged this" is useful or just noise for a
+    solo owner. 1 until the first refresh has actually run. */
+export function memberCount() {
+  return memberCacheOrg === currentOrgId() && memberCache.size ? memberCache.size : 1;
+}
+
+/**
+ * A name for `uid`, or '' when there is nothing to show — no org, no
+ * uid, or a record from before attribution existed. The caller decides
+ * what an empty string means for its layout; this never invents a
+ * placeholder like "Unknown".
+ */
+export function memberName(uid) {
+  if (!uid) return '';
+  const user = currentUser();
+  if (user && uid === user.id) return 'You';
+  return memberCache.get(uid) || '';
+}
+
 export async function invite(email, role = 'staff', orgId = currentOrgId()) {
   return rest('/invites', {
     method: 'POST',

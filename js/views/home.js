@@ -11,6 +11,7 @@ import {
 import { inr, inrShort, num, todayISO, thisMonthKey, monthLabel, dayHeading, fyOf } from '../format.js';
 import { openEntrySheet, openEntryDetail } from './entry.js';
 import { status } from '../sync.js';
+import { memberName, memberCount } from '../auth.js';
 
 let tab = 'accounts';
 
@@ -235,6 +236,12 @@ export function rowHTML(e, showDate = false) {
   if (kind !== 'transfer' && e.party) bits.push(categoryName(e.categoryId));
   if (e.jobCode) bits.push(e.jobCode);
   if (e.note) bits.push(e.note);
+  // Only worth showing once someone else could have logged it — a solo
+  // owner would just see "You" on every single row, forever.
+  if (memberCount() > 1) {
+    const who = memberName(e.loggedBy);
+    if (who) bits.push(who);
+  }
   if (showDate) bits.unshift(dayHeading(e.date));
   if (!bits.length) bits.push(accountName(e.accountId));
 

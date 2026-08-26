@@ -191,7 +191,11 @@ export function applyRemote(rows) {
       continue;
     }
 
-    const rec = { ...row.data, updatedAt: remoteAt };
+    // loggedBy travels the same way updatedAt does: folded onto the
+    // record here, echoed back inside `data` on this device's own
+    // later pushes, and harmless there — push_records never reads it
+    // from the JSON, only ever from the sticky created_by column.
+    const rec = { ...row.data, updatedAt: remoteAt, loggedBy: row.created_by || null };
     if (local) list[i] = rec; else list.push(rec);
     changed++;
   }

@@ -59,6 +59,23 @@ create table if not exists public.memberships (
 
 create index if not exists memberships_user_idx on public.memberships (user_id);
 
+-- memberships.user_id and profiles.id both reference auth.users
+-- independently, so there was nothing tying memberships directly to
+-- profiles. PostgREST can only embed a related table across an actual
+-- foreign key: js/auth.js members() asks for `profiles(email,full_name)`
+-- inside a /memberships query, and without this, PostgREST refuses the
+-- whole request rather than guess at the relationship — the People
+-- screen read that refusal as "no one is on these books" instead of the
+-- error it actually was. Every membership's user already has a profile
+-- by the time a membership can exist (the handle_new_user trigger creates
+-- one at signup), so this can never fail against real data.
+do $$ begin
+  alter table public.memberships
+    add constraint memberships_user_id_profiles_fkey
+    foreign key (user_id) references public.profiles(id) on delete cascade;
+exception when duplicate_object then null;
+end $$;
+
 -- An owner names an email before that person has an account. On their
 -- first sign-in the trigger below turns any matching invite into a
 -- membership, so nobody has to be online at the same time.
@@ -98,9 +115,20 @@ create table if not exists public.records (
   job_code    text,
   updated_at  timestamptz not null default now(),
   updated_by  uuid references auth.users on delete set null,
+  -- Who logged this, distinct from updated_by: an edit by a second
+  -- person moves updated_by but must never overwrite this, or "who
+  -- logged it" would silently become "who last touched it". Nullable
+  -- on `create table` so a fresh install and an existing one converge
+  -- on the same column via the `alter table` just below either way.
+  created_by  uuid references auth.users on delete set null,
   deleted_at  timestamptz,
   primary key (org_id, kind, id)
 );
+
+-- `create table if not exists` only helps a fresh install — this repo
+-- has been live since before this column existed, so an already-created
+-- records table needs it added explicitly.
+alter table public.records add column if not exists created_by uuid references auth.users on delete set null;
 
 -- The sync cursor: "everything that changed since I last pulled".
 create index if not exists records_sync_idx on public.records (org_id, updated_at);
@@ -445,13 +473,17 @@ begin
   ),
   applied as (
     insert into public.records as r
-      (org_id, kind, id, data, updated_at, updated_by, deleted_at)
-    select d.org_id, d.kind, d.id, d.data, d.updated_at, auth.uid(), d.deleted_at
+      (org_id, kind, id, data, updated_at, updated_by, created_by, deleted_at)
+    select d.org_id, d.kind, d.id, d.data, d.updated_at, auth.uid(), auth.uid(), d.deleted_at
     from deduped d
     on conflict (org_id, kind, id) do update
       set data       = excluded.data,
           updated_at = excluded.updated_at,
           updated_by = excluded.updated_by,
+          -- Sticky: whoever is pushing this edit is never the answer to
+          -- "who logged it" unless nobody ever was (a row from before
+          -- this column existed).
+          created_by = coalesce(r.created_by, excluded.created_by),
           deleted_at = excluded.deleted_at
       where excluded.updated_at > r.updated_at
     returning r.kind, r.id, r.updated_at
