@@ -112,6 +112,11 @@ export async function signUp(email, password, fullName = '') {
       email: String(email).trim(),
       password,
       data: { full_name: fullName },
+      // Without this GoTrue falls back to the Site URL configured in the
+      // Supabase dashboard, which can drift from the live domain (see
+      // SETUP.md's history of moving hosts) and send confirmation links
+      // to a dead page.
+      redirect_to: window.location.origin,
     },
   });
   // With email confirmation switched on there is no session yet — the
