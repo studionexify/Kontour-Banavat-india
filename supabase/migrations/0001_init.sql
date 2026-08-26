@@ -205,17 +205,50 @@ alter table public.records      enable row level security;
 alter table public.org_settings enable row level security;
 
 -- orgs
+--
+-- created_by = auth.uid() is included here, not only is_member(id),
+-- because of an ordering quirk in Postgres RLS: INSERT ... RETURNING
+-- checks the SELECT policy before the AFTER INSERT trigger below has
+-- created the creator's membership row. Without this clause, creating
+-- an org through a client that asks for the row back (PostgREST's
+-- return=representation, which the app always uses) fails outright —
+-- the insert lands, but Postgres refuses to hand the row back and
+-- reports that refusal as "new row violates row-level security policy",
+-- indistinguishable from the insert itself having been rejected.
 drop policy if exists orgs_read on public.orgs;
 create policy orgs_read on public.orgs
-  for select using (public.is_member(id));
+  for select using (public.is_member(id) or created_by = auth.uid());
 drop policy if exists orgs_update on public.orgs;
 create policy orgs_update on public.orgs
   for update using (public.is_admin(id)) with check (public.is_admin(id));
 -- Creating an org is allowed to any signed-in user; the trigger below
 -- immediately makes them its owner, so it cannot be created ownerless.
+--
+-- created_by is set by the stamp_org_creator trigger below, never by
+-- comparing it against what the client sent. A client-supplied value
+-- that does not exactly match auth.uid() — stale local state, a null
+-- from a session whose user object had not loaded, anything — would
+-- make `created_by = auth.uid()` evaluate to NULL, and Postgres treats
+-- a NULL WITH CHECK as a failure, not a pass. The database deriving
+-- the value itself is what removes that whole class of failure.
 drop policy if exists orgs_insert on public.orgs;
 create policy orgs_insert on public.orgs
-  for insert with check (auth.uid() is not null and created_by = auth.uid());
+  for insert with check (auth.uid() is not null);
+
+create or replace function public.stamp_org_creator()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.created_by := auth.uid();
+  return new;
+end;
+$$;
+
+drop trigger if exists stamp_org_creator_trg on public.orgs;
+create trigger stamp_org_creator_trg
+  before insert on public.orgs
+  for each row execute function public.stamp_org_creator();
 
 -- profiles: your own, plus anyone you share an org with
 drop policy if exists profiles_read_self on public.profiles;

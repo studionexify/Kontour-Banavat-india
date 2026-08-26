@@ -222,10 +222,12 @@ export async function myOrgs() {
 }
 
 export async function createOrg(name) {
-  const user = currentUser();
+  // created_by is not sent: a stamp_org_creator trigger sets it from
+  // auth.uid() server-side, so there is nothing here that could send a
+  // stale or missing id and be refused by row level security for it.
   const rows = await rest('/orgs', {
     method: 'POST',
-    body: { name: String(name).trim() || 'Banavat India', created_by: user ? user.id : null },
+    body: { name: String(name).trim() || 'Banavat India' },
     headers: { prefer: 'return=representation' },
   });
   return Array.isArray(rows) ? rows[0] : rows;
