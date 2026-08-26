@@ -777,24 +777,3 @@ export async function checkPin(pin) {
 export function clearPin() {
   saveSettings({ pinHash: '', pinSalt: '' });
 }
-
-/* ── Seed helper (Settings → "Add sample week") ─────────────── */
-
-export function seedSample() {
-  const s = load();
-  if (s.entries.length) return false;
-  const d = (back) => { const x = new Date(); x.setDate(x.getDate() - back); return isoOf(x); };
-  const rows = [
-    { type: 'in', entered: 250000, categoryId: 'c_adv', accountId: 'bank', jobCode: 'B109', party: 'Veer Chaudhary', note: 'Advance against console + bed', date: d(6), gst: { on: true, rate: 18, mode: 'excl' } },
-    { type: 'out', entered: 64300, categoryId: 'c_sub', accountId: 'bank', jobCode: 'C115', party: 'Shreemay Associates', note: 'Gulabchand jewellery — metal work', date: d(5) },
-    { type: 'out', entered: 3480, categoryId: 'c_trans', accountId: 'cash', jobCode: 'C115', party: 'Tempo', note: 'Material pickup', date: d(4) },
-    { type: 'in', entered: 20800, categoryId: 'c_bal', accountId: 'upi', jobCode: 'B116-1', party: 'Ar. Krishna Shah', note: 'Balance', date: d(3) },
-    { type: 'out', entered: 12500, categoryId: 'c_mat', accountId: 'cash', jobCode: 'B109', party: 'Timber mart', note: 'Ash wood', date: d(2) },
-    { type: 'transfer', entered: 50000, accountId: 'bank', toAccountId: 'cash', note: 'Cash withdrawal for site', date: d(1) },
-    { type: 'out', entered: 9000, categoryId: 'c_wage', accountId: 'cash', party: 'Workshop', note: 'Weekly wages', date: d(0) },
-  ];
-  rows.forEach(addEntry);
-  updateJob('B109', { title: 'Console, bed & side tables', client: 'Veer Chaudhary', orderValue: 516030 });
-  updateJob('C115', { title: 'Gulabchand jewellery', client: 'Rahi Construction', orderValue: 0 });
-  return true;
-}

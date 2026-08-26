@@ -8,7 +8,7 @@ import {
   categories, addCategory, updateCategory, deleteCategory,
   recurring, addRecurring, updateRecurring, deleteRecurring,
   settings, saveSettings, hasPin, setPin, clearPin, device,
-  importAll, wipe, seedSample, entries,
+  importAll, wipe, entries,
 } from '../store.js';
 import { inr } from '../format.js';
 import { photos, humanBytes } from '../photos.js';
@@ -71,8 +71,6 @@ export function openSettings(ctx) {
             ${navRow('alert', 'About Kontour', 'Version, storage, reset', 'about')}
           </div>
 
-          ${!entries().length ? `
-            <button class="btn sec sm" data-seed>Add a sample week to look around</button>` : ''}
         `;
       }
 
@@ -87,18 +85,6 @@ export function openSettings(ctx) {
         await map[where](ctx, paint);
       });
 
-      on(root, '[data-seed]', async () => {
-        const ok = await confirmSheet({
-          title: 'Add sample entries?',
-          message: 'Seven entries from a typical week get added so you can see how everything works. Delete them any time from the ledger.',
-          confirmLabel: 'Add them',
-        });
-        if (!ok) return;
-        seedSample();
-        toast('Sample week added');
-        await paint();
-        ctx.refresh();
-      });
     },
     onClose() { ctx.refresh(); },
   });
