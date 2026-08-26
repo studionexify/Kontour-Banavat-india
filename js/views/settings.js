@@ -16,6 +16,7 @@ import { exportBackup, readBackupFile } from '../export.js';
 import { status, connectDrive, disconnectDrive, driveConfigured, syncPending, sharedDrive } from '../sync.js';
 import { cloudConfigured } from '../config.js';
 import { PROVIDERS, providerOf, defaultModel, isCustomModel } from '../models.js';
+import { biometricAvailable, biometricEnabled, enrollBiometric, disableBiometric } from '../biometric.js';
 import {
   signedIn, currentUser, currentOrgId, myOrgs, myRole, canWrite, signOut,
   members, invite, pendingInvites, revokeInvite, setRole, removeMember,
@@ -732,23 +733,36 @@ function pinSheet(ctx, back) {
   const sheet = openSheet({
     title: 'PIN lock',
     body: `<div class="sheet-body" data-b></div>`,
-    onMount(root) {
+    async onMount(root) {
       const b = root.querySelector('[data-b]');
+      // Checked once: it involves an async platform call, and nothing
+      // about the answer changes while this sheet is open.
+      const bioCapable = await biometricAvailable();
       paint();
+
       function paint() {
         b.innerHTML = `
           <div class="hint" style="margin-bottom:14px">
-            A 4-digit PIN asked once when the app opens. It keeps a passer-by out of your ledger —
+            A 4-digit PIN asked when the app opens. It keeps a passer-by out of your ledger —
             it does not encrypt what is stored, so treat the phone itself as the real lock.
           </div>
           ${hasPin() ? `
+            ${bioCapable ? `
+              <div class="switchrow" data-bio>
+                <div>
+                  <div class="sw-t">Face ID / fingerprint</div>
+                  <div class="sw-s">Whatever unlocks this device — the PIN still works if it fails</div>
+                </div>
+                <div class="switch ${biometricEnabled() ? 'on' : ''}"></div>
+              </div>` : ''}
             <div class="switchrow" data-skip>
               <div><div class="sw-t">Skip on this device</div><div class="sw-s">Useful on the desktop you test from</div></div>
               <div class="switch ${device.get('skipPin') ? 'on' : ''}"></div>
             </div>
             <button class="btn sm" data-change>Change PIN</button>
             <button class="btn danger sm" data-off>Turn the PIN off</button>
-          ` : `<button class="btn" data-set>Set a PIN</button>`}`;
+          ` : `<button class="btn" data-set>Set a PIN</button>
+          ${bioCapable ? `<div class="hint" style="margin-top:10px">Set a PIN first — it stays the fallback for whenever Face ID or a fingerprint does not work.</div>` : ''}`}`;
       }
 
       on(root, '[data-skip]', (e, el) => {
@@ -757,16 +771,35 @@ function pinSheet(ctx, back) {
         el.querySelector('.switch').classList.toggle('on', next);
       });
 
+      on(root, '[data-bio]', async (e, el) => {
+        if (biometricEnabled()) {
+          disableBiometric();
+          toast('Face ID / fingerprint turned off');
+          paint();
+          return;
+        }
+        try {
+          await enrollBiometric();
+          toast('Face ID / fingerprint enabled');
+        } catch (err) {
+          toast(err.message || 'Could not set that up', 'err');
+        }
+        paint();
+      });
+
       on(root, '[data-set], [data-change]', () => askNewPin(() => { paint(); back(); }));
 
       on(root, '[data-off]', async () => {
         const ok = await confirmSheet({
           title: 'Turn the PIN off?',
-          message: 'Anyone who picks up this phone will be able to open Kontour.',
+          message: biometricEnabled()
+            ? 'Face ID / fingerprint will also turn off — anyone who picks up this phone will be able to open Kontour.'
+            : 'Anyone who picks up this phone will be able to open Kontour.',
           confirmLabel: 'Turn it off', danger: true,
         });
         if (!ok) return;
         clearPin();
+        disableBiometric();
         toast('PIN removed');
         paint();
         back();

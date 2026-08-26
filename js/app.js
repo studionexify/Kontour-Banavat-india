@@ -2,6 +2,7 @@
 
 import { icon } from './icons.js';
 import { $, on, toast, closeTopSheet, sheetCount, haptic } from './ui.js';
+import { biometricEnabled, verifyBiometric } from './biometric.js';
 import { load, hasPin, checkPin, device, onChange } from './store.js';
 import { openEntrySheet } from './views/entry.js';
 import * as home from './views/home.js';
@@ -100,9 +101,36 @@ function startGate() {
   let buf = '';
   const dots = $('#pin-dots');
   const sub = $('#gate-sub');
+  const bioBtn = $('#gate-bio');
 
   function paint() {
     Array.from(dots.children).forEach((d, i) => d.classList.toggle('on', i < buf.length));
+  }
+
+  function unlock() {
+    gate.hidden = true;
+    app.hidden = false;
+    start();
+  }
+
+  // Face ID, a fingerprint, Windows Hello — whatever this device's own
+  // lock screen already is. See js/biometric.js for why this needs no
+  // server round trip: it is a faster door next to the PIN, not a
+  // replacement for it, so a cancel or a failed scan just leaves the
+  // PIN pad below exactly as if biometrics did not exist.
+  const bioOn = biometricEnabled();
+  bioBtn.hidden = !bioOn;
+  if (bioOn) {
+    bioBtn.innerHTML = `${icon('fingerprint', 18)}<span>Unlock with Face ID / fingerprint</span>`;
+    bioBtn.onclick = tryBiometric;
+  }
+
+  async function tryBiometric({ auto = false } = {}) {
+    if (!bioOn) return;
+    if (!auto) sub.textContent = 'Waiting…';
+    const ok = await verifyBiometric();
+    if (ok) { haptic(10); unlock(); return; }
+    sub.textContent = 'Enter your PIN';
   }
 
   buildPad($('#gate-pad'), async (k) => {
@@ -115,9 +143,7 @@ function startGate() {
     if (buf.length === 4) {
       const ok = await checkPin(buf);
       if (ok) {
-        gate.hidden = true;
-        app.hidden = false;
-        start();
+        unlock();
       } else {
         dots.classList.add('shake');
         sub.textContent = 'Wrong PIN — try again';
@@ -127,6 +153,12 @@ function startGate() {
     }
   });
   paint();
+
+  // Prompted once, automatically, the moment the gate is shown — the
+  // point of having this at all is not typing anything most times the
+  // app opens. A dismiss or a failed scan is silent by design (see
+  // verifyBiometric); the PIN pad is already sitting right there.
+  if (bioOn) tryBiometric({ auto: true });
 }
 
 /* ── Shell ─────────────────────────────────────────────────── */

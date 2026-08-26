@@ -229,6 +229,17 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 .numpad button:active { background:rgba(206,241,123,.24); transform:scale(.94); }
 .numpad button.ghost { background:none; border:0; font-size:15px; color:var(--pine-200); }
 
+.bio-btn {
+  display:flex; align-items:center; justify-content:center; gap:9px;
+  width:100%; margin-top:18px; padding:13px;
+  border-radius:16px;
+  background:linear-gradient(160deg, rgba(206,241,123,.16), rgba(206,241,123,.06));
+  border:1px solid rgba(206,241,123,.28);
+  color:var(--lime); font-size:13.5px; font-weight:600;
+  transition:background var(--t-fast), transform .1s var(--ease);
+}
+.bio-btn:active { transform:scale(.97); background:rgba(206,241,123,.22); }
+
 /* ── Sign in ──────────────────────────────────────────────────
    The same door as the PIN gate, so the two screens that stand in
    front of the books read as one thing rather than two. */
