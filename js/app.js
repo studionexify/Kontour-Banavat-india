@@ -20,6 +20,7 @@ import { enhance, bindHeroScroll, attachRipple } from './motion.js';
 import { cloudConfigured } from './config.js';
 import { signedIn, currentOrgId } from './auth.js';
 import { startSync } from './cloud.js';
+import { startQuoteSync } from './quotesync.js';
 import { load as loadQuotes, onChange as onQuotesChange } from './quotes.js';
 import { markHTML, hasLogo } from './brand.js';
 import { openSignIn } from './views/signin.js';
@@ -423,6 +424,13 @@ function start() {
   // without a sync that found nothing flickering it.
   if (cloudConfigured() && signedIn() && currentOrgId()) {
     startSync({
+      onChange(r) {
+        if (r.pulled && !sheetCount()) show(route);
+      },
+    });
+    // Quotations ride their own sync on the same rhythm — separate
+    // store, separate outbox, same books and the same row-level rules.
+    startQuoteSync({
       onChange(r) {
         if (r.pulled && !sheetCount()) show(route);
       },

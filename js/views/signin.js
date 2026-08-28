@@ -15,7 +15,9 @@ import {
   myOrgs, createOrg, setCurrentOrg, currentUser,
 } from '../auth.js';
 import { adoptLocalData } from '../cloud.js';
+import { adoptLocalQuotes } from '../quotesync.js';
 import { entries } from '../store.js';
+import { quotes as allQuotes } from '../quotes.js';
 
 let mode = 'in';        // 'in' | 'up' | 'forgot'
 
@@ -242,13 +244,18 @@ async function enter(org, done, { fresh = false } = {}) {
 
   // Books that already existed on this device before there was anywhere
   // to send them. Signing in should carry them up, not strand them.
-  if (fresh && entries().length) {
-    try {
-      await adoptLocalData();
-      toast('Your existing entries have been uploaded');
-    } catch {
-      // Not fatal — the outbox keeps them and the next sync retries.
-      toast('Signed in. Your entries will upload shortly', 'warn');
+  if (fresh) {
+    const hadEntries = entries().length;
+    const hadQuotes = allQuotes().length;
+    if (hadEntries || hadQuotes) {
+      try {
+        if (hadEntries) await adoptLocalData();
+        if (hadQuotes) await adoptLocalQuotes();
+        toast('Your existing records have been uploaded');
+      } catch {
+        // Not fatal — both syncs retry on their own schedule.
+        toast('Signed in. Your records will upload shortly', 'warn');
+      }
     }
   }
 

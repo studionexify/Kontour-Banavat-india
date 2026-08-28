@@ -147,6 +147,11 @@ function blank() {
       bank: { ...BANK },
       seq: 0,
     },
+    // Which books these quotations belong to. Empty on a device that
+    // has never signed in. See claimFor() — this is what stops one
+    // org's quotations being pushed into another's after a sign-out
+    // and a sign-in as somebody else.
+    orgId: '',
   };
 }
 
@@ -173,6 +178,7 @@ function read() {
     for (const k of ['quotes', 'designs']) {
       if (!Array.isArray(out[k])) out[k] = [];
     }
+    out.orgId = typeof s.orgId === 'string' ? s.orgId : '';
     return out;
   } catch (e) {
     console.error('[kontour] could not read quotations', e);
@@ -237,6 +243,7 @@ export function fyLetter(iso = todayISO()) {
 export function nextMrNo(iso = todayISO()) {
   const letter = fyLetter(iso);
   const used = state.quotes
+    .filter((q) => !q.deletedAt)
     .map((q) => String(q.mrNo || ''))
     .filter((n) => n.startsWith(letter))
     .map((n) => Number(baseNo(n).slice(letter.length)))
@@ -260,7 +267,7 @@ function nextRevisionOf(mrNo) {
 /* ── Designs ─────────────────────────────────────────────────── */
 
 export function designs({ category = null, q = '' } = {}) {
-  let list = state.designs.filter((d) => !d.archived);
+  let list = state.designs.filter((d) => !d.archived && !d.deletedAt);
   if (category && category !== 'All') list = list.filter((d) => d.category === category);
   const needle = q.trim().toLowerCase();
   if (needle) {
@@ -271,7 +278,7 @@ export function designs({ category = null, q = '' } = {}) {
 }
 
 export function getDesign(code) {
-  return state.designs.find((d) => d.code === code) || null;
+  return state.designs.find((d) => d.code === code && !d.deletedAt) || null;
 }
 
 export function addDesign(input) {
@@ -305,7 +312,13 @@ export function updateDesign(code, changes) {
 }
 
 export function deleteDesign(code) {
-  state.designs = state.designs.filter((d) => d.code !== code);
+  const d = getDesign(code);
+  if (!d) return;
+  // Tombstoned, not spliced. A row removed outright has nothing left to
+  // sync against, so an offline device would push it back on its next
+  // connection and the deletion would quietly undo itself.
+  d.deletedAt = Date.now();
+  d.updatedAt = Date.now();
   write(); emit();
 }
 
@@ -318,7 +331,7 @@ export function designPrice(design, finishName) {
 /* ── Quotations ──────────────────────────────────────────────── */
 
 export function quotes({ status = null, q = '' } = {}) {
-  let list = state.quotes.slice();
+  let list = state.quotes.filter((x) => !x.deletedAt);
   if (status && status !== 'all') list = list.filter((x) => x.status === status);
   const needle = q.trim().toLowerCase();
   if (needle) {
@@ -329,14 +342,14 @@ export function quotes({ status = null, q = '' } = {}) {
 }
 
 export function getQuote(id) {
-  return state.quotes.find((x) => x.id === id) || null;
+  return state.quotes.find((x) => x.id === id && !x.deletedAt) || null;
 }
 
 /* Every revision of one job, newest first. */
 export function familyOf(mrNo) {
   const base = baseNo(mrNo);
   return state.quotes
-    .filter((x) => baseNo(x.mrNo) === base)
+    .filter((x) => !x.deletedAt && baseNo(x.mrNo) === base)
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
@@ -467,7 +480,8 @@ export function addQuote(input = {}) {
    silently merge into one revision family. */
 export function mrNoTaken(mrNo, exceptId = '') {
   const want = String(mrNo || '').trim().toUpperCase();
-  return state.quotes.some((x) => x.id !== exceptId && String(x.mrNo).toUpperCase() === want);
+  return state.quotes.some((x) => !x.deletedAt && x.id !== exceptId
+    && String(x.mrNo).toUpperCase() === want);
 }
 
 export function updateQuote(id, changes) {
@@ -479,7 +493,10 @@ export function updateQuote(id, changes) {
 }
 
 export function deleteQuote(id) {
-  state.quotes = state.quotes.filter((x) => x.id !== id);
+  const q = getQuote(id);
+  if (!q) return;
+  q.deletedAt = Date.now();
+  q.updatedAt = Date.now();
   write(); emit();
 }
 
@@ -664,5 +681,122 @@ export function pipelineValue() {
 }
 
 export function recentQuotes(limit = 5) {
-  return state.quotes.slice().sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
+  return state.quotes.filter((x) => !x.deletedAt).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
 }
+
+
+/* ── The sync surface ──────────────────────────────────────────
+   Everything js/quotesync.js needs and nothing more. Quotations keep
+   their own store and their own outbox rather than joining the
+   ledger's, because they are a different kind of thing on a different
+   rhythm — a quotation is edited for days before it means anything,
+   an entry is written once and is true.
+
+   The identity sent to the server is the app's own: a quotation by
+   its id, a design by its code. */
+
+export const SYNC_KINDS = [
+  { kind: 'quote', arr: 'quotes', key: 'id' },
+  { kind: 'design', arr: 'designs', key: 'code' },
+];
+
+/** Every record, tombstones included, as the server wants them. */
+export function syncRecords() {
+  const out = [];
+  for (const { kind, arr, key } of SYNC_KINDS) {
+    for (const rec of state[arr] || []) {
+      const id = rec[key];
+      if (id == null || id === '') continue;
+      out.push({
+        kind,
+        id: String(id),
+        data: rec,
+        updatedAt: rec.updatedAt || rec.createdAt || Date.now(),
+        deletedAt: rec.deletedAt || null,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Rows the server sent, folded in by last-write-wins per record.
+ * Returns how many actually moved, so a sync that found nothing does
+ * not repaint the screen someone is reading.
+ */
+export function applyRemote(rows) {
+  let changed = 0;
+
+  for (const row of rows || []) {
+    const spec = SYNC_KINDS.find((k) => k.kind === row.kind);
+    if (!spec) continue;                       // a kind this build does not know
+
+    const list = state[spec.arr];
+    const at = Date.parse(row.updated_at) || 0;
+    const i = list.findIndex((r) => String(r[spec.key]) === String(row.id));
+    const mine = i >= 0 ? list[i] : null;
+    const mineAt = mine ? (mine.updatedAt || mine.createdAt || 0) : -1;
+
+    // The server's copy only wins if it is genuinely newer. A tie goes
+    // to the device, which is what stops a pull from undoing an edit
+    // made in the same second it arrived.
+    if (mine && mineAt >= at) continue;
+
+    const next = { ...(row.data || {}), updatedAt: at };
+    if (row.deleted_at) next.deletedAt = Date.parse(row.deleted_at) || at;
+    else delete next.deletedAt;
+    next[spec.key] = row.id;
+
+    if (mine) list[i] = next;
+    else list.push(next);
+    changed += 1;
+  }
+
+  if (changed) { write(); emit(); }
+  return changed;
+}
+
+/** Shared settings for the module — the boilerplate every quotation
+    prints. The logo is included: it belongs to the business, not to
+    the device that happened to upload it. */
+export const SHARED_QUOTE_SETTINGS = [
+  'mrPrefix', 'gstRate', 'defaultCity', 'fabricRate', 'leadTime',
+  'paymentTerms', 'terms', 'note', 'company', 'bank', 'logo',
+];
+
+export function sharedSettings() {
+  const out = {};
+  for (const k of SHARED_QUOTE_SETTINGS) out[k] = state.settings[k];
+  return out;
+}
+
+
+/* ── Whose books are these ─────────────────────────────────────
+   Signing out and signing in as a different org must not carry the
+   previous org's quotations across. Local data with no org yet is
+   claimed by the first one that signs in — that is the ordinary case
+   of a device that was working offline. Local data belonging to a
+   different org is cleared, because it is not this org's to hold and
+   certainly not this org's to be sent.
+
+   Returns true when it had to clear, so the caller can reset its
+   cursor and pull the new org's books from the beginning. */
+export function claimFor(orgId) {
+  const want = String(orgId || '');
+  if (!want) return false;
+
+  if (!state.orgId) {
+    state.orgId = want;
+    write();
+    return false;
+  }
+  if (state.orgId === want) return false;
+
+  state.quotes = [];
+  state.designs = [];
+  state.orgId = want;
+  write(); emit();
+  return true;
+}
+
+export function ownerOrg() { return state.orgId; }

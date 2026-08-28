@@ -2,7 +2,8 @@
    credentials, and backup. Opened from the gear on Home. */
 
 import { icon } from '../icons.js';
-import { settings as qSettings, updateSettings as updateQSettings, importHistory, quotes as allQuotes } from '../quotes.js';
+import { settings as qSettings, updateSettings as updateQSettings, importHistory, quotes as allQuotes, ownerOrg } from '../quotes.js';
+import { syncQuotes, lastSyncError as qsError, online as qsOnline } from '../quotesync.js';
 import { openSheet, on, esc, toast, confirmSheet, emptyState } from '../ui.js';
 import {
   accounts, addAccount, updateAccount, deleteAccount, balance,
@@ -75,6 +76,9 @@ export function openSettings(ctx) {
           <p class="tray-lbl sp">Brand</p>
           <div class="list">
             ${navRow('sparkle', 'Logo', qSettings().logo ? 'Set — shows on quotations and in the app' : 'Not set', 'logo')}
+            ${cloudConfigured() && signedIn() ? navRow(
+              qsOnline() ? 'cloud' : 'cloudOff', 'Quotation sync',
+              qsError() ? 'Last sync failed' : `${allQuotes().length} on the shared books`, 'qsync') : ''}
             ${navRow('upload', 'Quotation history',
               allQuotes().length ? `${allQuotes().length} quotation${allQuotes().length === 1 ? '' : 's'} on file`
                                  : 'Bring in the quotations from the sheet', 'history')}
@@ -88,7 +92,7 @@ export function openSettings(ctx) {
         const map = {
           accounts: accountsSheet, categories: categoriesSheet, recurring: recurringSheet,
           gst: gstSheet, drive: driveSheet, ai: aiSheet, pending: pendingSheet,
-          pin: pinSheet, backup: backupSheet, about: aboutSheet, logo: logoSheet, history: historySheet,
+          pin: pinSheet, backup: backupSheet, about: aboutSheet, logo: logoSheet, history: historySheet, qsync: qsyncSheet,
           people: peopleSheet, sync: syncSheet, account: accountSheet,
         };
         await map[where](ctx, paint);
@@ -1351,4 +1355,52 @@ async function historySheet(ctx, back) {
       }
     },
   });
+}
+
+
+/* ── Quotation sync ────────────────────────────────────────────
+   What is on the shared books, and a way to make it so now rather
+   than at the next five-minute tick. */
+async function qsyncSheet(ctx, back) {
+  openSheet({
+    title: 'Quotation sync',
+    body: `<div class="sheet-body" data-qs></div>`,
+    onMount(root) {
+      const host = root.querySelector('[data-qs]');
+      paint();
+
+      function paint(result) {
+        const n = allQuotes().length;
+        host.innerHTML = `
+          <p class="sheet-lede">
+            Quotations live on the same books as the ledger, behind the
+            same sign-in. Anyone you have added to these books sees them;
+            nobody else can, signed in or not.
+          </p>
+          ${result && result.error ? `<div class="snip-none" style="border-style:solid">
+              ${icon('alert', 20)}<span>${esc(result.error)}</span></div>` : ''}
+          ${result && !result.error ? `<div class="snip-none" style="border-style:solid">
+              ${icon('check', 20)}<span>${result.pushed || 0} sent · ${result.pulled || 0} received</span></div>` : ''}
+          <div class="list">
+            ${plainRow('On this device', `${n} quotation${n === 1 ? '' : 's'}`)}
+            ${plainRow('Connection', qsOnline() ? 'Online' : 'Offline')}
+            ${plainRow('Last result', qsError() || 'No errors')}
+          </div>
+          <button class="btn" data-run>Sync now</button>
+        `;
+        on(host, '[data-run]', async (e, b) => {
+          b.disabled = true;
+          b.textContent = 'Syncing…';
+          const r = await syncQuotes({ settingsToo: true });
+          paint(r);
+          if (back) back();
+        });
+      }
+    },
+  });
+}
+
+function plainRow(label, value) {
+  return `<div class="row"><div class="row-main"><div class="row-t">${esc(label)}</div>
+    <div class="row-s">${esc(value)}</div></div></div>`;
 }
