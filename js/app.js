@@ -17,16 +17,37 @@ import { signedIn, currentOrgId } from './auth.js';
 import { startSync } from './cloud.js';
 import { openSignIn } from './views/signin.js';
 
-const TABS = [
-  { id: 'home', label: 'Home', icon: 'home' },
-  { id: 'ledger', label: 'Ledger', icon: 'ledger' },
-  { id: 'jobs', label: 'Jobs', icon: 'jobs' },
-  { id: 'reports', label: 'Reports', icon: 'reports' },
+/* ── Nav ───────────────────────────────────────────────────────
+   Kontour is the workspace; Phynance is the money module inside
+   it. So the rail carries destinations, not screens: Home, and
+   the module. Ledger, Jobs and Reports are Phynance's own three
+   screens, and they appear as a sub-nav once you are in it. */
+
+const NAV = [
+  { id: 'home', label: 'Home', icon: 'home', route: 'home' },
+  { id: 'phynance', label: 'Phynance', icon: 'ledger', route: 'ledger' },
 ];
+
+const SUBNAV = {
+  phynance: [
+    { route: 'ledger', label: 'Ledger' },
+    { route: 'jobs', label: 'Jobs' },
+    { route: 'reports', label: 'Reports' },
+  ],
+};
 
 const VIEWS = { home, ledger, jobs, reports };
 
+/* Which module a screen belongs to. Home is the workspace itself;
+   everything else is money, so it is Phynance's. */
+function sectionOf(where) {
+  return where === 'home' ? 'home' : 'phynance';
+}
+
 let route = 'home';
+// Re-entering Phynance from the rail returns you to the screen you
+// were last on in it, the way switching apps does.
+let lastInSection = { home: 'home', phynance: 'ledger' };
 let painting = false;
 let detachScroll = null;   // hero↔topbar binding for the live screen
 let revealIO = null;       // entrance observer for the live screen
@@ -166,16 +187,42 @@ function startGate() {
 function buildTabs() {
   const bar = $('#tabbar');
   bar.querySelectorAll('.tab').forEach((btn) => {
-    const t = TABS.find((x) => x.id === btn.dataset.route);
+    const t = NAV.find((x) => x.id === btn.dataset.nav);
     btn.innerHTML = `${icon(t.icon, 21)}<span>${t.label}</span>`;
   });
   $('#fab').innerHTML = icon('plus', 26, 2.2);
 
-  on(bar, '.tab', (e, b) => show(b.dataset.route));
+  on(bar, '.tab', (e, b) => {
+    const id = b.dataset.nav;
+    show(lastInSection[id] || NAV.find((x) => x.id === id).route);
+  });
   on(bar, '#fab', () => {
     haptic(10);
     openEntrySheet({ onSaved: ctx.refresh });
   });
+}
+
+/* The module's own three screens, as a row of pills that sticks to
+   the top of the scroller once the hero has gone by. Rebuilt with
+   each render because the screen element is rebuilt with it. */
+function buildSubnav(screen, where) {
+  const items = SUBNAV[sectionOf(where)];
+  if (!items) return;
+
+  const nav = document.createElement('nav');
+  nav.className = 'subnav';
+  nav.setAttribute('aria-label', 'Phynance');
+  nav.innerHTML = items.map((it) => `
+    <button class="subtab${it.route === where ? ' on' : ''}"
+            data-route="${it.route}"
+            ${it.route === where ? 'aria-current="page"' : ''}>${it.label}</button>
+  `).join('');
+  on(nav, '.subtab', (e, b) => show(b.dataset.route));
+
+  // After the hero, so the hero↔topbar handover still sees it first.
+  const hero = screen.querySelector('.hero');
+  if (hero) hero.after(nav);
+  else screen.prepend(nav);
 }
 
 async function show(where) {
@@ -206,7 +253,13 @@ async function show(where) {
 
     old.replaceWith(screen);
 
-    $('#tabbar').querySelectorAll('.tab').forEach((b) => b.classList.toggle('on', b.dataset.route === where));
+    const section = sectionOf(where);
+    lastInSection[section] = where;
+    // The token layer keys off this: the shell is monochrome, and a
+    // module re-points the whole ramp to its own colour.
+    document.documentElement.dataset.section = section;
+    buildSubnav(screen, where);
+    $('#tabbar').querySelectorAll('.tab').forEach((b) => b.classList.toggle('on', b.dataset.nav === section));
     if (location.hash !== `#/${where}`) history.replaceState(null, '', `#/${where}`);
     screen.scrollTop = Math.min(keepScroll, screen.scrollHeight);
 
