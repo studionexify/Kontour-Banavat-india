@@ -5,16 +5,20 @@ import { $, on, toast, closeTopSheet, sheetCount, haptic } from './ui.js';
 import { biometricEnabled, verifyBiometric } from './biometric.js';
 import { load, hasPin, checkPin, device, onChange } from './store.js';
 import { openEntrySheet } from './views/entry.js';
+import * as dashboard from './views/dashboard.js';
 import * as home from './views/home.js';
 import * as ledger from './views/ledger.js';
 import * as jobs from './views/jobs.js';
 import * as reports from './views/reports.js';
+import * as quotes from './views/quotelist.js';
+import * as library from './views/library.js';
 import { openSettings } from './views/settings.js';
 import { syncPending, watchConnection, canUpload, online } from './sync.js';
 import { enhance, bindHeroScroll, attachRipple } from './motion.js';
 import { cloudConfigured } from './config.js';
 import { signedIn, currentOrgId } from './auth.js';
 import { startSync } from './cloud.js';
+import { load as loadQuotes, onChange as onQuotesChange } from './quotes.js';
 import { openSignIn } from './views/signin.js';
 
 /* ── Nav ───────────────────────────────────────────────────────
@@ -24,30 +28,42 @@ import { openSignIn } from './views/signin.js';
    screens, and they appear as a sub-nav once you are in it. */
 
 const NAV = [
-  { id: 'home', label: 'Home', icon: 'home', route: 'home' },
-  { id: 'phynance', label: 'Phynance', icon: 'ledger', route: 'ledger' },
+  { id: 'dashboard', label: 'Dashboard', icon: 'home', route: 'dashboard' },
+  { id: 'phynance', label: 'Phynance', icon: 'ledger', route: 'home' },
+  { id: 'quotation', label: 'Quotation', icon: 'tag', route: 'quotes' },
 ];
 
 const SUBNAV = {
   phynance: [
+    { route: 'home', label: 'Overview' },
     { route: 'ledger', label: 'Ledger' },
     { route: 'jobs', label: 'Jobs' },
     { route: 'reports', label: 'Reports' },
   ],
+  quotation: [
+    { route: 'quotes', label: 'Quotations' },
+    { route: 'library', label: 'Design library' },
+  ],
 };
 
-const VIEWS = { home, ledger, jobs, reports };
+const VIEWS = { dashboard, home, ledger, jobs, reports, quotes, library };
 
-/* Which module a screen belongs to. Home is the workspace itself;
-   everything else is money, so it is Phynance's. */
+/* Which module a screen belongs to. The Dashboard is Kontour's
+   own; money screens are Phynance's; quoting is its own module. */
+const SECTION_OF = {
+  dashboard: 'dashboard',
+  home: 'phynance', ledger: 'phynance', jobs: 'phynance', reports: 'phynance',
+  quotes: 'quotation', library: 'quotation',
+};
+
 function sectionOf(where) {
-  return where === 'home' ? 'home' : 'phynance';
+  return SECTION_OF[where] || 'dashboard';
 }
 
-let route = 'home';
-// Re-entering Phynance from the rail returns you to the screen you
+let route = 'dashboard';
+// Re-entering a module from the rail returns you to the screen you
 // were last on in it, the way switching apps does.
-let lastInSection = { home: 'home', phynance: 'ledger' };
+let lastInSection = { dashboard: 'dashboard', phynance: 'home', quotation: 'quotes' };
 let painting = false;
 let detachScroll = null;   // hero↔topbar binding for the live screen
 let revealIO = null;       // entrance observer for the live screen
@@ -55,6 +71,10 @@ let revealIO = null;       // entrance observer for the live screen
 const ctx = {
   go(where, params) {
     if (params && where === 'ledger') ledger.setFilter({ ...params, type: 'all', q: '' });
+    if (params && where === 'quotes' && params.id) {
+      show('quotes').then(() => quotes.openById(params.id, ctx));
+      return;
+    }
     if (params && where === 'jobs' && params.code) {
       show('jobs').then(() => jobs.openJob(params.code, ctx));
       return;
@@ -211,7 +231,7 @@ function buildSubnav(screen, where) {
 
   const nav = document.createElement('nav');
   nav.className = 'subnav';
-  nav.setAttribute('aria-label', 'Phynance');
+  nav.setAttribute('aria-label', sectionOf(where));
   nav.innerHTML = items.map((it) => `
     <button class="subtab${it.route === where ? ' on' : ''}"
             data-route="${it.route}"
@@ -226,7 +246,7 @@ function buildSubnav(screen, where) {
 }
 
 async function show(where) {
-  if (!VIEWS[where]) where = 'home';
+  if (!VIEWS[where]) where = 'dashboard';
   const sameView = route === where;
   route = where;
   if (painting) return;
@@ -275,11 +295,12 @@ async function show(where) {
 
 function start() {
   load();
+  loadQuotes();
   buildTabs();
   attachRipple($('#app'));
 
   const fromHash = (location.hash || '').replace('#/', '');
-  show(VIEWS[fromHash] ? fromHash : 'home');
+  show(VIEWS[fromHash] ? fromHash : 'dashboard');
 
   // Back button closes a sheet before it leaves the app.
   window.addEventListener('popstate', () => {
@@ -288,11 +309,16 @@ function start() {
       history.pushState(null, '', location.hash);
     }
   });
-  history.pushState(null, '', location.hash || '#/home');
+  history.pushState(null, '', location.hash || '#/dashboard');
 
   // Redraw when the data changes underneath us (import, settings, seed).
   let queued = null;
   onChange(() => {
+    clearTimeout(queued);
+    queued = setTimeout(() => { if (!sheetCount()) show(route); }, 60);
+  });
+
+  onQuotesChange(() => {
     clearTimeout(queued);
     queued = setTimeout(() => { if (!sheetCount()) show(route); }, 60);
   });

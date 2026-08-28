@@ -1576,3 +1576,314 @@ select.control { padding-right:34px; background-position:right 13px center; back
   --grad-lime:linear-gradient(145deg, #2A2A31 0%, #131316 52%, #050506 100%);
   --grad-tile-tea:linear-gradient(145deg, #F7F7F8 0%, #E9E9EC 100%);
 }
+
+/* ════════════════════════════════════════════════════════════
+   DASHBOARD — snippets, not a fifth ledger
+
+   Every block is a heading, a way through, and at most a handful
+   of rows. The cap is the design: a snippet that grows into a
+   list is just the other screen, badly.
+   ════════════════════════════════════════════════════════════ */
+
+.snip { margin-bottom:22px; }
+.snip-head {
+  display:flex; align-items:baseline; justify-content:space-between;
+  gap:12px; margin:0 0 10px;
+}
+.snip-t {
+  margin:0; font-size:12px; font-weight:700;
+  letter-spacing:.9px; text-transform:uppercase; color:var(--ink-3);
+}
+.snip-go {
+  display:inline-flex; align-items:center; gap:3px;
+  font-size:13px; font-weight:600; color:var(--ink-2);
+  padding:4px 2px; border-radius:8px;
+}
+.snip-go svg { transition:transform var(--t-fast) var(--ease); }
+@media (hover:hover) and (pointer:fine) {
+  .snip-go:hover { color:var(--ink); }
+  .snip-go:hover svg { transform:translateX(2px); }
+}
+
+.snip-rows { display:flex; flex-direction:column; gap:8px; }
+
+.snip-none {
+  display:flex; align-items:center; gap:10px;
+  padding:18px 16px; border-radius:var(--r-md);
+  background:var(--paper); border:1px dashed var(--line);
+  color:var(--ink-3); font-size:13.5px;
+}
+
+.qrow {
+  display:flex; align-items:center; gap:12px;
+  width:100%; text-align:left;
+  padding:13px 15px; border-radius:var(--r-md);
+  background:var(--grad-card); border:1px solid var(--line-soft);
+  box-shadow:var(--e1);
+  transition:transform .12s var(--ease), box-shadow var(--t-fast);
+}
+.qrow:active { transform:scale(.99); }
+@media (hover:hover) and (pointer:fine) {
+  .qrow:hover { box-shadow:var(--e2); }
+}
+.qrow-main { flex:1; min-width:0; }
+.qrow-t {
+  font-size:14px; font-weight:600; color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.qrow-s { font-size:12px; color:var(--ink-3); margin-top:2px; }
+.qrow-side { flex:none; text-align:right; display:flex; flex-direction:column; gap:4px; align-items:flex-end; }
+.qrow-amt { font-size:14.5px; font-weight:700; color:var(--ink); }
+.qrow-amt.in { color:var(--in); }
+.qrow-amt.out { color:var(--out); }
+.qrow-cap { font-size:10.5px; color:var(--ink-3); letter-spacing:.2px; }
+
+/* ════════════════════════════════════════════════════════════
+   QUOTATION — the list
+   ════════════════════════════════════════════════════════════ */
+
+.searchbar { margin-bottom:12px; }
+
+.qlist {
+  display:grid; gap:12px;
+  grid-template-columns:1fr;
+}
+@media (min-width:760px) {
+  .qlist { grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); }
+}
+
+.qcard {
+  display:flex; flex-direction:column; gap:9px;
+  padding:16px; border-radius:var(--r-lg);
+  background:var(--grad-card); border:1px solid var(--line-soft);
+  box-shadow:var(--e1); text-align:left; width:100%;
+  cursor:pointer;
+  transition:transform .14s var(--ease), box-shadow var(--t-fast);
+}
+.qcard:active { transform:scale(.99); }
+.qcard:focus-visible { outline:2px solid var(--pine-700); outline-offset:2px; }
+@media (hover:hover) and (pointer:fine) {
+  .qcard:hover { box-shadow:var(--e2); transform:translateY(-1px); }
+}
+.qcard-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.qcard-num { font-size:12px; font-weight:600; color:var(--ink-3); letter-spacing:.3px; }
+.qcard-client { font-size:16px; font-weight:700; color:var(--ink); margin-top:2px; }
+.qcard-title {
+  margin:0; font-size:13.5px; color:var(--ink-2); line-height:1.45;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.qcard-foot {
+  display:flex; align-items:flex-end; justify-content:space-between; gap:10px;
+  padding-top:9px; border-top:1px solid var(--line-soft);
+}
+.qcard-meta { font-size:11.5px; color:var(--ink-3); }
+.qcard-amt { font-size:19px; font-weight:700; color:var(--ink); letter-spacing:-.4px; }
+.qcard-acts { display:flex; flex-wrap:wrap; gap:6px; }
+
+.mini {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:6px 12px; border-radius:999px;
+  font-size:12px; font-weight:600;
+  background:var(--tea-soft); color:var(--ink-2);
+  border:1px solid transparent;
+  transition:background var(--t-fast), color var(--t-fast);
+}
+@media (hover:hover) and (pointer:fine) {
+  .mini:hover { background:var(--tea); color:var(--ink); }
+}
+.mini.ok { background:var(--in-soft); color:var(--in); }
+.mini.danger { background:transparent; color:var(--ink-3); padding:6px 9px; }
+@media (hover:hover) and (pointer:fine) {
+  .mini.danger:hover { background:var(--out-soft); color:var(--out); }
+}
+.mini.flat { background:transparent; color:var(--ink-3); border-color:var(--line); }
+
+/* ════════════════════════════════════════════════════════════
+   QUOTATION — the builder
+
+   Laid out in the order the document is read. The body scrolls;
+   the total does not, because it is the figure being negotiated.
+   ════════════════════════════════════════════════════════════ */
+
+.qb { display:flex; flex-direction:column; min-height:0; flex:1; }
+.qb-scroll { flex:1; min-height:0; overflow-y:auto; padding:4px 18px 20px; }
+
+.qb-sec { padding-top:14px; }
+.qb-sec + .qb-sec { margin-top:6px; padding-top:18px; border-top:1px solid var(--line-soft); }
+.qb-sec-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.qb-sec-acts { display:flex; gap:6px; }
+.qb-h {
+  margin:0 0 10px; font-size:11.5px; font-weight:700;
+  letter-spacing:.9px; text-transform:uppercase; color:var(--ink-3);
+}
+.qb-sec-head .qb-h { margin-bottom:0; }
+.qb-hint { margin:6px 0 12px; font-size:12px; color:var(--ink-3); line-height:1.5; }
+
+.qb-grid { display:grid; grid-template-columns:1fr; gap:0 12px; }
+@media (min-width:520px) { .qb-grid { grid-template-columns:1fr 1fr; } }
+
+.qb-none {
+  text-align:center; padding:26px 18px; color:var(--ink-3);
+  border:1px dashed var(--line); border-radius:var(--r-md);
+}
+.qb-none p { margin:8px 0 2px; font-weight:600; color:var(--ink-2); font-size:14px; }
+.qb-none small { font-size:12.5px; }
+
+/* ── One line of the quotation ─────────────────────────────── */
+.qline {
+  margin-top:12px; padding:13px;
+  border-radius:var(--r-md);
+  background:var(--paper); border:1px solid var(--line-soft);
+  box-shadow:var(--e1);
+}
+.qline-head { display:flex; align-items:center; gap:9px; }
+.qline-n {
+  flex:none; width:22px; height:22px; border-radius:8px;
+  display:grid; place-items:center;
+  background:var(--tea-soft); color:var(--ink-3);
+  font-size:11px; font-weight:700;
+}
+.qline-img {
+  flex:none; width:38px; height:38px; border-radius:11px;
+  object-fit:cover; background:var(--tea-soft);
+}
+.qline-img.ph { display:grid; place-items:center; color:var(--ink-3); }
+.qline-title { flex:1; min-width:0; font-weight:600; }
+.control.flush { border-color:transparent; background:transparent; padding-left:6px; }
+.control.flush:focus { border-color:var(--pine-500); background:var(--paper); }
+
+.qline-kind { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
+.seg-mini {
+  padding:6px 13px; border-radius:999px;
+  font-size:12px; font-weight:600;
+  background:var(--tea-soft); color:var(--ink-3);
+  transition:background var(--t-fast), color var(--t-fast);
+}
+.seg-mini.on { background:var(--pine-700); color:var(--beige); }
+.qline-code {
+  margin-left:auto; font-size:11px; font-weight:600;
+  color:var(--ink-3); letter-spacing:.4px;
+}
+
+.qline-dims { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+.qline-dims label,
+.qline-money label {
+  display:flex; align-items:center; gap:6px;
+  font-size:11.5px; font-weight:600; color:var(--ink-3);
+}
+.qline-dims label.grow, .qline-money label.grow { flex:1; min-width:130px; }
+.mini-in { width:88px; padding:8px 10px; font-size:13.5px; }
+.qline-dims label.grow .mini-in,
+.qline-money label.grow .mini-in { width:100%; }
+
+.qline-spec { margin-top:10px; font-size:13px; }
+
+.qline-money {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  margin-top:11px; padding-top:11px; border-top:1px solid var(--line-soft);
+}
+.qline-amt {
+  margin-left:auto; font-size:16px; font-weight:700; color:var(--ink);
+}
+
+/* ── The foot that stays put ───────────────────────────────── */
+.qb-foot {
+  flex:none;
+  padding:13px 18px calc(var(--safe-b) + 14px);
+  border-top:1px solid var(--line);
+  background:var(--glass-light);
+  -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+}
+.qb-sums { display:flex; flex-direction:column; gap:6px; margin-bottom:11px; }
+.qb-sum {
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  font-size:13px; color:var(--ink-2);
+}
+.qb-sum b { font-weight:600; color:var(--ink); }
+.qb-sum .mini-in { width:110px; }
+.qb-gst { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-3); }
+.qb-gst .mini-in { width:64px; }
+.qb-sum.tot {
+  padding-top:9px; border-top:1px solid var(--line);
+  font-size:15px; font-weight:700; color:var(--ink);
+}
+.qb-sum.tot b { font-size:21px; letter-spacing:-.4px; }
+
+/* ════════════════════════════════════════════════════════════
+   DESIGN LIBRARY
+
+   Browsing is visual on purpose — nobody remembers what BD-14 is,
+   but everybody recognises the photograph.
+   ════════════════════════════════════════════════════════════ */
+
+.dgrid {
+  display:grid; gap:12px;
+  grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
+}
+@media (min-width:900px) {
+  .dgrid { grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); }
+}
+
+.dcard {
+  display:flex; flex-direction:column; text-align:left;
+  border-radius:var(--r-md); overflow:hidden;
+  background:var(--grad-card); border:1px solid var(--line-soft);
+  box-shadow:var(--e1);
+  transition:transform .14s var(--ease), box-shadow var(--t-fast);
+}
+.dcard:active { transform:scale(.98); }
+@media (hover:hover) and (pointer:fine) {
+  .dcard:hover { box-shadow:var(--e2); transform:translateY(-2px); }
+}
+.dcard-img {
+  width:100%; aspect-ratio:4/3; object-fit:cover;
+  background:var(--tea-soft); display:block;
+}
+.dcard-img.ph { display:grid; place-items:center; color:var(--ink-3); }
+.dcard-body { padding:11px 12px 12px; display:flex; flex-direction:column; gap:3px; }
+.dcard-code { font-size:11px; font-weight:700; letter-spacing:.5px; color:var(--ink-3); }
+.dcard-name {
+  font-size:14px; font-weight:600; color:var(--ink); line-height:1.3;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.dcard-dims { font-size:11px; color:var(--ink-3); }
+.dcard-foot { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:5px; }
+.dcard-rate { font-size:14.5px; font-weight:700; color:var(--ink); }
+.dcard-fin { font-size:10.5px; color:var(--ink-3); margin-top:2px; }
+
+/* The photograph is the first thing a design needs, so it is the
+   first thing the form asks for. */
+.dphoto {
+  width:100%; aspect-ratio:16/10; margin-bottom:14px;
+  border-radius:var(--r-md); overflow:hidden;
+  background:var(--tea-soft); border:1px dashed var(--line);
+  display:grid; place-items:center; color:var(--ink-3);
+}
+.dphoto.has { border-style:solid; border-color:var(--line-soft); }
+.dphoto img { width:100%; height:100%; object-fit:cover; }
+.dphoto span { display:grid; justify-items:center; gap:7px; font-size:12.5px; font-weight:600; }
+
+.fin-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.fin-row .control:first-child { flex:1; min-width:0; }
+
+.sheet-lede {
+  margin:2px 0 14px; font-size:14px; line-height:1.55; color:var(--ink-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qrow, .qcard, .dcard, .snip-go svg, .mini, .seg-mini { transition:none; }
+}
+
+/* Money labels sit beside their field, so they must not wrap — a
+   two-word label like "Lump sum" was breaking and clipping. */
+.qline-money label, .qline-dims label { white-space:nowrap; }
+
+/* A quotation is a document, and a document needs width. The
+   builder and the library picker open wider than an ordinary
+   sheet once there is room for it. */
+@media (min-width:900px) {
+  .sheet.full.wide, .sheet.wide { max-width:760px; }
+}
+@media (min-width:1280px) {
+  .sheet.full.wide, .sheet.wide { max-width:880px; }
+}

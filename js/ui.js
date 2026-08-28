@@ -51,11 +51,11 @@ const stack = [];
  * openSheet({ title, body, dark, full, onMount, onClose })
  * Returns a handle with .close() and .el
  */
-export function openSheet({ title = '', body = '', dark = false, full = false, headRight = '', onMount, onClose } = {}) {
+export function openSheet({ title = '', body = '', dark = false, full = false, wide = false, headRight = '', onMount, onClose } = {}) {
   const root = $('#sheet-root');
   const scrim = el('<div class="scrim"></div>');
   const sheet = el(`
-    <section class="sheet ${dark ? 'dark' : ''} ${full ? 'full' : ''}" role="dialog" aria-modal="true">
+    <section class="sheet ${dark ? 'dark' : ''} ${full ? 'full' : ''} ${wide ? 'wide' : ''}" role="dialog" aria-modal="true">
       ${full ? '' : '<div class="grab"></div>'}
       <header class="sheet-head">
         <button class="icon-btn ${dark ? '' : 'plain'}" data-sheet-close aria-label="Close">${icon(full ? 'back' : 'close', 21)}</button>
