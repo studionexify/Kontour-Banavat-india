@@ -44,7 +44,6 @@ export async function render(root, ctx) {
           Quotations
           <small>${counts.all} job${counts.all === 1 ? '' : 's'} · ${esc(fyOf(todayISO()))}</small>
         </div>
-        <button class="icon-btn" data-new aria-label="New quotation">${icon('plus', 21)}</button>
       </div>
       <div class="stat-row">
         <div class="stat">
@@ -83,7 +82,6 @@ export async function render(root, ctx) {
     </div>
   `;
 
-  on(root, '[data-new]', () => openQuoteSheet({ onSaved: ctx.refresh }));
   on(root, '[data-filter]', (e, b) => { filter = b.dataset.filter; ctx.refresh(); });
   on(root, '[data-doc]', (e, b) => { e.stopPropagation(); openQuoteDoc(b.dataset.doc); });
   // The action buttons live inside the card, and both handlers are

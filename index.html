@@ -43,9 +43,15 @@
   <nav class="tabbar" id="tabbar">
     <button class="tab" data-nav="dashboard" aria-label="Dashboard"></button>
     <button class="tab" data-nav="phynance"  aria-label="Phynance"></button>
-    <button class="fab" id="fab" aria-label="New entry"></button>
     <button class="tab" data-nav="quotation" aria-label="Quotation"></button>
   </nav>
+
+  <!-- The entry button is an action, not a destination, so it sits
+       beside the bar rather than inside it: floating at the thumb's
+       corner on a phone, at the foot of the rail on a desktop. Outside
+       the bar it also wears the live module's colour instead of the
+       shell's monochrome. -->
+  <button class="fab" id="fab" aria-label="New entry"></button>
 </div>
 
 <div id="sheet-root"></div>

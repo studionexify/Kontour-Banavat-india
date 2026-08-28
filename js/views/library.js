@@ -31,7 +31,6 @@ export async function render(root, ctx) {
           Design library
           <small>${all.length} design${all.length === 1 ? '' : 's'}</small>
         </div>
-        <button class="icon-btn" data-new aria-label="Add design">${icon('plus', 21)}</button>
       </div>
     </header>
 
@@ -52,7 +51,6 @@ export async function render(root, ctx) {
     </div>
   `;
 
-  on(root, '[data-new]', () => openDesignSheet({ onSaved: ctx.refresh }));
   on(root, '[data-edit]', (e, b) => openDesignSheet({ code: b.dataset.edit, onSaved: ctx.refresh }));
   on(root, '[data-cat]', (e, b) => { cat = b.dataset.cat; ctx.refresh(); });
 

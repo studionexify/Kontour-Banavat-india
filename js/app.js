@@ -12,6 +12,8 @@ import * as jobs from './views/jobs.js';
 import * as reports from './views/reports.js';
 import * as quotes from './views/quotelist.js';
 import * as library from './views/library.js';
+import { openDesignSheet } from './views/library.js';
+import { openQuoteSheet } from './views/quotebuilder.js';
 import { openSettings } from './views/settings.js';
 import { syncPending, watchConnection, canUpload, online } from './sync.js';
 import { enhance, bindHeroScroll, attachRipple } from './motion.js';
@@ -49,6 +51,21 @@ const SUBNAV = {
 
 const VIEWS = { dashboard, home, ledger, jobs, reports, quotes, library };
 
+/* One primary action per screen, in one place. Every screen that can
+   make something used to hide its own "+" in the top-right corner of
+   the hero — the furthest point on a phone from the thumb holding it,
+   and a different shape on every screen. They all share the floating
+   button instead, and it says what it makes. The Dashboard reports
+   rather than creates, so it has none and the button steps aside. */
+const PRIMARY = {
+  home:    { label: 'New entry', run: (ctx) => openEntrySheet({ onSaved: ctx.refresh }) },
+  ledger:  { label: 'New entry', run: (ctx) => openEntrySheet({ onSaved: ctx.refresh }) },
+  jobs:    { label: 'New entry', run: (ctx) => openEntrySheet({ onSaved: ctx.refresh }) },
+  reports: { label: 'New entry', run: (ctx) => openEntrySheet({ onSaved: ctx.refresh }) },
+  quotes:  { label: 'New quotation', run: (ctx) => openQuoteSheet({ onSaved: ctx.refresh }) },
+  library: { label: 'Add design', run: (ctx) => openDesignSheet({ onSaved: ctx.refresh }) },
+};
+
 /* Which module a screen belongs to. The Dashboard is Kontour's
    own; money screens are Phynance's; quoting is its own module. */
 const SECTION_OF = {
@@ -68,6 +85,7 @@ let lastInSection = { dashboard: 'dashboard', phynance: 'home', quotation: 'quot
 let painting = false;
 let detachScroll = null;   // hero↔topbar binding for the live screen
 let revealIO = null;       // entrance observer for the live screen
+let detachRows = null;     // chip-row overflow watch for the live screen
 
 const ctx = {
   go(where, params) {
@@ -231,15 +249,19 @@ function buildTabs() {
     const t = NAV.find((x) => x.id === btn.dataset.nav);
     btn.innerHTML = `${icon(t.icon, 21)}<span>${t.label}</span>`;
   });
-  $('#fab').innerHTML = icon('plus', 26, 2.2);
+  // The label rides along on every screen; only the rail has the room
+  // to show it, so on a phone it is the accessible name and nothing more.
+  $('#fab').innerHTML = `${icon('plus', 26, 2.2)}<span class="fab-t"></span>`;
 
   on(bar, '.tab', (e, b) => {
     const id = b.dataset.nav;
     show(lastInSection[id] || NAV.find((x) => x.id === id).route);
   });
-  on(bar, '#fab', () => {
+  $('#fab').addEventListener('click', () => {
+    const act = PRIMARY[route];
+    if (!act) return;
     haptic(10);
-    openEntrySheet({ onSaved: ctx.refresh });
+    act.run(ctx);
   });
   paintRailBrand();
 }
@@ -265,6 +287,36 @@ function buildSubnav(screen, where) {
   const hero = screen.querySelector('.hero');
   if (hero) hero.after(nav);
   else screen.prepend(nav);
+
+  // The pills are sized to fit a phone, but a long label or a large
+  // text setting can still push the row past the edge. If it has,
+  // bring the screen you are on into view rather than leaving it
+  // cropped off the end.
+  requestAnimationFrame(() => {
+    if (nav.scrollWidth <= nav.clientWidth + 1) return;
+    const on = nav.querySelector('.subtab.on');
+    if (!on) return;
+    // Set directly rather than scrollIntoView: this must land already
+    // centred, not glide there in front of you as the screen appears.
+    const prev = nav.style.scrollBehavior;
+    nav.style.scrollBehavior = 'auto';
+    nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2;
+    nav.style.scrollBehavior = prev;
+  });
+}
+
+/* A horizontal filter row is only worth fading at its edge if it
+   actually runs past it. Re-checked on resize, since a rotation can
+   turn a row that overflowed into one that fits. */
+function markScrollers(screen) {
+  const rows = Array.from(screen.querySelectorAll('.chipbar'));
+  if (!rows.length) return null;
+  const mark = () => rows.forEach((r) => {
+    r.classList.toggle('overflows', r.scrollWidth > r.clientWidth + 1);
+  });
+  requestAnimationFrame(mark);
+  window.addEventListener('resize', mark, { passive: true });
+  return () => window.removeEventListener('resize', mark);
 }
 
 async function show(where) {
@@ -292,15 +344,20 @@ async function show(where) {
     // Tear down the previous screen's observers before it is discarded.
     if (detachScroll) { detachScroll(); detachScroll = null; }
     if (revealIO) { revealIO.disconnect(); revealIO = null; }
+    if (detachRows) { detachRows(); detachRows = null; }
 
     old.replaceWith(screen);
 
     const section = sectionOf(where);
     lastInSection[section] = where;
-    // Logging an entry is Phynance's action, not the workspace's, so
-    // the button belongs to Phynance's screens rather than the rail
-    // it happens to sit in. Elsewhere the rail is navigation only.
-    $('#tabbar').classList.toggle('no-fab', section !== 'phynance');
+    // The floating button carries the live screen's one primary action,
+    // and stands down on a screen that has none.
+    const act = PRIMARY[where];
+    const fab = $('#fab');
+    fab.classList.toggle('off', !act);
+    fab.setAttribute('aria-label', act ? act.label : '');
+    fab.setAttribute('aria-hidden', act ? 'false' : 'true');
+    fab.querySelector('.fab-t').textContent = act ? act.label : '';
     // The token layer keys off this: the shell is monochrome, and a
     // module re-points the whole ramp to its own colour.
     document.documentElement.dataset.section = section;
@@ -311,6 +368,7 @@ async function show(where) {
 
     revealIO = enhance(screen, screen);
     detachScroll = bindHeroScroll(screen, $('#topbar'));
+    detachRows = markScrollers(screen);
   } catch (e) {
     console.error('[kontour] view failed', e);
     toast('Something went wrong drawing that screen', 'err');
