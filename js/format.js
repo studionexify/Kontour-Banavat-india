@@ -109,6 +109,13 @@ export function shiftMonth(key, by) {
 }
 
 /** Indian financial year of a date: Apr 2026–Mar 2027 -> "FY 2026-27" */
+/* The year a financial year starts in: April 2026 → 2026, and
+   February 2026 → 2025, because the Indian FY runs April to March. */
+export function fyStartYear(iso) {
+  const d = fromISO(iso);
+  return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+}
+
 export function fyOf(iso) {
   const d = fromISO(iso);
   const y = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;

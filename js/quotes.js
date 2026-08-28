@@ -34,7 +34,7 @@
  */
 
 import { uid, ensureJob, updateJob } from './store.js';
-import { todayISO, round2 } from './format.js';
+import { todayISO, round2, fyStartYear } from './format.js';
 
 const KEY = 'kontour.quotes.v2';
 
@@ -221,11 +221,30 @@ export function defaultValidUntil(fromISO) {
 }
 
 /* ── MR numbers ────────────────────────────────────────────────
-   C126, C127, C128 — a running series, not restarted per year, and
-   the same code the ledger files the job under. */
-export function nextMrNo() {
-  const s = state.settings;
-  return `${s.mrPrefix}${(s.seq || 0) + 1}`;
+   The letter is the financial year and the number runs on within it:
+   B is 2025-26, C is 2026-27, D will be 2027-28. So the series does
+   not restart in April — it changes letter, which is what makes an
+   old number still readable years later.
+
+   The number continues from the highest already filed under that
+   letter rather than a stored counter, so importing history or
+   typing a number over by hand cannot leave the sequence behind. */
+export function fyLetter(iso = todayISO()) {
+  const offset = fyStartYear(iso) - 2025;
+  return String.fromCharCode('B'.charCodeAt(0) + Math.max(0, offset));
+}
+
+export function nextMrNo(iso = todayISO()) {
+  const letter = fyLetter(iso);
+  const used = state.quotes
+    .map((q) => String(q.mrNo || ''))
+    .filter((n) => n.startsWith(letter))
+    .map((n) => Number(baseNo(n).slice(letter.length)))
+    .filter((n) => Number.isFinite(n));
+  const highest = used.length ? Math.max(...used) : 0;
+  // A fresh book still starts where the stored counter says, so a
+  // copy with no history behaves as it always did.
+  return `${letter}${Math.max(highest, state.settings.seq || 0) + 1}`;
 }
 
 /* A revision keeps the parent's number and adds a suffix, exactly
@@ -407,7 +426,7 @@ export function addQuote(input = {}) {
   const isRevision = Boolean(input.revisionOf);
   const q = {
     id: uid('q'),
-    mrNo: input.mrNo || (isRevision ? nextRevisionOf(input.revisionOf) : nextMrNo()),
+    mrNo: input.mrNo || (isRevision ? nextRevisionOf(input.revisionOf) : nextMrNo(date)),
     date,
     validUntil: input.validUntil || '',
     // The internal name for the job. Not printed — the document
@@ -540,6 +559,100 @@ export function setStatus(id, status) {
   if (!STATUS[status]) return null;
   if (status === 'accepted') return acceptQuote(id);
   return updateQuote(id, { status });
+}
+
+/* ── Importing the history ────────────────────────────────────
+   The quotations that lived in the spreadsheet, brought in as
+   records rather than retyped. Matching is by MR number, so running
+   it twice adds nothing the second time and a quotation edited here
+   is never overwritten by the file.
+
+   It takes the parsed rows, or a URL to fetch them from. It is
+   deliberately not wired to a file shipped with the app: this is
+   real client names, phone numbers and prices, and anything served
+   alongside the app is readable by anyone who visits it. The file
+   is chosen from the device instead, so the data never leaves it.
+
+   Numbers the sheet reused for different clients come in flagged
+   rather than merged or dropped — the data is real either way, and
+   only you can say which one should keep the number. */
+export async function importHistory(rows) {
+  if (typeof rows === 'string') {
+    const res = await fetch(rows, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Could not read that file (${res.status})`);
+    rows = await res.json();
+  }
+  if (!Array.isArray(rows)) throw new Error('That file is not a list of quotations');
+
+  const numbers = new Set(state.quotes.map((q) => String(q.mrNo).toUpperCase()));
+  /* Identity is the number plus who and when, not the number alone.
+     The sheet reused some numbers for different clients, so the
+     number by itself cannot say whether a row is already here — and
+     matching on it alone made a second run import every clashing
+     record again under a fresh suffix. */
+  const worth = (ls) => (ls || []).reduce((t, l) => t + (l.unitPrice || 0) * (l.qty || 0), 0);
+  const identity = (q) => [
+    String(q.mrNo || '').toUpperCase().split('#')[0],
+    q.date || '',
+    String((q.client || {}).name || '').trim().toLowerCase(),
+    // The sheet holds two different C131s for one client on one day.
+    // Without the figures in the key they would collapse into one and
+    // a real quotation would be lost.
+    (q.lines || []).length,
+    Math.round(worth(q.lines)),
+  ].join('|');
+  const seen = new Set(state.quotes.map(identity));
+
+  let added = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    const mrNo = String(row.mrNo || '').trim().toUpperCase();
+    if (!mrNo) { skipped += 1; continue; }
+
+    const key = identity(row);
+    if (seen.has(key)) { skipped += 1; continue; }
+
+    // A number the sheet reused for a different client comes in under
+    // a suffix so both survive; the flag is what tells you to settle it.
+    let useNo = mrNo;
+    if (numbers.has(useNo)) {
+      let n = 2;
+      while (numbers.has(`${mrNo}#${n}`)) n += 1;
+      useNo = `${mrNo}#${n}`;
+    }
+
+    state.quotes.push({
+      id: uid('q'),
+      mrNo: useNo,
+      date: row.date || '',
+      validUntil: row.validUntil || '',
+      title: '',
+      client: { name: '', email: '', phone: '', shippingAddress: '', ...(row.client || {}) },
+      lines: (row.lines || []).map((l) => newLine(l)),
+      shipping: (row.shipping || []).map((x) => newShipping(x)),
+      gstRate: state.settings.gstRate,
+      gstApplicable: row.gstApplicable !== false,
+      paymentTerms: row.paymentTerms || state.settings.paymentTerms,
+      fabricRate: state.settings.fabricRate,
+      leadTime: state.settings.leadTime,
+      notes: '',
+      // Everything in the sheet went out to a client; what came back is
+      // not recorded there, so they arrive awaiting a reply.
+      status: 'sent',
+      jobCode: '',
+      imported: true,
+      numberClash: Boolean(row.numberClash) && useNo !== mrNo,
+      createdAt: Date.parse(`${row.date}T00:00:00`) || Date.now(),
+      updatedAt: Date.now(),
+    });
+    numbers.add(useNo);
+    seen.add(key);
+    added += 1;
+  }
+
+  if (added) { write(); emit(); }
+  return { added, skipped, total: rows.length };
 }
 
 /* ── Dashboard figures ───────────────────────────────────────── */

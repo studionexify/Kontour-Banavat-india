@@ -56,6 +56,10 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
       `;
       const region = (n) => host.querySelector(`[data-${n}]`);
 
+      // Declared before the first paint: the breakdown panel's state
+      // outlives the repaint that every edit triggers.
+      let footOpen = false;
+
       region('client').innerHTML = clientBlock(quote);
       region('terms').innerHTML = termsBlock(quote);
       renderLines(); renderShip(); renderFoot();
@@ -63,7 +67,9 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
 
       function renderLines() { region('lines').innerHTML = linesBlock(quote); }
       function renderShip() { region('ship').innerHTML = shipBlock(quote); }
-      function renderFoot() { region('foot').innerHTML = footBlock(quoteTotals(quote), quote); }
+      function renderFoot() {
+        region('foot').innerHTML = footBlock(quoteTotals(quote), quote, footOpen);
+      }
 
       function setLines(lines) {
         quote = updateQuote(quote.id, { lines });
@@ -159,6 +165,8 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
 
         on(host, '[data-line-img-rm]', (e, b) =>
           setLines(quote.lines.map((l) => l.id === b.dataset.lineImgRm ? { ...l, photo: '' } : l)));
+
+        on(host, '[data-brk]', () => { footOpen = !footOpen; renderFoot(); });
 
         on(host, '[data-done]', () => { handle.close(); if (onSaved) onSaved(); });
       }
@@ -330,28 +338,52 @@ function termsBlock(q) {
 
 /* The foot mirrors the document's own ladder, so the number here is
    the number the client sees, arrived at the same way. */
-function footBlock(t, q) {
+/* The foot carries one figure and one action, because that is what
+   it is for: the total the client will see, and the way out. The
+   ladder behind it — sub-total, tax, shipping — is a summary line you
+   can open when you want to check the arithmetic, and it stays shut
+   the rest of the time so the items keep the screen.
+
+   `open` is passed in rather than read from the DOM so the panel
+   survives the repaint that every edit triggers. */
+function footBlock(t, q, open = false) {
+  const parts = [
+    `Sub ${inr(t.sub)}`,
+    t.taxed ? `GST ${q.gstRate}% ${inr(t.gst)}` : 'no GST',
+    t.subB ? `Shipping ${inr(t.subB)}` : null,
+  ].filter(Boolean);
+
   return `
     <footer class="qb-foot">
-      <div class="qb-sums">
-        <div class="qb-sum"><span>Sub - Total</span><b class="num">${inr(t.sub)}</b></div>
-        <div class="qb-sum">
-          <span>
-            GST
-            <button class="seg-mini gst-t ${t.taxed ? 'on' : ''}" data-gst="${t.taxed ? 'off' : 'on'}">
-              ${t.taxed ? 'Applicable' : 'Not applicable'}
-            </button>
-          </span>
-          <span class="qb-gst">
-            ${t.taxed ? `<input class="control mini-in" type="number" min="0" max="28" data-f="gstRate" value="${q.gstRate}">%` : ''}
-            <b class="num">${t.taxed ? inr(t.gst) : '—'}</b>
-          </span>
+      ${open ? `
+        <div class="qb-sums">
+          <div class="qb-sum"><span>Sub - Total</span><b class="num">${inr(t.sub)}</b></div>
+          <div class="qb-sum">
+            <span>
+              GST
+              <button class="seg-mini gst-t ${t.taxed ? 'on' : ''}" data-gst="${t.taxed ? 'off' : 'on'}">
+                ${t.taxed ? 'Applicable' : 'Not applicable'}
+              </button>
+            </span>
+            <span class="qb-gst">
+              ${t.taxed ? `<input class="control mini-in" type="number" min="0" max="28" data-f="gstRate" value="${q.gstRate}">%` : ''}
+              <b class="num">${t.taxed ? inr(t.gst) : '—'}</b>
+            </span>
+          </div>
+          <div class="qb-sum"><span>Sub Total A</span><b class="num">${inr(t.subA)}</b></div>
+          <div class="qb-sum"><span>Sub Total B — shipping</span><b class="num">${inr(t.subB)}</b></div>
+        </div>` : ''}
+
+      <div class="qb-bar">
+        <button class="qb-brk" data-brk aria-expanded="${open ? 'true' : 'false'}">
+          ${icon('chevD', 14)}<span>${esc(parts.join(' · '))}</span>
+        </button>
+        <div class="qb-tot">
+          <span>Total</span>
+          <b class="num">${inr(t.total)}</b>
         </div>
-        <div class="qb-sum"><span>Sub Total A</span><b class="num">${inr(t.subA)}</b></div>
-        <div class="qb-sum"><span>Sub Total B — shipping</span><b class="num">${inr(t.subB)}</b></div>
-        <div class="qb-sum tot"><span>Total</span><b class="num">${inr(t.total)}</b></div>
+        <button class="btn sm" data-done>Done</button>
       </div>
-      <button class="btn" data-done>Done</button>
     </footer>
   `;
 }

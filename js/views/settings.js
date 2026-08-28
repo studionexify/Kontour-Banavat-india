@@ -2,7 +2,7 @@
    credentials, and backup. Opened from the gear on Home. */
 
 import { icon } from '../icons.js';
-import { settings as qSettings, updateSettings as updateQSettings } from '../quotes.js';
+import { settings as qSettings, updateSettings as updateQSettings, importHistory, quotes as allQuotes } from '../quotes.js';
 import { openSheet, on, esc, toast, confirmSheet, emptyState } from '../ui.js';
 import {
   accounts, addAccount, updateAccount, deleteAccount, balance,
@@ -75,6 +75,9 @@ export function openSettings(ctx) {
           <p class="tray-lbl sp">Brand</p>
           <div class="list">
             ${navRow('sparkle', 'Logo', qSettings().logo ? 'Set — shows on quotations and in the app' : 'Not set', 'logo')}
+            ${navRow('upload', 'Quotation history',
+              allQuotes().length ? `${allQuotes().length} quotation${allQuotes().length === 1 ? '' : 's'} on file`
+                                 : 'Bring in the quotations from the sheet', 'history')}
           </div>
 
         `;
@@ -85,7 +88,7 @@ export function openSettings(ctx) {
         const map = {
           accounts: accountsSheet, categories: categoriesSheet, recurring: recurringSheet,
           gst: gstSheet, drive: driveSheet, ai: aiSheet, pending: pendingSheet,
-          pin: pinSheet, backup: backupSheet, about: aboutSheet, logo: logoSheet,
+          pin: pinSheet, backup: backupSheet, about: aboutSheet, logo: logoSheet, history: historySheet,
           people: peopleSheet, sync: syncSheet, account: accountSheet,
         };
         await map[where](ctx, paint);
@@ -1287,4 +1290,65 @@ async function logoSheet(ctx, back) {
     },
   });
   return h;
+}
+
+
+/* ── Quotation history ─────────────────────────────────────────
+   A one-time backfill of what lived in the spreadsheet, read from a
+   file you pick rather than one shipped with the app — the records
+   carry client names, phone numbers and prices, and anything served
+   next to the app is readable by anyone who opens it.
+
+   Safe to run more than once: it matches on MR number and adds only
+   what is missing, so nothing edited here is ever overwritten. */
+async function historySheet(ctx, back) {
+  openSheet({
+    title: 'Quotation history',
+    body: `<div class="sheet-body" data-hist></div>`,
+    onMount(root) {
+      const host = root.querySelector('[data-hist]');
+      paint();
+
+      function paint(result) {
+        const n = allQuotes().length;
+        host.innerHTML = `
+          <p class="sheet-lede">
+            Brings in the quotations recorded in the Banavat spreadsheet —
+            the older BOQ-headed documents and the current ones alike — as
+            records you can open, revise and reprint.
+          </p>
+          ${result ? `<div class="snip-none" style="border-style:solid">
+              ${icon('check', 20)}
+              <span>${result.added} added${result.skipped ? `, ${result.skipped} already here` : ''}</span>
+            </div>` : ''}
+          <p class="qb-hint">
+            ${n ? `${n} quotation${n === 1 ? '' : 's'} on file.` : 'Nothing imported yet.'}
+            Matching is by MR number, so running this again only fills gaps.
+            The file stays on this device.
+          </p>
+          <input type="file" accept="application/json,.json" data-file hidden>
+          <button class="btn" data-pick>${n ? 'Import anything missing' : 'Choose the history file'}</button>
+        `;
+
+        const input = host.querySelector('[data-file]');
+        on(host, '[data-pick]', () => input.click());
+
+        input.onchange = async () => {
+          const file = input.files && input.files[0];
+          if (!file) return;
+          try {
+            const rows = JSON.parse(await file.text());
+            const r = await importHistory(rows);
+            toast(r.added ? `${r.added} quotations imported` : 'Nothing new to import');
+            paint(r);
+            if (back) back();
+          } catch (err) {
+            console.error('[kontour] import failed', err);
+            toast(err.message || 'That file could not be read', 'err');
+            paint();
+          }
+        };
+      }
+    },
+  });
 }

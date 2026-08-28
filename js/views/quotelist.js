@@ -17,6 +17,7 @@ import { openQuoteDoc } from './quotedoc.js';
 
 let filter = 'all';
 let query = '';
+let fy = 'all';
 
 /* Opening one quotation straight from the Dashboard. */
 export function openById(id, ctx) {
@@ -29,9 +30,13 @@ export function setFilter(next) {
 }
 
 export async function render(root, ctx) {
-  const list = quoteFamilies({ status: filter, q: query });
+  const inFy = (f) => fy === 'all' || fyOf(f.head.date) === fy;
+  const list = quoteFamilies({ status: filter, q: query }).filter(inFy);
   const pipeline = pipelineValue();
-  const all = quoteFamilies({ q: query });
+  const all = quoteFamilies({ q: query }).filter(inFy);
+  // Newest year first, and only offered once there is more than one.
+  const years = [...new Set(quoteFamilies({})
+    .map((f) => f.head.date).filter(Boolean).map(fyOf))].sort().reverse();
   const counts = { all: all.length };
   for (const k of ['draft', 'sent', 'accepted', 'declined']) {
     counts[k] = all.filter((f) => f.head.status === k).length;
@@ -42,7 +47,7 @@ export async function render(root, ctx) {
       <div class="hero-bar">
         <div class="hero-title">
           Quotations
-          <small>${counts.all} job${counts.all === 1 ? '' : 's'} · ${esc(fyOf(todayISO()))}</small>
+          <small>${counts.all} job${counts.all === 1 ? '' : 's'}${fy === 'all' ? '' : ` · ${esc(fy)}`}</small>
         </div>
       </div>
       <div class="stat-row">
@@ -67,6 +72,11 @@ export async function render(root, ctx) {
                placeholder="Search client, MR number, job" aria-label="Search quotations">
       </div>
 
+      ${years.length > 1 ? `<div class="chipbar">
+        <button class="chip ${fy === 'all' ? 'on' : ''}" data-fy="all">All years</button>
+        ${years.map((y) => `<button class="chip ${fy === y ? 'on' : ''}" data-fy="${esc(y)}">${esc(y)}</button>`).join('')}
+      </div>` : ''}
+
       <div class="chipbar">
         ${['all', 'draft', 'sent', 'accepted', 'declined'].map((k) => `
           <button class="chip ${filter === k ? 'on' : ''}" data-filter="${k}">
@@ -83,11 +93,24 @@ export async function render(root, ctx) {
   `;
 
   on(root, '[data-filter]', (e, b) => { filter = b.dataset.filter; ctx.refresh(); });
+  on(root, '[data-fy]', (e, b) => { fy = b.dataset.fy; ctx.refresh(); });
   on(root, '[data-doc]', (e, b) => { e.stopPropagation(); openQuoteDoc(b.dataset.doc); });
   // The action buttons live inside the card, and both handlers are
   // delegated on the same root — so stopPropagation on the action
   // does not stop this one. The card opens only when the click did
   // not land on one of its own actions.
+  // Any choice inside the overflow closes it, so it never stays
+  // hanging open over the card behind it.
+  on(root, '.qmore-item', (e, b) => {
+    const d = b.closest('details');
+    if (d) d.open = false;
+  });
+
+  on(root, '[data-edit]', (e, b) => {
+    e.stopPropagation();
+    openQuoteSheet({ id: b.dataset.edit, onSaved: ctx.refresh });
+  });
+
   on(root, '[data-dup]', async (e, b) => {
     e.stopPropagation();
     const q = duplicateQuote(b.dataset.dup);
@@ -96,7 +119,8 @@ export async function render(root, ctx) {
   });
 
   on(root, '[data-open]', (e, b) => {
-    if (e.target.closest('.qcard-acts') || e.target.closest('.qcard-hist')) return;
+    if (e.target.closest('.qcard-acts') || e.target.closest('.qcard-hist')
+        || e.target.closest('.qcard-mr')) return;
     openQuoteSheet({ id: b.dataset.open, onSaved: ctx.refresh });
   });
 
@@ -153,8 +177,10 @@ function card({ base, head: q, family, revisions }) {
       <div class="qcard-top">
         <div>
           <div class="qcard-num">
-            MR # ${esc(q.mrNo)}
+            <button class="qcard-mr" data-doc="${esc(q.id)}"
+                    title="Open the quotation document">MR # ${esc(q.mrNo)}</button>
             ${revisions > 1 ? `<span class="qcard-rev">${revisions} revisions</span>` : ''}
+            ${q.numberClash ? `<span class="pill out" title="This number was used more than once in the sheet">number clash</span>` : ''}
           </div>
           <div class="qcard-client">${esc(q.client.name || 'Unnamed client')}</div>
         </div>
@@ -196,10 +222,16 @@ function card({ base, head: q, family, revisions }) {
           <button class="mini ok" data-status="accepted" data-id="${esc(q.id)}">Accepted</button>
           <button class="mini" data-status="declined" data-id="${esc(q.id)}">Declined</button>` : ''}
         ${q.status === 'accepted' && q.jobCode ? `<span class="mini flat">Job ${esc(q.jobCode)} open</span>` : ''}
-        ${q.status === 'accepted' ? '' : `<button class="mini" data-revise="${esc(q.id)}">Revise</button>`}
-        <button class="mini" data-dup="${esc(q.id)}">Duplicate</button>
-        <button class="mini" data-doc="${esc(q.id)}">${icon('reports', 14)} Preview</button>
-        <button class="mini danger" data-del="${esc(q.id)}">${icon('trash', 14)}</button>
+
+        <details class="qmore">
+          <summary class="mini" title="More actions">⋯</summary>
+          <div class="qmore-menu">
+            ${q.status === 'accepted' ? '' : `<button class="qmore-item" data-revise="${esc(q.id)}">Revise</button>`}
+            <button class="qmore-item" data-dup="${esc(q.id)}">Duplicate</button>
+            <button class="qmore-item" data-edit="${esc(q.id)}">Edit</button>
+            <button class="qmore-item danger" data-del="${esc(q.id)}">Delete</button>
+          </div>
+        </details>
       </div>
     </article>
   `;
