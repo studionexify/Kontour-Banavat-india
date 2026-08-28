@@ -2,6 +2,7 @@
    credentials, and backup. Opened from the gear on Home. */
 
 import { icon } from '../icons.js';
+import { settings as qSettings, updateSettings as updateQSettings } from '../quotes.js';
 import { openSheet, on, esc, toast, confirmSheet, emptyState } from '../ui.js';
 import {
   accounts, addAccount, updateAccount, deleteAccount, balance,
@@ -11,7 +12,7 @@ import {
   importAll, wipe, entries,
 } from '../store.js';
 import { inr } from '../format.js';
-import { photos, humanBytes } from '../photos.js';
+import { photos, humanBytes, pickImage, shrink, toBase64 } from '../photos.js';
 import { exportBackup, readBackupFile } from '../export.js';
 import { status, connectDrive, disconnectDrive, driveConfigured, syncPending, sharedDrive } from '../sync.js';
 import { cloudConfigured } from '../config.js';
@@ -71,6 +72,11 @@ export function openSettings(ctx) {
             ${navRow('alert', 'About Kontour', 'Version, storage, reset', 'about')}
           </div>
 
+          <p class="tray-lbl sp">Brand</p>
+          <div class="list">
+            ${navRow('sparkle', 'Logo', qSettings().logo ? 'Set — shows on quotations and in the app' : 'Not set', 'logo')}
+          </div>
+
         `;
       }
 
@@ -79,7 +85,7 @@ export function openSettings(ctx) {
         const map = {
           accounts: accountsSheet, categories: categoriesSheet, recurring: recurringSheet,
           gst: gstSheet, drive: driveSheet, ai: aiSheet, pending: pendingSheet,
-          pin: pinSheet, backup: backupSheet, about: aboutSheet,
+          pin: pinSheet, backup: backupSheet, about: aboutSheet, logo: logoSheet,
           people: peopleSheet, sync: syncSheet, account: accountSheet,
         };
         await map[where](ctx, paint);
@@ -1228,4 +1234,57 @@ function accountSheet(ctx, back) {
     },
     onClose: back,
   });
+}
+
+
+/* ── Brand ─────────────────────────────────────────────────────
+   One image, used by the quotation document, the rail wordmark and
+   the lock screen. Stored with the quotation settings rather than
+   shipped as a repo asset, so replacing it is an upload rather than
+   a deploy — and so it travels in a backup. */
+async function logoSheet(ctx, back) {
+  const h = openSheet({
+    title: 'Logo',
+    body: `<div class="sheet-body" data-logo></div>`,
+    onMount(root) {
+      const host = root.querySelector('[data-logo]');
+      paint();
+
+      function paint() {
+        const src = qSettings().logo || '';
+        host.innerHTML = `
+          <p class="sheet-lede">
+            Shown at the head of every quotation, on the sign-in and lock
+            screens, and beside the app name in the sidebar.
+          </p>
+          <button class="dphoto logo-drop ${src ? 'has' : ''}" data-pick>
+            ${src ? `<img src="${esc(src)}" alt="Current logo">`
+                  : `<span>${icon('camera', 26)}<small>Choose the logo file</small></span>`}
+          </button>
+          <p class="qb-hint">
+            A square PNG or JPEG works best. It is stored on this device
+            and included in a backup.
+          </p>
+          <button class="btn" data-pick>${src ? 'Replace logo' : 'Choose logo'}</button>
+          ${src ? `<button class="btn sec sm" data-clear>Remove logo</button>` : ''}
+        `;
+        on(host, '[data-pick]', async () => {
+          const files = await pickImage({ camera: false });
+          if (!files || !files[0]) return;
+          const blob = await shrink(files[0]);
+          updateQSettings({ logo: await toBase64(blob) });
+          toast('Logo saved');
+          paint();
+          if (back) back();
+        });
+        on(host, '[data-clear]', () => {
+          updateQSettings({ logo: '' });
+          toast('Logo removed');
+          paint();
+          if (back) back();
+        });
+      }
+    },
+  });
+  return h;
 }

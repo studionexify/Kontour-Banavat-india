@@ -8,7 +8,8 @@
 import { icon } from '../icons.js';
 import { on, esc, emptyState, toast, confirmSheet, field } from '../ui.js';
 import {
-  quotes, quoteTotals, STATUS, setStatus, deleteQuote, reviseQuote, pipelineValue,
+  quotes, quoteFamilies, quoteTotals, STATUS, setStatus, deleteQuote,
+  reviseQuote, duplicateQuote, pipelineValue,
 } from '../quotes.js';
 import { inr, inrShort, dmy, todayISO, fyOf } from '../format.js';
 import { openQuoteSheet } from './quotebuilder.js';
@@ -28,22 +29,20 @@ export function setFilter(next) {
 }
 
 export async function render(root, ctx) {
-  const list = quotes({ status: filter, q: query });
+  const list = quoteFamilies({ status: filter, q: query });
   const pipeline = pipelineValue();
-  const counts = {
-    all: quotes().length,
-    draft: quotes({ status: 'draft' }).length,
-    sent: quotes({ status: 'sent' }).length,
-    accepted: quotes({ status: 'accepted' }).length,
-    declined: quotes({ status: 'declined' }).length,
-  };
+  const all = quoteFamilies({ q: query });
+  const counts = { all: all.length };
+  for (const k of ['draft', 'sent', 'accepted', 'declined']) {
+    counts[k] = all.filter((f) => f.head.status === k).length;
+  }
 
   root.innerHTML = `
     <header class="hero with-panel">
       <div class="hero-bar">
         <div class="hero-title">
           Quotations
-          <small>${counts.all} total · ${esc(fyOf(todayISO()))}</small>
+          <small>${counts.all} job${counts.all === 1 ? '' : 's'} · ${esc(fyOf(todayISO()))}</small>
         </div>
         <button class="icon-btn" data-new aria-label="New quotation">${icon('plus', 21)}</button>
       </div>
@@ -91,8 +90,15 @@ export async function render(root, ctx) {
   // delegated on the same root — so stopPropagation on the action
   // does not stop this one. The card opens only when the click did
   // not land on one of its own actions.
+  on(root, '[data-dup]', async (e, b) => {
+    e.stopPropagation();
+    const q = duplicateQuote(b.dataset.dup);
+    toast(`Copied to ${q.mrNo} — add the client`);
+    openQuoteSheet({ id: q.id, onSaved: ctx.refresh });
+  });
+
   on(root, '[data-open]', (e, b) => {
-    if (e.target.closest('.qcard-acts')) return;
+    if (e.target.closest('.qcard-acts') || e.target.closest('.qcard-hist')) return;
     openQuoteSheet({ id: b.dataset.open, onSaved: ctx.refresh });
   });
 
@@ -116,7 +122,7 @@ export async function render(root, ctx) {
     e.stopPropagation();
     const ok = await confirmSheet({
       title: 'Delete this quotation?',
-      message: 'The number is not reused — the next quote still takes the next number.',
+      message: 'Only this revision goes. Other rounds of the same MR number are left alone.',
       confirmLabel: 'Delete', danger: true,
     });
     if (!ok) return;
@@ -135,18 +141,29 @@ export async function render(root, ctx) {
   }
 }
 
-function card(q) {
+/* One card per job, showing the revision that is currently live.
+   The earlier rounds fold underneath, so a job quoted five times
+   takes one row in the list rather than five. */
+function card({ base, head: q, family, revisions }) {
   const t = quoteTotals(q);
   const st = STATUS[q.status];
   const lines = (q.lines || []).length;
+  const older = family.filter((x) => x.id !== q.id);
+
   return `
     <article class="qcard reveal" data-open="${esc(q.id)}" tabindex="0" role="button">
       <div class="qcard-top">
         <div>
-          <div class="qcard-num">MR # ${esc(q.mrNo)}</div>
+          <div class="qcard-num">
+            MR # ${esc(q.mrNo)}
+            ${revisions > 1 ? `<span class="qcard-rev">${revisions} revisions</span>` : ''}
+          </div>
           <div class="qcard-client">${esc(q.client.name || 'Unnamed client')}</div>
         </div>
-        <span class="pill ${st.tone}">${esc(st.label)}</span>
+        <div class="qcard-pills">
+          <span class="pill ${st.tone}">${esc(st.label)}</span>
+          ${q.gstApplicable === false ? `<span class="pill mut">No GST</span>` : ''}
+        </div>
       </div>
 
       ${q.title ? `<p class="qcard-title">${esc(q.title)}</p>` : ''}
@@ -159,13 +176,30 @@ function card(q) {
         <div class="qcard-amt num">${inr(t.total)}</div>
       </div>
 
+      ${older.length ? `
+        <details class="qcard-hist">
+          <summary>${older.length} earlier round${older.length === 1 ? '' : 's'}</summary>
+          ${older.map((o) => {
+            const ot = quoteTotals(o);
+            const ost = STATUS[o.status];
+            return `
+              <button class="qhist" data-doc="${esc(o.id)}">
+                <span class="qhist-n">${esc(o.mrNo)}</span>
+                <span class="qhist-d">${esc(dmy(o.date))}</span>
+                <span class="pill ${ost.tone}">${esc(ost.label)}</span>
+                <span class="qhist-a num">${inr(ot.total)}</span>
+              </button>`;
+          }).join('')}
+        </details>` : ''}
+
       <div class="qcard-acts">
         ${q.status === 'draft' ? `<button class="mini" data-status="sent" data-id="${esc(q.id)}">Mark sent</button>` : ''}
         ${q.status === 'sent' ? `
           <button class="mini ok" data-status="accepted" data-id="${esc(q.id)}">Accepted</button>
           <button class="mini" data-status="declined" data-id="${esc(q.id)}">Declined</button>` : ''}
-        ${q.status === 'declined' ? `<button class="mini" data-revise="${esc(q.id)}">Revise</button>` : ''}
         ${q.status === 'accepted' && q.jobCode ? `<span class="mini flat">Job ${esc(q.jobCode)} open</span>` : ''}
+        ${q.status === 'accepted' ? '' : `<button class="mini" data-revise="${esc(q.id)}">Revise</button>`}
+        <button class="mini" data-dup="${esc(q.id)}">Duplicate</button>
         <button class="mini" data-doc="${esc(q.id)}">${icon('reports', 14)} Preview</button>
         <button class="mini danger" data-del="${esc(q.id)}">${icon('trash', 14)}</button>
       </div>
@@ -177,7 +211,7 @@ function card(q) {
    asks for the job code rather than inventing one. */
 async function openAccept(id, ctx) {
   const { openSheet } = await import('../ui.js');
-  const { acceptQuote, getQuote, quoteTotals: totals } = await import('../quotes.js');
+  const { acceptQuote, getQuote, quoteTotals: totals, baseNo } = await import('../quotes.js');
   const q = getQuote(id);
   if (!q) return;
   const t = totals(q);
@@ -192,8 +226,8 @@ async function openAccept(id, ctx) {
         tracking payment against the figure the client agreed to.
       </p>
       ${field('Job code',
-        `<input class="control" data-code value="${esc(q.jobCode || q.mrNo || '')}" autocapitalize="characters">`,
-        'The MR number is already the job code. Clear it to accept without opening a job.')}
+        `<input class="control" data-code value="${esc(q.jobCode || baseNo(q.mrNo) || '')}" autocapitalize="characters">`,
+        'The MR number is already the job code, without the revision suffix. Clear it to accept without opening a job.')}
       <button class="btn" data-go>Accept and open job</button>
       </div>
     `,

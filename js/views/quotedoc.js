@@ -16,6 +16,7 @@ import { icon } from '../icons.js';
 import { openSheet, esc, on, toast } from '../ui.js';
 import { getQuote, quoteTotals, lineAmount, settings } from '../quotes.js';
 import { inr, dmy } from '../format.js';
+import { markHTML, hasLogo } from '../brand.js';
 
 export function openQuoteDoc(id) {
   const q = getQuote(id);
@@ -51,7 +52,18 @@ export function docHTML(q) {
 
   return `
   <article class="doc" data-doc>
-    <h1 class="doc-title">QUOTATION</h1>
+    <header class="doc-head">
+      ${hasLogo() ? markHTML({ size: 58, className: 'doc-logo', alt: s.company.name })
+                  : `<div class="doc-logo ph">${esc(s.company.name)}</div>`}
+      <div class="doc-head-t">
+        <h1 class="doc-title">QUOTATION</h1>
+        <p class="doc-head-sub">${esc(s.company.name)}</p>
+      </div>
+    </header>
+
+    ${q.status === 'superseded' || q.status === 'declined'
+      ? `<p class="doc-stamp">This quotation is ${q.status === 'superseded'
+          ? 'superseded by a later revision' : 'no longer under offer'}.</p>` : ''}
 
     <div class="doc-meta">
       <dl>
@@ -105,7 +117,7 @@ export function docHTML(q) {
 
       <section class="doc-sums">
         <div class="doc-sum"><span>Sub - Total</span><b class="num">${inr(t.sub)}</b></div>
-        <div class="doc-sum"><span>GST (${q.gstRate}%)</span><b class="num">${inr(t.gst)}</b></div>
+        ${t.taxed ? `<div class="doc-sum"><span>GST (${q.gstRate}%)</span><b class="num">${inr(t.gst)}</b></div>` : ''}
         <div class="doc-sum a"><span>Sub Total A</span><b class="num">${inr(t.subA)}</b></div>
       </section>
     </div>

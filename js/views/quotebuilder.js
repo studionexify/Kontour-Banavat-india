@@ -127,6 +127,13 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
         on(host, '[data-rm-ship]', (e, b) =>
           setShip(quote.shipping.filter((x) => x.id !== b.dataset.rmShip)));
 
+        // Off means the document drops the row entirely rather than
+        // printing a zero, so it is a flag, not a rate of 0.
+        on(host, '[data-gst]', (e, b) => {
+          quote = updateQuote(quote.id, { gstApplicable: b.dataset.gst === 'on' });
+          renderFoot();
+        });
+
         on(host, '[data-done]', () => { handle.close(); if (onSaved) onSaved(); });
       }
 
@@ -277,10 +284,15 @@ function footBlock(t, q) {
       <div class="qb-sums">
         <div class="qb-sum"><span>Sub - Total</span><b class="num">${inr(t.sub)}</b></div>
         <div class="qb-sum">
-          <span>GST</span>
+          <span>
+            GST
+            <button class="seg-mini gst-t ${t.taxed ? 'on' : ''}" data-gst="${t.taxed ? 'off' : 'on'}">
+              ${t.taxed ? 'Applicable' : 'Not applicable'}
+            </button>
+          </span>
           <span class="qb-gst">
-            <input class="control mini-in" type="number" min="0" max="28" data-f="gstRate" value="${q.gstRate}">%
-            <b class="num">${inr(t.gst)}</b>
+            ${t.taxed ? `<input class="control mini-in" type="number" min="0" max="28" data-f="gstRate" value="${q.gstRate}">%` : ''}
+            <b class="num">${t.taxed ? inr(t.gst) : '—'}</b>
           </span>
         </div>
         <div class="qb-sum"><span>Sub Total A</span><b class="num">${inr(t.subA)}</b></div>

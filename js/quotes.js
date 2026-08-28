@@ -39,11 +39,22 @@ import { todayISO, round2 } from './format.js';
 const KEY = 'kontour.quotes.v2';
 
 export const STATUS = {
-  draft:    { label: 'Draft',    tone: 'mut'  },
-  sent:     { label: 'Sent',     tone: 'warn' },
-  accepted: { label: 'Accepted', tone: 'in'   },
-  declined: { label: 'Declined', tone: 'out'  },
+  draft:      { label: 'Draft',      tone: 'mut'  },
+  sent:       { label: 'Sent',       tone: 'warn' },
+  accepted:   { label: 'Accepted',   tone: 'in'   },
+  declined:   { label: 'Declined',   tone: 'out'  },
+  // Not a decision anyone makes by hand. When one revision of a job
+  // is finalised the rest of that family close as superseded, so a
+  // job never has two live figures and the open-value figure on the
+  // Dashboard cannot count the same work twice.
+  superseded: { label: 'Superseded', tone: 'mut'  },
 };
+
+/* A quotation's family is everything sharing its base MR number:
+   C129, C129-1, C129-2 are one job quoted three times. */
+export function baseNo(mrNo) {
+  return String(mrNo || '').split('-')[0];
+}
 
 export const CATEGORIES = [
   'Seating', 'Table', 'Bed', 'Storage', 'Lighting',
@@ -120,6 +131,12 @@ function blank() {
       terms: TERMS,
       note: NOTE,
       company: { ...COMPANY },
+      // The Banavat mark, as an uploaded image. Held here rather than
+      // shipped as a repo asset so it travels in a backup, works with
+      // no network, and can be changed without a deploy. Everything
+      // that shows the brand — the document, the rail, the lock
+      // screen — reads this one value.
+      logo: '',
       bank: { ...BANK },
       seq: 0,
     },
@@ -267,6 +284,35 @@ export function getQuote(id) {
   return state.quotes.find((x) => x.id === id) || null;
 }
 
+/* Every revision of one job, newest first. */
+export function familyOf(mrNo) {
+  const base = baseNo(mrNo);
+  return state.quotes
+    .filter((x) => baseNo(x.mrNo) === base)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+/* The list groups by family and shows the current revision, so it
+   stays as long as the job count rather than the revision count.
+   "Current" is the one that was decided if any was, otherwise the
+   most recent — which is what you would hand a client today. */
+export function quoteFamilies({ status = null, q = '' } = {}) {
+  const seen = new Set();
+  const out = [];
+  for (const quote of quotes({ q })) {
+    const base = baseNo(quote.mrNo);
+    if (seen.has(base)) continue;
+    seen.add(base);
+    const family = familyOf(base);
+    const head = family.find((x) => x.status === 'accepted')
+      || family.find((x) => x.status !== 'superseded')
+      || family[0];
+    if (status && status !== 'all' && head.status !== status) continue;
+    out.push({ base, head, family, revisions: family.length });
+  }
+  return out;
+}
+
 export function newLine(input = {}) {
   return {
     id: uid('l'),
@@ -317,12 +363,13 @@ export function newShipping(input = {}) {
    summed. Shipping is deliberately outside the GST base — that is
    how these quotations have always been written. */
 export function quoteTotals(quote) {
-  if (!quote) return { sub: 0, gst: 0, subA: 0, subB: 0, total: 0 };
+  if (!quote) return { sub: 0, gst: 0, subA: 0, subB: 0, total: 0, taxed: false };
   const sub = round2((quote.lines || []).reduce((t, l) => t + lineAmount(l), 0));
-  const gst = round2(sub * (Number(quote.gstRate) || 0) / 100);
+  const taxed = quote.gstApplicable !== false;
+  const gst = taxed ? round2(sub * (Number(quote.gstRate) || 0) / 100) : 0;
   const subA = round2(sub + gst);
   const subB = round2((quote.shipping || []).reduce((t, s) => t + (Number(s.amount) || 0), 0));
-  return { sub, gst, subA, subB, total: round2(subA + subB) };
+  return { sub, gst, subA, subB, total: round2(subA + subB), taxed };
 }
 
 export function addQuote(input = {}) {
@@ -342,6 +389,10 @@ export function addQuote(input = {}) {
     shipping: Array.isArray(input.shipping) ? input.shipping
       : [newShipping({ label: `Delivery City - ${s.defaultCity}`, amount: 0 })],
     gstRate: input.gstRate == null ? s.gstRate : Number(input.gstRate),
+    // Some quotations are written without tax. That is not the same as
+    // 18% of nothing, so it is a flag rather than a zero rate — and the
+    // document drops the row entirely rather than printing a ₹0.
+    gstApplicable: input.gstApplicable == null ? true : Boolean(input.gstApplicable),
     paymentTerms: input.paymentTerms == null ? s.paymentTerms : input.paymentTerms,
     notes: input.notes || '',
     status: 'draft',
@@ -369,6 +420,29 @@ export function deleteQuote(id) {
   write(); emit();
 }
 
+/* Recreating an old quotation for a different client. Unlike a
+   revision this is a new job with a new MR number, and the client,
+   dates and job code are deliberately left blank so nothing stale
+   goes out under someone else's name. */
+export function duplicateQuote(id) {
+  const old = getQuote(id);
+  if (!old) return null;
+  const s = state.settings;
+  const valid = new Date();
+  valid.setDate(valid.getDate() + (s.validityDays || 61));
+  return addQuote({
+    date: todayISO(),
+    validUntil: valid.toISOString().slice(0, 10),
+    title: old.title,
+    client: { name: '', phone: '', shippingAddress: s.defaultCity },
+    lines: (old.lines || []).map((l) => ({ ...l, id: uid('l') })),
+    shipping: (old.shipping || []).map((x) => ({ ...x, id: uid('s') })),
+    gstRate: old.gstRate,
+    gstApplicable: old.gstApplicable,
+    paymentTerms: old.paymentTerms,
+  });
+}
+
 export function reviseQuote(id) {
   const old = getQuote(id);
   if (!old) return null;
@@ -392,7 +466,10 @@ export function reviseQuote(id) {
 export function acceptQuote(id, jobCode = '') {
   const q = getQuote(id);
   if (!q) return null;
-  const code = (jobCode || q.jobCode || q.mrNo || '').trim().toUpperCase();
+  // The revision suffix belongs to the quotation, not the job — all
+  // three rounds of C129 are quoting the same job, so the ledger must
+  // not end up with C129, C129-1 and C129-2 as separate jobs.
+  const code = (jobCode || q.jobCode || baseNo(q.mrNo) || '').trim().toUpperCase();
   if (code) {
     ensureJob(code, { silent: true, title: q.title, client: q.client.name });
     updateJob(code, { orderValue: quoteTotals(q).total });
@@ -400,6 +477,15 @@ export function acceptQuote(id, jobCode = '') {
   }
   q.status = 'accepted';
   q.updatedAt = Date.now();
+  // Finalising one revision closes every other revision of the same
+  // job, whichever direction it sits in — an older C129 and a newer
+  // C129-2 both stop being live the moment C129-1 is agreed.
+  for (const other of familyOf(q.mrNo)) {
+    if (other.id === q.id) continue;
+    if (other.status === 'accepted') continue;
+    other.status = 'superseded';
+    other.updatedAt = Date.now();
+  }
   write(); emit();
   return q;
 }

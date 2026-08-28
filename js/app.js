@@ -19,6 +19,7 @@ import { cloudConfigured } from './config.js';
 import { signedIn, currentOrgId } from './auth.js';
 import { startSync } from './cloud.js';
 import { load as loadQuotes, onChange as onQuotesChange } from './quotes.js';
+import { markHTML, hasLogo } from './brand.js';
 import { openSignIn } from './views/signin.js';
 
 /* ── Nav ───────────────────────────────────────────────────────
@@ -139,6 +140,11 @@ function startGate() {
   gate.hidden = false;
   app.hidden = true;
 
+  if (hasLogo()) {
+    const glyph = gate.querySelector('.gate-mark');
+    if (glyph) glyph.outerHTML = markHTML({ size: 64, className: 'gate-logo', alt: '' });
+  }
+
   let buf = '';
   const dots = $('#pin-dots');
   const sub = $('#gate-sub');
@@ -204,6 +210,21 @@ function startGate() {
 
 /* ── Shell ─────────────────────────────────────────────────── */
 
+/* The rail wears the mark beside the name once one is uploaded; the
+   CSS wordmark stands in until then, so the rail is never empty. */
+function paintRailBrand() {
+  const bar = $('#tabbar');
+  bar.classList.toggle('has-logo', hasLogo());
+  let brand = bar.querySelector('.rail-brand');
+  if (!hasLogo()) { if (brand) brand.remove(); return; }
+  if (!brand) {
+    brand = document.createElement('div');
+    brand.className = 'rail-brand';
+    bar.prepend(brand);
+  }
+  brand.innerHTML = `${markHTML({ size: 30, alt: '' })}<span class="rail-brand-t">Kontour</span>`;
+}
+
 function buildTabs() {
   const bar = $('#tabbar');
   bar.querySelectorAll('.tab').forEach((btn) => {
@@ -220,6 +241,7 @@ function buildTabs() {
     haptic(10);
     openEntrySheet({ onSaved: ctx.refresh });
   });
+  paintRailBrand();
 }
 
 /* The module's own three screens, as a row of pills that sticks to
@@ -319,6 +341,7 @@ function start() {
   });
 
   onQuotesChange(() => {
+    paintRailBrand();
     clearTimeout(queued);
     queued = setTimeout(() => { if (!sheetCount()) show(route); }, 60);
   });
