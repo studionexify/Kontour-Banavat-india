@@ -2116,3 +2116,12 @@ button.qline-img img { width:100%; height:100%; object-fit:cover; }
   font-size:12px; line-height:1; display:grid; place-items:center;
   box-shadow:var(--e1);
 }
+
+/* The entry button appears only inside Phynance. On a phone the two
+   remaining destinations spread to fill the bar rather than leaving
+   a hole where it was. */
+.tabbar.no-fab #fab { display:none; }
+.tabbar.no-fab { justify-content:space-evenly; }
+@media (min-width:900px) {
+  .tabbar.no-fab { justify-content:flex-start; }
+}

@@ -297,6 +297,10 @@ async function show(where) {
 
     const section = sectionOf(where);
     lastInSection[section] = where;
+    // Logging an entry is Phynance's action, not the workspace's, so
+    // the button belongs to Phynance's screens rather than the rail
+    // it happens to sit in. Elsewhere the rail is navigation only.
+    $('#tabbar').classList.toggle('no-fab', section !== 'phynance');
     // The token layer keys off this: the shell is monochrome, and a
     // module re-points the whole ramp to its own colour.
     document.documentElement.dataset.section = section;
