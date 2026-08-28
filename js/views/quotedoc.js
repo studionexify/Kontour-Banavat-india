@@ -14,7 +14,7 @@
 
 import { icon } from '../icons.js';
 import { openSheet, esc, on, toast } from '../ui.js';
-import { getQuote, quoteTotals, lineAmount, settings } from '../quotes.js';
+import { getQuote, quoteTotals, lineAmount, settings, renderTerms } from '../quotes.js';
 import { inr, dmy } from '../format.js';
 import { markHTML, hasLogo } from '../brand.js';
 
@@ -69,6 +69,7 @@ export function docHTML(q) {
       <dl>
         ${metaRow('Client Name', q.client.name)}
         ${metaRow('Contact Number', q.client.phone || '-')}
+        ${q.client.email ? metaRow('Email', q.client.email) : ''}
         ${metaRow('Shipping Address', q.client.shippingAddress || '-')}
       </dl>
       <dl>
@@ -172,7 +173,7 @@ export function docHTML(q) {
 
     <section class="doc-block">
       <h2>Terms &amp; Conditions</h2>
-      ${bullets(s.terms)}
+      ${bullets(renderTerms(q))}
       <p class="doc-aster">*Terms and conditions apply.</p>
     </section>
 

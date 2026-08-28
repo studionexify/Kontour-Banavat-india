@@ -2094,3 +2094,25 @@ select.control { padding-right:34px; background-position:right 13px center; back
 .gate-logo { width:64px; height:64px; object-fit:contain; margin:0 auto 4px; display:block; }
 .logo-drop { aspect-ratio:auto; min-height:150px; }
 .logo-drop img { object-fit:contain; padding:14px; }
+
+/* A line's image is picked in place, so the slot is a button. */
+.qline-imgwrap { position:relative; flex:none; display:block; }
+button.qline-img {
+  width:38px; height:38px; border-radius:11px; padding:0;
+  display:grid; place-items:center; overflow:hidden;
+  background:var(--tea-soft); color:var(--ink-3);
+  border:1px dashed var(--line);
+  transition:border-color var(--t-fast), background var(--t-fast);
+}
+button.qline-img.has { border-style:solid; border-color:var(--line-soft); }
+button.qline-img img { width:100%; height:100%; object-fit:cover; }
+@media (hover:hover) and (pointer:fine) {
+  button.qline-img:hover { border-color:var(--pine-500); background:var(--tea); }
+}
+.qline-img-x {
+  position:absolute; top:-6px; right:-6px;
+  width:18px; height:18px; border-radius:50%;
+  background:var(--pine-700); color:var(--beige);
+  font-size:12px; line-height:1; display:grid; place-items:center;
+  box-shadow:var(--e1);
+}

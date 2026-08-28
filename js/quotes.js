@@ -101,11 +101,11 @@ const PAYMENT_TERMS = [
 
 const TERMS = [
   'Photographs of the products will be shared for confirmation before shipping.',
-  'The quoted prices include fabrics valued up to ₹800 per meter (if applicable), and additional charges will be added if actual price is increased.',
+  'The quoted prices include fabrics valued up to {{fabricRate}} per meter (if applicable), and additional charges will be added if actual price is increased.',
   'All products come with a 1.5-year warranty covering manufacturing defects and non-accidental damages.',
   'Unloading and installation will require coordination with the client. Local labor assistance and lift access may be necessary.',
   'Custom, made-to-order pieces are subject to a tolerance of ±2 inches.',
-  'Lead time for delivery is 25–30 business days.*',
+  'Lead time for delivery is {{leadTime}}.*',
   'Please ensure that passage dimensions are compatible with product sizes before placing an order.',
 ].join('\n');
 
@@ -127,6 +127,13 @@ function blank() {
       // Every quotation seen runs two months from the quoted date.
       validityDays: 61,
       defaultCity: 'Vadodara',
+      // Both of these print inside a standing term but change from one
+      // quotation to the next — 25–30 business days on one, 15–20 on
+      // another — so the term holds a placeholder and the quotation
+      // holds the value. These are only the defaults a new one starts
+      // from.
+      fabricRate: 800,
+      leadTime: '25–30 business days',
       paymentTerms: PAYMENT_TERMS,
       terms: TERMS,
       note: NOTE,
@@ -189,6 +196,28 @@ export function updateSettings(changes) {
   state.settings = { ...state.settings, ...changes };
   write(); emit();
   return state.settings;
+}
+
+/* Fills {{fabricRate}} and {{leadTime}} in the standing terms from
+   whatever this particular quotation says. */
+export function renderTerms(quote) {
+  const s = state.settings;
+  const rate = Number(quote && quote.fabricRate != null ? quote.fabricRate : s.fabricRate) || 0;
+  const lead = (quote && quote.leadTime) || s.leadTime || '';
+  return String(s.terms || '')
+    .replace(/\{\{fabricRate\}\}/g, `₹${rate.toLocaleString('en-IN')}`)
+    .replace(/\{\{leadTime\}\}/g, lead);
+}
+
+/* Two calendar months from the quoted date, which is what every
+   issued quotation has used — not a fixed number of days. */
+export function defaultValidUntil(fromISO) {
+  const d = new Date(`${fromISO}T00:00:00`);
+  const day = d.getDate();
+  d.setMonth(d.getMonth() + 2);
+  // Guard the month-end roll: 31 Dec + 2 months must not become 3 Mar.
+  if (d.getDate() !== day) d.setDate(0);
+  return d.toISOString().slice(0, 10);
 }
 
 /* ── MR numbers ────────────────────────────────────────────────
@@ -384,7 +413,12 @@ export function addQuote(input = {}) {
     // The internal name for the job. Not printed — the document
     // identifies itself by MR number and client.
     title: input.title || '',
-    client: { name: '', phone: '', shippingAddress: s.defaultCity, ...(input.client || {}) },
+    client: {
+      name: '', email: '', phone: '',
+      // City only — that is all the printed document carries.
+      shippingAddress: s.defaultCity,
+      ...(input.client || {}),
+    },
     lines: Array.isArray(input.lines) ? input.lines : [],
     shipping: Array.isArray(input.shipping) ? input.shipping
       : [newShipping({ label: `Delivery City - ${s.defaultCity}`, amount: 0 })],
@@ -394,6 +428,8 @@ export function addQuote(input = {}) {
     // document drops the row entirely rather than printing a ₹0.
     gstApplicable: input.gstApplicable == null ? true : Boolean(input.gstApplicable),
     paymentTerms: input.paymentTerms == null ? s.paymentTerms : input.paymentTerms,
+    fabricRate: input.fabricRate == null ? s.fabricRate : Number(input.fabricRate),
+    leadTime: input.leadTime == null ? s.leadTime : input.leadTime,
     notes: input.notes || '',
     status: 'draft',
     jobCode: '',
@@ -405,6 +441,14 @@ export function addQuote(input = {}) {
   if (!isRevision && !input.mrNo) state.settings.seq = (state.settings.seq || 0) + 1;
   write(); emit();
   return q;
+}
+
+/* The number is offered as previous + 1 but can be typed over, so a
+   collision has to be caught — two quotations sharing a number would
+   silently merge into one revision family. */
+export function mrNoTaken(mrNo, exceptId = '') {
+  const want = String(mrNo || '').trim().toUpperCase();
+  return state.quotes.some((x) => x.id !== exceptId && String(x.mrNo).toUpperCase() === want);
 }
 
 export function updateQuote(id, changes) {
@@ -440,6 +484,8 @@ export function duplicateQuote(id) {
     gstRate: old.gstRate,
     gstApplicable: old.gstApplicable,
     paymentTerms: old.paymentTerms,
+    fabricRate: old.fabricRate,
+    leadTime: old.leadTime,
   });
 }
 

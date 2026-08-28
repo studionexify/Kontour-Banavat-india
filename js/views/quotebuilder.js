@@ -17,19 +17,19 @@ import { icon } from '../icons.js';
 import { openSheet, on, esc, toast, field, emptyState } from '../ui.js';
 import {
   getQuote, addQuote, updateQuote, newLine, newShipping, lineAmount, quoteTotals,
-  LINE_KINDS, designs, getDesign, lineFromDesign, settings,
+  LINE_KINDS, designs, getDesign, lineFromDesign, settings, mrNoTaken,
+  defaultValidUntil,
 } from '../quotes.js';
-import { inr, todayISO, isoOf } from '../format.js';
+import { pickImage, shrink, toBase64 } from '../photos.js';
+import { inr, todayISO } from '../format.js';
 import { openQuoteDoc } from './quotedoc.js';
 
 export function openQuoteSheet({ id = '', onSaved } = {}) {
   let quote = id ? getQuote(id) : null;
 
   if (!quote) {
-    const s = settings();
-    const valid = new Date();
-    valid.setDate(valid.getDate() + (s.validityDays || 61));
-    quote = addQuote({ date: todayISO(), validUntil: isoOf(valid) });
+    const today = todayISO();
+    quote = addQuote({ date: today, validUntil: defaultValidUntil(today) });
   }
 
   return openSheet({
@@ -80,6 +80,20 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
         host.addEventListener('change', (e) => {
           const inp = e.target;
           const d = inp.dataset || {};
+
+          if (d.f === 'mrNo') {
+            const want = String(inp.value).trim().toUpperCase();
+            if (!want) { inp.value = quote.mrNo; return; }
+            if (mrNoTaken(want, quote.id)) {
+              toast(`${want} is already used`, 'err');
+              inp.value = quote.mrNo;
+              return;
+            }
+            quote = updateQuote(quote.id, { mrNo: want });
+            inp.value = want;
+            renderTitle();
+            return;
+          }
 
           if (d.f != null) {
             const val = inp.type === 'number' ? Number(inp.value) || 0 : inp.value;
@@ -134,7 +148,25 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
           renderFoot();
         });
 
+        /* A line can carry its own photograph even when it did not come
+           from the library — a one-off still prints in the Image column. */
+        on(host, '[data-line-img]', async (e, b) => {
+          const files = await pickImage({ camera: false });
+          if (!files || !files[0]) return;
+          const photo = await toBase64(await shrink(files[0]));
+          setLines(quote.lines.map((l) => l.id === b.dataset.lineImg ? { ...l, photo } : l));
+        });
+
+        on(host, '[data-line-img-rm]', (e, b) =>
+          setLines(quote.lines.map((l) => l.id === b.dataset.lineImgRm ? { ...l, photo: '' } : l)));
+
         on(host, '[data-done]', () => { handle.close(); if (onSaved) onSaved(); });
+      }
+
+      /* The MR number is editable, so the sheet's own title follows it. */
+      function renderTitle() {
+        const h2 = root.querySelector('.sheet-head h2');
+        if (h2) h2.textContent = `MR # ${quote.mrNo}`;
       }
 
       on(root, '[data-preview]', () => openQuoteDoc(quote.id));
@@ -152,13 +184,18 @@ function clientBlock(q) {
       <div class="qb-grid">
         ${field('Client name', `<input class="control" data-f="client.name" value="${esc(q.client.name)}" placeholder="Rahi Construction">`)}
         ${field('Contact number', `<input class="control" data-f="client.phone" value="${esc(q.client.phone)}" inputmode="tel">`)}
+        ${field('Email', `<input class="control" type="email" data-f="client.email" value="${esc(q.client.email || '')}" placeholder="Optional">`)}
+        ${field('Delivery city', `<input class="control" data-f="client.shippingAddress" value="${esc(q.client.shippingAddress)}" placeholder="Vadodara">`,
+          'City only — that is what the quotation prints.')}
       </div>
-      ${field('Shipping address',
-        `<textarea class="control" data-f="client.shippingAddress" rows="2">${esc(q.client.shippingAddress)}</textarea>`)}
 
       <div class="qb-grid">
+        ${field('Quotation number',
+          `<input class="control" data-f="mrNo" value="${esc(q.mrNo)}" autocapitalize="characters">`,
+          'Offered as the previous number plus one. Type over it if you need to.')}
         ${field('Quoted date', `<input class="control" type="date" data-f="date" value="${esc(q.date)}">`)}
-        ${field('Valid till', `<input class="control" type="date" data-f="validUntil" value="${esc(q.validUntil)}">`)}
+        ${field('Valid till', `<input class="control" type="date" data-f="validUntil" value="${esc(q.validUntil)}">`,
+          'Two months from the quoted date by default.')}
       </div>
       ${field('Job name',
         `<input class="control" data-f="title" value="${esc(q.title)}" placeholder="Table and grill">`,
@@ -192,8 +229,13 @@ function lineRow(l, i) {
     <article class="qline">
       <div class="qline-head">
         <span class="qline-n">${i + 1}</span>
-        ${l.photo ? `<img class="qline-img" src="${esc(l.photo)}" alt="">`
-                  : `<span class="qline-img ph">${icon('box', 18)}</span>`}
+        <span class="qline-imgwrap">
+          <button class="qline-img ${l.photo ? 'has' : ''}" data-line-img="${esc(l.id)}"
+                  aria-label="${l.photo ? 'Replace image' : 'Add image'}">
+            ${l.photo ? `<img src="${esc(l.photo)}" alt="">` : icon('camera', 16)}
+          </button>
+          ${l.photo ? `<button class="qline-img-x" data-line-img-rm="${esc(l.id)}" aria-label="Remove image">×</button>` : ''}
+        </span>
         <input class="control flush qline-title" data-l="${esc(l.id)}" data-k="name"
                value="${esc(l.name)}" placeholder="Name">
         <button class="mini danger" data-rm="${esc(l.id)}" aria-label="Remove line">${icon('trash', 14)}</button>
@@ -266,10 +308,20 @@ function termsBlock(q) {
       ${field('Printed on this quotation',
         `<textarea class="control" data-f="paymentTerms" rows="3">${esc(q.paymentTerms)}</textarea>`,
         'One per line. Usually 50% advance; 70% on larger orders.')}
+      <h3 class="qb-h">Standing terms, this quotation</h3>
+      <div class="qb-grid">
+        ${field('Lead time',
+          `<input class="control" data-f="leadTime" value="${esc(q.leadTime || '')}" placeholder="25–30 business days">`,
+          'Prints as "Lead time for delivery is …".')}
+        ${field('Fabric included up to',
+          `<input class="control" type="number" min="0" data-f="fabricRate" value="${q.fabricRate || 0}">`,
+          'Per meter. Prints inside the fabric clause.')}
+      </div>
+
       ${field('Private note',
         `<textarea class="control" data-f="notes" rows="2" placeholder="Not printed">${esc(q.notes)}</textarea>`)}
       <p class="qb-hint">
-        Terms &amp; conditions, banking and contact details print on every
+        The rest of the terms, banking and contact details print on every
         quotation and are set once, in Settings.
       </p>
     </section>
