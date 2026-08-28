@@ -1887,3 +1887,137 @@ select.control { padding-right:34px; background-position:right 13px center; back
 @media (min-width:1280px) {
   .sheet.full.wide, .sheet.wide { max-width:880px; }
 }
+
+/* ════════════════════════════════════════════════════════════
+   THE QUOTATION DOCUMENT
+
+   A faithful rendering of what the client receives: the same
+   header pairs, the same eight columns, the same totals ladder
+   with shipping added after the tax. It is set on white with a
+   serif-free, plain hierarchy because it is a business document
+   that gets printed, not a screen that gets browsed — the app's
+   own theme deliberately stops at its edge.
+   ════════════════════════════════════════════════════════════ */
+
+.doc-scroll { background:var(--k-100); padding:16px; }
+
+.doc {
+  background:#FFFFFF;
+  color:#111113;
+  max-width:900px;
+  margin:0 auto;
+  padding:34px 32px 40px;
+  border-radius:6px;
+  box-shadow:var(--e2);
+  font-size:12px;
+  line-height:1.5;
+}
+
+.doc-title {
+  margin:0 0 22px;
+  font-size:20px; font-weight:700; letter-spacing:2.5px;
+  text-align:center; text-transform:uppercase;
+}
+
+.doc-meta {
+  display:grid; grid-template-columns:1fr; gap:2px 40px;
+  margin-bottom:20px;
+}
+@media (min-width:640px) { .doc-meta { grid-template-columns:1fr 1fr; } }
+.doc-meta dl { margin:0; display:flex; flex-direction:column; gap:3px; }
+.doc-meta div { display:flex; gap:8px; }
+.doc-meta dt { margin:0; font-weight:700; flex:none; min-width:118px; }
+.doc-meta dd { margin:0; }
+
+.doc-tablewrap { overflow-x:auto; margin-bottom:16px; }
+
+.doc-table {
+  width:100%; border-collapse:collapse;
+  font-size:11.5px;
+}
+.doc-table th, .doc-table td {
+  border:1px solid #C9C9CF;
+  padding:7px 8px;
+  vertical-align:top;
+  text-align:left;
+}
+.doc-table th {
+  background:#F1F1F3; font-weight:700;
+  font-size:11px; letter-spacing:.2px;
+  white-space:nowrap;
+}
+.doc-table .c-sr { width:46px; text-align:center; }
+.doc-table .c-img { width:78px; }
+.doc-table .c-img img { width:100%; border-radius:3px; display:block; }
+.doc-table .c-name { min-width:130px; font-weight:600; }
+.doc-table .c-desc { min-width:210px; }
+.doc-table .c-dim { min-width:130px; white-space:nowrap; }
+.doc-table .c-num { text-align:right; white-space:nowrap; }
+.doc-fin { display:block; font-weight:400; color:#55555E; margin-top:2px; }
+.doc-empty { text-align:center; color:#8A8A93; padding:16px; }
+
+.doc-split {
+  display:grid; grid-template-columns:1fr; gap:18px;
+  margin-bottom:16px;
+}
+@media (min-width:640px) { .doc-split { grid-template-columns:1.4fr 1fr; } }
+
+.doc-terms-pay h2, .doc-block h2 {
+  margin:0 0 7px; font-size:12.5px; font-weight:700;
+}
+.doc-terms-pay ul, .doc-block ul { margin:0; padding-left:16px; }
+.doc-terms-pay li, .doc-block li { margin-bottom:3px; }
+.doc-block p { margin:0 0 8px; }
+.doc-aster { font-style:italic; color:#55555E; }
+
+.doc-sums { align-self:start; }
+.doc-sum {
+  display:flex; justify-content:space-between; gap:16px;
+  padding:6px 9px; border:1px solid #C9C9CF; border-bottom:0;
+}
+.doc-sum:last-child { border-bottom:1px solid #C9C9CF; }
+.doc-sum.a { background:#F1F1F3; font-weight:700; }
+
+.doc-grand { margin-bottom:20px; }
+.doc-grand th, .doc-grand td { text-align:right; }
+.doc-total { font-weight:700; font-size:13.5px; }
+
+.doc-block { margin-bottom:18px; break-inside:avoid; }
+
+/* ── Print ───────────────────────────────────────────────────
+   Everything the app puts around the document gets out of the
+   way, and the page prints as the page. */
+@media print {
+  body.printing .app,
+  body.printing .gate,
+  body.printing .scrim,
+  body.printing .toast-root,
+  body.printing .sheet-head,
+  body.printing .qb-foot { display:none !important; }
+
+  body.printing .sheet,
+  body.printing .sheet.full {
+    position:static !important;
+    max-width:none !important; max-height:none !important;
+    height:auto !important; box-shadow:none !important;
+    border-radius:0 !important; background:#fff !important;
+    overflow:visible !important; animation:none !important;
+  }
+  body.printing .qb,
+  body.printing .qb-scroll,
+  body.printing .doc-scroll {
+    overflow:visible !important; height:auto !important;
+    padding:0 !important; background:#fff !important;
+  }
+  body.printing .doc {
+    box-shadow:none; border-radius:0; padding:0; max-width:none;
+  }
+  .doc-table thead { display:table-header-group; }
+  .doc-table tr { break-inside:avoid; }
+  @page { margin:14mm; }
+}
+
+.qline-lump {
+  font-size:11.5px; font-weight:600; color:var(--ink-3);
+  padding:8px 0;
+}

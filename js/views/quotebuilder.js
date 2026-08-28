@@ -1,23 +1,26 @@
 /* views/quotebuilder.js — writing the quotation.
  *
- * The sheet is laid out in the order the document is read: who it
- * is for, what is being supplied, what it comes to. Lines are the
- * body of the work, so they get the room, and the totals stay
- * pinned at the foot where the eye checks them.
+ * Laid out in the order the printed document is read: who it is
+ * for, what is being supplied, how it is paid for, what it ships
+ * as, what it comes to. The totals ladder is pinned at the foot in
+ * the same shape it prints — Sub Total A, Sub Total B, Total —
+ * so the figure being negotiated is never a scroll away and never
+ * a different sum from the one the client will see.
  *
  * Every edit writes straight through to the store. A quotation is
  * revised over days, often on a phone in someone's showroom, and
- * losing an afternoon's pricing to a closed tab is not a risk
- * worth taking for the sake of a Save button.
+ * losing an afternoon's pricing to a closed tab is not a risk worth
+ * taking for the sake of a Save button.
  */
 
 import { icon } from '../icons.js';
 import { openSheet, on, esc, toast, field, emptyState } from '../ui.js';
 import {
-  getQuote, addQuote, updateQuote, newLine, lineAmount, quoteTotals,
-  LINE_KINDS, designs, getDesign, lineFromDesign, designRate, settings,
+  getQuote, addQuote, updateQuote, newLine, newShipping, lineAmount, quoteTotals,
+  LINE_KINDS, designs, getDesign, lineFromDesign, settings,
 } from '../quotes.js';
-import { inr, todayISO, dmy, fyOf, isoOf, fromISO } from '../format.js';
+import { inr, todayISO, isoOf } from '../format.js';
+import { openQuoteDoc } from './quotedoc.js';
 
 export function openQuoteSheet({ id = '', onSaved } = {}) {
   let quote = id ? getQuote(id) : null;
@@ -25,19 +28,15 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
   if (!quote) {
     const s = settings();
     const valid = new Date();
-    valid.setDate(valid.getDate() + (s.validityDays || 15));
-    quote = addQuote({
-      fy: fyOf(todayISO()),
-      date: todayISO(),
-      validUntil: isoOf(valid),
-    });
+    valid.setDate(valid.getDate() + (s.validityDays || 61));
+    quote = addQuote({ date: todayISO(), validUntil: isoOf(valid) });
   }
 
-  const sheet = openSheet({
-    title: quote.number,
+  return openSheet({
+    title: `MR # ${quote.mrNo}`,
     full: true,
     wide: true,
-    headRight: `<button class="icon-btn plain" data-add-design aria-label="Add from library">${icon('box', 20)}</button>`,
+    headRight: `<button class="icon-btn plain" data-preview aria-label="Preview document">${icon('reports', 20)}</button>`,
     body: `<div class="qb" data-qb></div>`,
     onMount(root, handle) {
       const host = root.querySelector('[data-qb]');
@@ -50,85 +49,91 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
         <div class="qb-scroll">
           <div data-client></div>
           <div data-lines></div>
+          <div data-ship></div>
           <div data-terms></div>
         </div>
         <div data-foot></div>
       `;
-      const $client = host.querySelector('[data-client]');
-      const $lines = host.querySelector('[data-lines]');
-      const $terms = host.querySelector('[data-terms]');
-      const $foot = host.querySelector('[data-foot]');
+      const region = (n) => host.querySelector(`[data-${n}]`);
 
-      $client.innerHTML = clientBlock(quote);
-      $terms.innerHTML = termsBlock(quote);
-      renderLines();
-      renderFoot();
+      region('client').innerHTML = clientBlock(quote);
+      region('terms').innerHTML = termsBlock(quote);
+      renderLines(); renderShip(); renderFoot();
       bindOnce();
 
-      function renderLines() { $lines.innerHTML = linesBlock(quote); }
-      function renderFoot() { $foot.innerHTML = footBlock(quoteTotals(quote), quote); }
+      function renderLines() { region('lines').innerHTML = linesBlock(quote); }
+      function renderShip() { region('ship').innerHTML = shipBlock(quote); }
+      function renderFoot() { region('foot').innerHTML = footBlock(quoteTotals(quote), quote); }
 
-      function save(changes, { lines = false } = {}) {
-        quote = updateQuote(quote.id, changes);
-        if (lines) renderLines();
-        renderFoot();
+      function setLines(lines) {
+        quote = updateQuote(quote.id, { lines });
+        renderLines(); renderFoot();
       }
-
-      function setLines(lines) { save({ lines }, { lines: true }); }
+      function setShip(shipping) {
+        quote = updateQuote(quote.id, { shipping });
+        renderShip(); renderFoot();
+      }
 
       /* Delegated once on the host, so a repaint of any region never
          stacks a second copy of these handlers. */
       function bindOnce() {
         host.addEventListener('change', (e) => {
           const inp = e.target;
+          const d = inp.dataset || {};
 
-          if (inp.dataset && inp.dataset.f != null) {
-            const path = inp.dataset.f;
+          if (d.f != null) {
             const val = inp.type === 'number' ? Number(inp.value) || 0 : inp.value;
-            if (path.startsWith('client.')) {
-              // The client block is not redrawn — the field already
-              // holds what was typed, and redrawing it would move the
-              // caret out from under the person typing.
-              quote = updateQuote(quote.id, { client: { ...quote.client, [path.slice(7)]: val } });
-              renderFoot();
+            if (d.f.startsWith('client.')) {
+              // The block is not redrawn — the field already holds what
+              // was typed, and redrawing would move the caret out from
+              // under the person typing.
+              quote = updateQuote(quote.id, { client: { ...quote.client, [d.f.slice(7)]: val } });
             } else {
-              save({ [path]: val });
+              quote = updateQuote(quote.id, { [d.f]: val });
             }
+            renderFoot();
             return;
           }
 
-          if (inp.dataset && inp.dataset.l) {
-            const { l: lid, k: key } = inp.dataset;
-            const lines = quote.lines.map((l) => l.id !== lid ? l : {
-              ...l, [key]: inp.type === 'number' ? Number(inp.value) || 0 : inp.value,
+          if (d.l) {
+            const lines = quote.lines.map((l) => l.id !== d.l ? l : {
+              ...l, [d.k]: inp.type === 'number' ? Number(inp.value) || 0 : inp.value,
             });
             quote = updateQuote(quote.id, { lines });
-            // Only this line's amount and the totals move; the line
-            // itself is left alone so the field keeps focus.
             const row = inp.closest('.qline');
             const amt = row && row.querySelector('.qline-amt');
-            const line = quote.lines.find((l) => l.id === lid);
+            const line = quote.lines.find((l) => l.id === d.l);
             if (amt && line) amt.textContent = inr(lineAmount(line));
+            renderFoot();
+            return;
+          }
+
+          if (d.s) {
+            const shipping = quote.shipping.map((x) => x.id !== d.s ? x : {
+              ...x, [d.k]: inp.type === 'number' ? Number(inp.value) || 0 : inp.value,
+            });
+            quote = updateQuote(quote.id, { shipping });
             renderFoot();
           }
         });
 
-        on(host, '[data-kind]', (e, b) => {
-          const { kind, l: lid } = b.dataset;
-          setLines(quote.lines.map((l) => l.id === lid ? { ...l, kind } : l));
-        });
+        on(host, '[data-kind]', (e, b) =>
+          setLines(quote.lines.map((l) => l.id === b.dataset.l ? { ...l, kind: b.dataset.kind } : l)));
         on(host, '[data-rm]', (e, b) => setLines(quote.lines.filter((l) => l.id !== b.dataset.rm)));
         on(host, '[data-add-blank]', () => setLines([...quote.lines, newLine()]));
         on(host, '[data-pick]', () => pickDesign((line) => setLines([...quote.lines, line])));
+
+        on(host, '[data-add-ship]', () => setShip([...quote.shipping, newShipping()]));
+        on(host, '[data-rm-ship]', (e, b) =>
+          setShip(quote.shipping.filter((x) => x.id !== b.dataset.rmShip)));
+
         on(host, '[data-done]', () => { handle.close(); if (onSaved) onSaved(); });
       }
 
-      on(root, '[data-add-design]', () => pickDesign((line) => setLines([...quote.lines, line])));
+      on(root, '[data-preview]', () => openQuoteDoc(quote.id));
     },
     onClose() { if (onSaved) onSaved(); },
   });
-
-  return sheet;
 }
 
 /* ── Blocks ────────────────────────────────────────────────────── */
@@ -138,18 +143,19 @@ function clientBlock(q) {
     <section class="qb-sec">
       <h3 class="qb-h">Client</h3>
       <div class="qb-grid">
-        ${field('Name', `<input class="control" data-f="client.name" value="${esc(q.client.name)}" placeholder="Contact person">`)}
-        ${field('Company', `<input class="control" data-f="client.company" value="${esc(q.client.company)}" placeholder="Firm or site name">`)}
-        ${field('Phone', `<input class="control" data-f="client.phone" value="${esc(q.client.phone)}" inputmode="tel">`)}
-        ${field('GSTIN', `<input class="control" data-f="client.gstin" value="${esc(q.client.gstin)}" autocapitalize="characters">`)}
+        ${field('Client name', `<input class="control" data-f="client.name" value="${esc(q.client.name)}" placeholder="Rahi Construction">`)}
+        ${field('Contact number', `<input class="control" data-f="client.phone" value="${esc(q.client.phone)}" inputmode="tel">`)}
       </div>
-      ${field('Address', `<textarea class="control" data-f="client.address" rows="2" placeholder="Delivery address">${esc(q.client.address)}</textarea>`)}
+      ${field('Shipping address',
+        `<textarea class="control" data-f="client.shippingAddress" rows="2">${esc(q.client.shippingAddress)}</textarea>`)}
 
       <div class="qb-grid">
-        ${field('Quotation date', `<input class="control" type="date" data-f="date" value="${esc(q.date)}">`)}
-        ${field('Valid until', `<input class="control" type="date" data-f="validUntil" value="${esc(q.validUntil)}">`)}
+        ${field('Quoted date', `<input class="control" type="date" data-f="date" value="${esc(q.date)}">`)}
+        ${field('Valid till', `<input class="control" type="date" data-f="validUntil" value="${esc(q.validUntil)}">`)}
       </div>
-      ${field('Subject', `<input class="control" data-f="title" value="${esc(q.title)}" placeholder="Bedroom furniture — Villa 12">`)}
+      ${field('Job name',
+        `<input class="control" data-f="title" value="${esc(q.title)}" placeholder="Table and grill">`,
+        'For your own filing. It does not print on the quotation.')}
     </section>
   `;
 }
@@ -164,8 +170,7 @@ function linesBlock(q) {
           <button class="mini" data-add-blank>${icon('plus', 14)} Blank line</button>
         </div>
       </div>
-
-      ${q.lines.length ? q.lines.map((l, i) => lineRow(l, i)).join('')
+      ${q.lines.length ? q.lines.map(lineRow).join('')
         : `<div class="qb-none">${icon('box', 22)}
              <p>No items yet</p>
              <small>Pick a design from the library, or add a blank line for a one-off.</small>
@@ -180,11 +185,10 @@ function lineRow(l, i) {
     <article class="qline">
       <div class="qline-head">
         <span class="qline-n">${i + 1}</span>
-        ${design && design.photo
-          ? `<img class="qline-img" src="${esc(design.photo)}" alt="">`
-          : `<span class="qline-img ph">${icon('box', 18)}</span>`}
-        <input class="control flush qline-title" data-l="${esc(l.id)}" data-k="title"
-               value="${esc(l.title)}" placeholder="Item description">
+        ${l.photo ? `<img class="qline-img" src="${esc(l.photo)}" alt="">`
+                  : `<span class="qline-img ph">${icon('box', 18)}</span>`}
+        <input class="control flush qline-title" data-l="${esc(l.id)}" data-k="name"
+               value="${esc(l.name)}" placeholder="Name">
         <button class="mini danger" data-rm="${esc(l.id)}" aria-label="Remove line">${icon('trash', 14)}</button>
       </div>
 
@@ -195,62 +199,83 @@ function lineRow(l, i) {
         ${l.designCode ? `<span class="qline-code">${esc(l.designCode)}</span>` : ''}
       </div>
 
-      <div class="qline-dims">
-        <label>W <input class="control mini-in" type="number" data-l="${esc(l.id)}" data-k="w" value="${l.w || ''}"></label>
-        <label>D <input class="control mini-in" type="number" data-l="${esc(l.id)}" data-k="d" value="${l.d || ''}"></label>
-        <label>H <input class="control mini-in" type="number" data-l="${esc(l.id)}" data-k="h" value="${l.h || ''}"></label>
-        ${design && design.finishes.length ? `
+      <textarea class="control qline-spec" data-l="${esc(l.id)}" data-k="description" rows="2"
+                placeholder="Description — material, finish, construction">${esc(l.description)}</textarea>
+
+      <textarea class="control qline-spec" data-l="${esc(l.id)}" data-k="dims" rows="1"
+                placeholder="Dimensions — 38 x 1 x 58&quot;, Dia 8 inch, as per drawing">${esc(l.dims)}</textarea>
+
+      ${design && design.finishes.length ? `
+        <div class="qline-dims">
           <label class="grow">Finish
             <select class="control mini-in" data-l="${esc(l.id)}" data-k="finish">
               ${design.finishes.map((f) => `
                 <option value="${esc(f.name)}" ${f.name === l.finish ? 'selected' : ''}>${esc(f.name)}</option>
               `).join('')}
             </select>
-          </label>` : ''}
-      </div>
-
-      <textarea class="control qline-spec" data-l="${esc(l.id)}" data-k="spec" rows="2"
-                placeholder="Specification that prints under this item">${esc(l.spec)}</textarea>
+          </label>
+        </div>` : ''}
 
       <div class="qline-money">
+        <label>Unit price
+          <input class="control mini-in" type="number" min="0" data-l="${esc(l.id)}" data-k="unitPrice" value="${l.unitPrice}">
+        </label>
         ${l.kind === 'unit' ? `
-          <label>Qty <input class="control mini-in" type="number" min="0" data-l="${esc(l.id)}" data-k="qty" value="${l.qty}"></label>
-          <label>Rate <input class="control mini-in" type="number" min="0" data-l="${esc(l.id)}" data-k="rate" value="${l.rate}"></label>
-        ` : `
-          <label class="grow">Lump sum
-            <input class="control mini-in" type="number" min="0" data-l="${esc(l.id)}" data-k="lump" value="${l.lump}">
-          </label>
-        `}
+          <label>Qty
+            <input class="control mini-in" type="number" min="0" data-l="${esc(l.id)}" data-k="qty" value="${l.qty}">
+          </label>` : `<span class="qline-lump">one lot</span>`}
         <span class="qline-amt num">${inr(lineAmount(l))}</span>
       </div>
     </article>
   `;
 }
 
-function termsBlock(q) {
+/* Shipping is its own short table on the document, added after tax
+   rather than inside it, so it gets its own block here too. */
+function shipBlock(q) {
   return `
     <section class="qb-sec">
-      <h3 class="qb-h">Terms</h3>
-      ${field('Terms &amp; conditions',
-        `<textarea class="control" data-f="terms" rows="6">${esc(q.terms)}</textarea>`,
-        'One per line. These print at the foot of the quotation.')}
-      ${field('Private note',
-        `<textarea class="control" data-f="notes" rows="2" placeholder="Not printed">${esc(q.notes)}</textarea>`)}
+      <div class="qb-sec-head">
+        <h3 class="qb-h">Shipping</h3>
+        <button class="mini" data-add-ship>${icon('plus', 14)} Add row</button>
+      </div>
+      ${(q.shipping || []).map((s) => `
+        <div class="fin-row">
+          <input class="control" data-s="${esc(s.id)}" data-k="label"
+                 value="${esc(s.label)}" placeholder="Delivery City - Vadodara">
+          <input class="control mini-in" type="number" min="0" data-s="${esc(s.id)}" data-k="amount" value="${s.amount}">
+          <button class="mini danger" data-rm-ship="${esc(s.id)}" aria-label="Remove row">${icon('trash', 14)}</button>
+        </div>
+      `).join('')}
+      <p class="qb-hint">Charged at actuals, and added after GST — the document totals it as Sub Total B.</p>
     </section>
   `;
 }
 
-/* The foot stays put while the body scrolls: the total is the
-   figure being negotiated, so it should never be a scroll away. */
+function termsBlock(q) {
+  return `
+    <section class="qb-sec">
+      <h3 class="qb-h">Payment terms</h3>
+      ${field('Printed on this quotation',
+        `<textarea class="control" data-f="paymentTerms" rows="3">${esc(q.paymentTerms)}</textarea>`,
+        'One per line. Usually 50% advance; 70% on larger orders.')}
+      ${field('Private note',
+        `<textarea class="control" data-f="notes" rows="2" placeholder="Not printed">${esc(q.notes)}</textarea>`)}
+      <p class="qb-hint">
+        Terms &amp; conditions, banking and contact details print on every
+        quotation and are set once, in Settings.
+      </p>
+    </section>
+  `;
+}
+
+/* The foot mirrors the document's own ladder, so the number here is
+   the number the client sees, arrived at the same way. */
 function footBlock(t, q) {
   return `
     <footer class="qb-foot">
       <div class="qb-sums">
-        <div class="qb-sum"><span>Subtotal</span><b class="num">${inr(t.sub)}</b></div>
-        <div class="qb-sum">
-          <span>Discount</span>
-          <input class="control mini-in" type="number" min="0" data-f="discount" value="${q.discount || 0}">
-        </div>
+        <div class="qb-sum"><span>Sub - Total</span><b class="num">${inr(t.sub)}</b></div>
         <div class="qb-sum">
           <span>GST</span>
           <span class="qb-gst">
@@ -258,6 +283,8 @@ function footBlock(t, q) {
             <b class="num">${inr(t.gst)}</b>
           </span>
         </div>
+        <div class="qb-sum"><span>Sub Total A</span><b class="num">${inr(t.subA)}</b></div>
+        <div class="qb-sum"><span>Sub Total B — shipping</span><b class="num">${inr(t.subB)}</b></div>
         <div class="qb-sum tot"><span>Total</span><b class="num">${inr(t.total)}</b></div>
       </div>
       <button class="btn" data-done>Done</button>
@@ -265,10 +292,8 @@ function footBlock(t, q) {
   `;
 }
 
-/* ── Picking from the library ──────────────────────────────────
-   A second sheet over the first, so the quote stays exactly where
-   it was underneath. Picking adds the line and closes; the rate
-   and dimensions come along and are editable afterwards. */
+/* ── Picking from the library ────────────────────────────────── */
+
 function pickDesign(onPick) {
   let q = '';
   let cat = 'All';
@@ -295,7 +320,6 @@ function pickDesign(onPick) {
               : emptyState('box', 'Nothing in the library yet', 'Add designs from the Library screen.')}
           </div>
         `;
-
         const input = host.querySelector('[data-q]');
         input.addEventListener('input', () => {
           q = input.value;
@@ -324,7 +348,7 @@ function pickCard(d) {
         <div class="dcard-code">${esc(d.code)}</div>
         <div class="dcard-name">${esc(d.name)}</div>
         <div class="dcard-foot">
-          <span class="dcard-rate num">${inr(d.baseRate)}</span>
+          <span class="dcard-rate num">${inr(d.unitPrice)}</span>
           <span class="pill mut">${esc(d.category)}</span>
         </div>
       </div>

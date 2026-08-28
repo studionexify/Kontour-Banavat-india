@@ -12,6 +12,7 @@ import {
 } from '../quotes.js';
 import { inr, inrShort, dmy, todayISO, fyOf } from '../format.js';
 import { openQuoteSheet } from './quotebuilder.js';
+import { openQuoteDoc } from './quotedoc.js';
 
 let filter = 'all';
 let query = '';
@@ -65,7 +66,7 @@ export async function render(root, ctx) {
     <div class="panel">
       <div class="searchbar">
         <input class="control" type="search" data-q value="${esc(query)}"
-               placeholder="Search client, number, title" aria-label="Search quotations">
+               placeholder="Search client, MR number, job" aria-label="Search quotations">
       </div>
 
       <div class="chipbar">
@@ -85,6 +86,7 @@ export async function render(root, ctx) {
 
   on(root, '[data-new]', () => openQuoteSheet({ onSaved: ctx.refresh }));
   on(root, '[data-filter]', (e, b) => { filter = b.dataset.filter; ctx.refresh(); });
+  on(root, '[data-doc]', (e, b) => { e.stopPropagation(); openQuoteDoc(b.dataset.doc); });
   // The action buttons live inside the card, and both handlers are
   // delegated on the same root — so stopPropagation on the action
   // does not stop this one. The card opens only when the click did
@@ -105,8 +107,8 @@ export async function render(root, ctx) {
 
   on(root, '[data-revise]', async (e, b) => {
     e.stopPropagation();
-    const q = reviseQuote(b.dataset.revise, fyOf(todayISO()));
-    toast(`Revised as ${q.number}`);
+    const q = reviseQuote(b.dataset.revise);
+    toast(`Revised as ${q.mrNo}`);
     openQuoteSheet({ id: q.id, onSaved: ctx.refresh });
   });
 
@@ -141,8 +143,8 @@ function card(q) {
     <article class="qcard reveal" data-open="${esc(q.id)}" tabindex="0" role="button">
       <div class="qcard-top">
         <div>
-          <div class="qcard-num">${esc(q.number)}</div>
-          <div class="qcard-client">${esc(q.client.company || q.client.name || 'Unnamed client')}</div>
+          <div class="qcard-num">MR # ${esc(q.mrNo)}</div>
+          <div class="qcard-client">${esc(q.client.name || 'Unnamed client')}</div>
         </div>
         <span class="pill ${st.tone}">${esc(st.label)}</span>
       </div>
@@ -164,6 +166,7 @@ function card(q) {
           <button class="mini" data-status="declined" data-id="${esc(q.id)}">Declined</button>` : ''}
         ${q.status === 'declined' ? `<button class="mini" data-revise="${esc(q.id)}">Revise</button>` : ''}
         ${q.status === 'accepted' && q.jobCode ? `<span class="mini flat">Job ${esc(q.jobCode)} open</span>` : ''}
+        <button class="mini" data-doc="${esc(q.id)}">${icon('reports', 14)} Preview</button>
         <button class="mini danger" data-del="${esc(q.id)}">${icon('trash', 14)}</button>
       </div>
     </article>
@@ -189,8 +192,8 @@ async function openAccept(id, ctx) {
         tracking payment against the figure the client agreed to.
       </p>
       ${field('Job code',
-        `<input class="control" data-code value="${esc(q.jobCode || '')}" placeholder="B121" autocapitalize="characters">`,
-        'Leave blank to accept without opening a job.')}
+        `<input class="control" data-code value="${esc(q.jobCode || q.mrNo || '')}" autocapitalize="characters">`,
+        'The MR number is already the job code. Clear it to accept without opening a job.')}
       <button class="btn" data-go>Accept and open job</button>
       </div>
     `,

@@ -93,8 +93,8 @@ function quotesHTML(list) {
     return `
       <button class="qrow" data-quote="${esc(q.id)}">
         <div class="qrow-main">
-          <div class="qrow-t">${esc(q.client.company || q.client.name || 'Unnamed client')}</div>
-          <div class="qrow-s">${esc(q.number)}${q.validUntil ? ` · valid to ${esc(dmy(q.validUntil))}` : ''}</div>
+          <div class="qrow-t">${esc(q.client.name || 'Unnamed client')}</div>
+          <div class="qrow-s">MR # ${esc(q.mrNo)}${q.validUntil ? ` · valid to ${esc(dmy(q.validUntil))}` : ''}</div>
         </div>
         <div class="qrow-side">
           <span class="qrow-amt num">${inr(t.total)}</span>
@@ -144,8 +144,8 @@ function activityHTML() {
       html: `
         <button class="qrow" data-quote="${esc(q.id)}">
           <div class="qrow-main">
-            <div class="qrow-t">${esc(q.number)}</div>
-            <div class="qrow-s">${esc(q.client.company || q.client.name || 'Unnamed client')} · quotation</div>
+            <div class="qrow-t">MR # ${esc(q.mrNo)}</div>
+            <div class="qrow-s">${esc(q.client.name || 'Unnamed client')} · quotation</div>
           </div>
           <div class="qrow-side">
             <span class="qrow-amt num">${inrShort(quoteTotals(q).total)}</span>

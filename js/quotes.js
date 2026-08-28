@@ -1,31 +1,43 @@
 /* quotes.js — the Quotation module's data.
  *
- * Kept in its own store, and its own localStorage key, rather than
- * folded into store.js. The ledger records what already happened;
- * a quotation is a proposal about what might. They have different
- * lifecycles, and a quote is edited many times before it means
- * anything, so mixing the two would put draft figures inside the
- * books.
+ * The shapes here are taken from Banavat India's actual quotation,
+ * not invented. A quotation is a document before it is a record, so
+ * the fields are the ones that appear on the page, in the order the
+ * page prints them:
  *
- * The one place they meet is a job code: accepting a quote opens
- * the job and sets its order value, and from that point Phynance
- * tracks payment against the figure quoted here.
+ *   QUOTATION
+ *   Client Name / Contact Number / Shipping Address
+ *   Quoted Date / MR # / Valid till
+ *   Sr.No | Image | Name | Description | Dimensions | Unit Price | Qty | Total
+ *   Payment Terms
+ *   Sub-Total → GST(18%) → Sub Total A
+ *   Shipping rows → Sub Total B
+ *   Sub Total A + Sub Total B = Total
+ *   Banking details · Contact details · Terms & Conditions · Note
  *
- * Shapes below are deliberately close to the printed format —
- * a quotation is a document before it is a record, so the fields
- * are the ones that appear on the page.
+ * Three things the real document taught us, each of which the first
+ * draft of this file got wrong:
+ *
+ * 1. The MR number is the quotation's identity. There is no separate
+ *    quote number — C128 *is* the quotation, and it is the same code
+ *    the ledger already files jobs under. A revision appends a suffix
+ *    (C129-1), so the original a client has seen keeps its meaning.
+ *
+ * 2. Dimensions are prose, not three numbers. Real entries read
+ *    `38 x 1 x 58"`, `Dia 8 inch`, `(8'8" + 20'7.5" + 8'8") x 36" (Ht)`
+ *    and `Small: 550 x 550 x 440 mm  Large: 890 x 890 x 340 mm`. No
+ *    W/D/H triple survives contact with that, so the field is text.
+ *
+ * 3. Shipping is its own short table below the tax, not a line item
+ *    and not a discount. Goods are taxed (Sub Total A); shipping is
+ *    added after (Sub Total B); the two are summed for the Total.
  */
 
 import { uid, ensureJob, updateJob } from './store.js';
 import { todayISO, round2 } from './format.js';
 
-const KEY = 'kontour.quotes.v1';
+const KEY = 'kontour.quotes.v2';
 
-/* ── Status ────────────────────────────────────────────────────
-   A quote moves in one direction, except that a declined or
-   expired one can be revised — which copies it to a new draft
-   rather than reopening the old number. A number that has been
-   sent to a client never changes meaning afterwards. */
 export const STATUS = {
   draft:    { label: 'Draft',    tone: 'mut'  },
   sent:     { label: 'Sent',     tone: 'warn' },
@@ -34,38 +46,85 @@ export const STATUS = {
 };
 
 export const CATEGORIES = [
-  'Sofa', 'Bed', 'Wardrobe', 'Dining', 'Storage',
-  'Table', 'Chair', 'Modular', 'Other',
+  'Seating', 'Table', 'Bed', 'Storage', 'Lighting',
+  'Mirror', 'Metalwork', 'Decor', 'Modular', 'Other',
 ];
 
-/* Two ways a line is priced, and only two. Either it is a countable
-   thing with a rate, or it is a scope with a negotiated figure. */
+/* Every printed line is Unit Price × Quantity — that is the only
+   arithmetic the document does. A negotiated scope is expressed as
+   a single unit at that figure, so it prints identically while the
+   builder can still label it for what it is. */
 export const LINE_KINDS = {
-  unit: { label: 'Per unit', hint: 'Rate × quantity' },
-  lump: { label: 'Lump sum', hint: 'One figure for the scope' },
+  unit: { label: 'Per unit', hint: 'Unit price × quantity' },
+  lump: { label: 'Lump sum', hint: 'One figure for the whole scope' },
 };
+
+/* ── The boilerplate ───────────────────────────────────────────
+   Everything below prints on every quotation and is typed on none
+   of them. It lives in settings so a change to the lead time or a
+   bank detail happens once. Taken verbatim from the current PDFs. */
+
+const COMPANY = {
+  name: 'Banavat India',
+  gstin: '24ABCFB9356M1Z3',
+  address: 'Tarsali, Vadodara - 390009',
+  email: 'banavat.furniture.homedecor@gmail.com',
+  phone: '+91 78598 80461 / +91-9773048267',
+  website: 'www.banavat-india.com',
+};
+
+const BANK = {
+  bank: 'HDFC Bank Ltd.',
+  name: 'Banavat India',
+  account: '50200098923230',
+  ifsc: 'HDFC0001711',
+  branch: 'Waghodia',
+};
+
+/* Payment terms vary between quotations — 50% on most, 70% on some —
+   so this is only the default a new quotation starts from. */
+const PAYMENT_TERMS = [
+  '50% advance payment is required at the time of placing the order.',
+  'The remaining balance must be paid prior to the dispatch of the products.',
+].join('\n');
+
+const TERMS = [
+  'Photographs of the products will be shared for confirmation before shipping.',
+  'The quoted prices include fabrics valued up to ₹800 per meter (if applicable), and additional charges will be added if actual price is increased.',
+  'All products come with a 1.5-year warranty covering manufacturing defects and non-accidental damages.',
+  'Unloading and installation will require coordination with the client. Local labor assistance and lift access may be necessary.',
+  'Custom, made-to-order pieces are subject to a tolerance of ±2 inches.',
+  'Lead time for delivery is 25–30 business days.*',
+  'Please ensure that passage dimensions are compatible with product sizes before placing an order.',
+].join('\n');
+
+const NOTE = `We genuinely do our best to deliver your furniture as quickly and smoothly as possible, and we're committed to making your experience enjoyable and stress-free.
+
+That said, we kindly request that you avoid planning important personal or professional events—such as move-ins, weddings, muhurats, guest visits, photoshoots, board exams, or project handovers—around our delivery timeline. While we provide an estimated delivery window, it is only indicative and may vary due to production or logistical factors. We are unable to promise an exact delivery date or expedite orders to meet specific event deadlines.
+
+We understand delays can be inconvenient, but we are not able to take responsibility for any financial loss or emotional impact caused by unforeseen delays.
+
+Thank you for your understanding and for trusting us with your space.`;
 
 function blank() {
   return {
     quotes: [],
     designs: [],
     settings: {
-      prefix: 'BI',          // quote numbers read BI/2026-27/014
+      mrPrefix: 'C',
       gstRate: 18,
-      validityDays: 15,
-      terms: DEFAULT_TERMS,
+      // Every quotation seen runs two months from the quoted date.
+      validityDays: 61,
+      defaultCity: 'Vadodara',
+      paymentTerms: PAYMENT_TERMS,
+      terms: TERMS,
+      note: NOTE,
+      company: { ...COMPANY },
+      bank: { ...BANK },
       seq: 0,
     },
   };
 }
-
-const DEFAULT_TERMS = [
-  '50% advance along with the confirmed order, balance before dispatch.',
-  'Delivery 4–6 weeks from the date of order confirmation and final drawing approval.',
-  'Prices are exclusive of GST unless stated otherwise.',
-  'Transport and installation charged at actuals unless included above.',
-  'This quotation is valid for the period stated above.',
-].join('\n');
 
 let state = blank();
 const listeners = new Set();
@@ -85,6 +144,8 @@ function read() {
     const s = JSON.parse(raw);
     const out = { ...base, ...s };
     out.settings = { ...base.settings, ...(s.settings || {}) };
+    out.settings.company = { ...base.settings.company, ...((s.settings || {}).company || {}) };
+    out.settings.bank = { ...base.settings.bank, ...((s.settings || {}).bank || {}) };
     for (const k of ['quotes', 'designs']) {
       if (!Array.isArray(out[k])) out[k] = [];
     }
@@ -103,13 +164,8 @@ function write() {
   }
 }
 
-export function load() {
-  state = read();
-  return state;
-}
-
+export function load() { state = read(); return state; }
 export function raw() { return state; }
-
 export function settings() { return state.settings; }
 
 export function updateSettings(changes) {
@@ -118,25 +174,25 @@ export function updateSettings(changes) {
   return state.settings;
 }
 
-/* ── Numbering ─────────────────────────────────────────────────
-   Sequential within a financial year, so BI/2026-27/014 is the
-   fourteenth quote of that year and stays meaningful in a folder
-   sorted by name. The counter only advances when a draft is
-   actually created, so abandoned drafts do not leave holes. */
-export function nextNumber(fy) {
+/* ── MR numbers ────────────────────────────────────────────────
+   C126, C127, C128 — a running series, not restarted per year, and
+   the same code the ledger files the job under. */
+export function nextMrNo() {
   const s = state.settings;
-  const n = String((s.seq || 0) + 1).padStart(3, '0');
-  // fyOf() reads "FY 2026-27" for display; a document number wants
-  // only the years, so BI/2026-27/014 rather than BI/FY 2026-27/014.
-  const years = String(fy || '').replace(/^FY\s*/, '');
-  return `${s.prefix}/${years}/${n}`;
+  return `${s.mrPrefix}${(s.seq || 0) + 1}`;
 }
 
-/* ── Designs ───────────────────────────────────────────────────
-   The library. A design is a thing you make more than once, so it
-   carries what a quote needs to describe and price it: a code, a
-   picture, its default size, the finishes it comes in, and the
-   words that print underneath it. */
+/* A revision keeps the parent's number and adds a suffix, exactly
+   as the current filing does: C129 then C129-1. */
+function nextRevisionOf(mrNo) {
+  const base = String(mrNo).split('-')[0];
+  const used = state.quotes
+    .filter((q) => String(q.mrNo).split('-')[0] === base)
+    .map((q) => Number(String(q.mrNo).split('-')[1]) || 0);
+  return `${base}-${Math.max(0, ...used) + 1}`;
+}
+
+/* ── Designs ─────────────────────────────────────────────────── */
 
 export function designs({ category = null, q = '' } = {}) {
   let list = state.designs.filter((d) => !d.archived);
@@ -144,7 +200,7 @@ export function designs({ category = null, q = '' } = {}) {
   const needle = q.trim().toLowerCase();
   if (needle) {
     list = list.filter((d) =>
-      `${d.code} ${d.name} ${d.category} ${d.spec}`.toLowerCase().includes(needle));
+      `${d.code} ${d.name} ${d.category} ${d.description}`.toLowerCase().includes(needle));
   }
   return list.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
 }
@@ -159,15 +215,14 @@ export function addDesign(input) {
     code: (input.code || '').trim().toUpperCase(),
     name: (input.name || '').trim(),
     category: input.category || 'Other',
-    photo: input.photo || '',        // data URL, downscaled on capture
-    baseRate: Number(input.baseRate) || 0,
-    w: Number(input.w) || 0,
-    h: Number(input.h) || 0,
-    d: Number(input.d) || 0,
+    photo: input.photo || '',
+    unitPrice: Number(input.unitPrice) || 0,
+    // Prose, because the real ones are prose. See the header note.
+    dims: input.dims || '',
     // A finish carries what it does to the price, not a price of its
     // own — so re-rating a design does not mean re-rating every finish.
     finishes: Array.isArray(input.finishes) ? input.finishes : [],
-    spec: input.spec || '',
+    description: input.description || '',
     archived: false,
     createdAt: Date.now(),
   };
@@ -189,14 +244,13 @@ export function deleteDesign(code) {
   write(); emit();
 }
 
-/* The rate a design lands in a quote at, once a finish is chosen. */
-export function designRate(design, finishName) {
+export function designPrice(design, finishName) {
   if (!design) return 0;
   const f = (design.finishes || []).find((x) => x.name === finishName);
-  return round2(design.baseRate + (f ? Number(f.delta) || 0 : 0));
+  return round2(design.unitPrice + (f ? Number(f.delta) || 0 : 0));
 }
 
-/* ── Quotations ────────────────────────────────────────────────── */
+/* ── Quotations ──────────────────────────────────────────────── */
 
 export function quotes({ status = null, q = '' } = {}) {
   let list = state.quotes.slice();
@@ -204,7 +258,7 @@ export function quotes({ status = null, q = '' } = {}) {
   const needle = q.trim().toLowerCase();
   if (needle) {
     list = list.filter((x) =>
-      `${x.number} ${x.client.name} ${x.client.company} ${x.title}`.toLowerCase().includes(needle));
+      `${x.mrNo} ${x.client.name} ${x.title}`.toLowerCase().includes(needle));
   }
   return list.sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.createdAt - a.createdAt);
 }
@@ -218,66 +272,77 @@ export function newLine(input = {}) {
     id: uid('l'),
     kind: input.kind || 'unit',
     designCode: input.designCode || '',
-    title: input.title || '',
-    spec: input.spec || '',
+    name: input.name || '',
+    description: input.description || '',
+    dims: input.dims || '',
     finish: input.finish || '',
-    w: Number(input.w) || 0,
-    h: Number(input.h) || 0,
-    d: Number(input.d) || 0,
+    photo: input.photo || '',
     qty: input.qty == null ? 1 : Number(input.qty),
-    rate: Number(input.rate) || 0,
-    // Only a lump-sum line carries its own figure; a unit line's
-    // amount is always rate × qty, so it is never stored twice.
-    lump: Number(input.lump) || 0,
+    unitPrice: Number(input.unitPrice) || 0,
   };
 }
 
 export function lineFromDesign(design, finish = '') {
+  const chosen = finish || (design.finishes[0] && design.finishes[0].name) || '';
   return newLine({
-    kind: 'unit',
     designCode: design.code,
-    title: design.name || design.code,
-    spec: design.spec,
-    finish: finish || (design.finishes[0] && design.finishes[0].name) || '',
-    w: design.w, h: design.h, d: design.d,
+    name: design.name || design.code,
+    description: design.description,
+    dims: design.dims,
+    finish: chosen,
+    photo: design.photo,
     qty: 1,
-    rate: designRate(design, finish || (design.finishes[0] && design.finishes[0].name) || ''),
+    unitPrice: designPrice(design, chosen),
   });
 }
 
+/* A lump-sum line is one unit at the negotiated figure, so it prints
+   through the same Unit Price × Quantity column as everything else. */
 export function lineAmount(line) {
   if (!line) return 0;
-  return round2(line.kind === 'lump' ? line.lump : (line.qty || 0) * (line.rate || 0));
+  const qty = line.kind === 'lump' ? 1 : (line.qty || 0);
+  return round2(qty * (line.unitPrice || 0));
 }
 
-/* The figures that print at the foot of the page. Discount comes
-   off before GST, because that is how the tax is actually owed. */
+export function newShipping(input = {}) {
+  return {
+    id: uid('s'),
+    label: input.label || '',
+    amount: Number(input.amount) || 0,
+  };
+}
+
+/* The totals ladder, exactly as the document prints it: goods are
+   taxed, shipping is added after tax, and the two subtotals are
+   summed. Shipping is deliberately outside the GST base — that is
+   how these quotations have always been written. */
 export function quoteTotals(quote) {
-  if (!quote) return { sub: 0, discount: 0, taxable: 0, gst: 0, total: 0 };
+  if (!quote) return { sub: 0, gst: 0, subA: 0, subB: 0, total: 0 };
   const sub = round2((quote.lines || []).reduce((t, l) => t + lineAmount(l), 0));
-  const discount = round2(Number(quote.discount) || 0);
-  const taxable = round2(Math.max(0, sub - discount));
-  const gst = round2(taxable * (Number(quote.gstRate) || 0) / 100);
-  return { sub, discount, taxable, gst, total: round2(taxable + gst) };
+  const gst = round2(sub * (Number(quote.gstRate) || 0) / 100);
+  const subA = round2(sub + gst);
+  const subB = round2((quote.shipping || []).reduce((t, s) => t + (Number(s.amount) || 0), 0));
+  return { sub, gst, subA, subB, total: round2(subA + subB) };
 }
 
 export function addQuote(input = {}) {
   const s = state.settings;
   const date = input.date || todayISO();
+  const isRevision = Boolean(input.revisionOf);
   const q = {
     id: uid('q'),
-    number: input.number || nextNumber(input.fy || ''),
+    mrNo: input.mrNo || (isRevision ? nextRevisionOf(input.revisionOf) : nextMrNo()),
     date,
     validUntil: input.validUntil || '',
+    // The internal name for the job. Not printed — the document
+    // identifies itself by MR number and client.
     title: input.title || '',
-    client: {
-      name: '', company: '', address: '', phone: '', email: '', gstin: '',
-      ...(input.client || {}),
-    },
+    client: { name: '', phone: '', shippingAddress: s.defaultCity, ...(input.client || {}) },
     lines: Array.isArray(input.lines) ? input.lines : [],
+    shipping: Array.isArray(input.shipping) ? input.shipping
+      : [newShipping({ label: `Delivery City - ${s.defaultCity}`, amount: 0 })],
     gstRate: input.gstRate == null ? s.gstRate : Number(input.gstRate),
-    discount: Number(input.discount) || 0,
-    terms: input.terms == null ? s.terms : input.terms,
+    paymentTerms: input.paymentTerms == null ? s.paymentTerms : input.paymentTerms,
     notes: input.notes || '',
     status: 'draft',
     jobCode: '',
@@ -285,7 +350,8 @@ export function addQuote(input = {}) {
     updatedAt: Date.now(),
   };
   state.quotes.push(q);
-  state.settings.seq = (state.settings.seq || 0) + 1;
+  // A revision reuses the parent's number, so it must not burn one.
+  if (!isRevision && !input.mrNo) state.settings.seq = (state.settings.seq || 0) + 1;
   write(); emit();
   return q;
 }
@@ -303,35 +369,32 @@ export function deleteQuote(id) {
   write(); emit();
 }
 
-/* A revision is a new number, not an edit. The client has seen the
-   old one, so it stays exactly as it was sent. */
-export function reviseQuote(id, fy) {
+export function reviseQuote(id) {
   const old = getQuote(id);
   if (!old) return null;
   return addQuote({
     ...old,
-    fy,
-    number: nextNumber(fy),
+    revisionOf: old.mrNo,
+    mrNo: '',
     date: todayISO(),
     lines: (old.lines || []).map((l) => ({ ...l, id: uid('l') })),
+    shipping: (old.shipping || []).map((s) => ({ ...s, id: uid('s') })),
     status: 'draft',
   });
 }
 
-/* ── The one link into Phynance ────────────────────────────────
-   Accepting is the moment a proposal becomes money owed, so it is
-   also the moment the job should exist. The job's order value is
-   the quoted total, which is what makes the Jobs screen's
-   Total / Paid / Remaining line up with what the client agreed to.
-
-   Called with no job code it derives one from the quote number's
-   tail, which is the habit already in use — B121, B109. */
+/* ── The link into Phynance ────────────────────────────────────
+   The MR number is already the job code — the ledger has filed
+   entries under B121 and C123 since before this module existed. So
+   accepting does not invent a code, it simply opens the job that
+   the quotation has been named after all along and sets its order
+   value to the quoted total. */
 export function acceptQuote(id, jobCode = '') {
   const q = getQuote(id);
   if (!q) return null;
-  const code = (jobCode || q.jobCode || '').trim().toUpperCase();
+  const code = (jobCode || q.jobCode || q.mrNo || '').trim().toUpperCase();
   if (code) {
-    ensureJob(code, { silent: true, title: q.title, client: q.client.name || q.client.company });
+    ensureJob(code, { silent: true, title: q.title, client: q.client.name });
     updateJob(code, { orderValue: quoteTotals(q).total });
     q.jobCode = code;
   }
@@ -347,21 +410,14 @@ export function setStatus(id, status) {
   return updateQuote(id, { status });
 }
 
-/* ── Dashboard figures ─────────────────────────────────────────
-   What is still out with a client and undecided — the number the
-   Dashboard leads with, because it is the one that is worth
-   chasing this week. */
-export function openQuotes() {
-  return quotes({ status: 'sent' });
-}
+/* ── Dashboard figures ───────────────────────────────────────── */
+
+export function openQuotes() { return quotes({ status: 'sent' }); }
 
 export function pipelineValue() {
   return round2(openQuotes().reduce((t, q) => t + quoteTotals(q).total, 0));
 }
 
 export function recentQuotes(limit = 5) {
-  return state.quotes
-    .slice()
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .slice(0, limit);
+  return state.quotes.slice().sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
 }
