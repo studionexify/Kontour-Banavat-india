@@ -2,9 +2,9 @@
    credentials, and backup. Opened from the gear on Home. */
 
 import { icon } from '../icons.js';
-import { settings as qSettings, updateSettings as updateQSettings, importHistory, quotes as allQuotes, ownerOrg } from '../quotes.js';
+import { settings as qSettings, updateSettings as updateQSettings, importHistory, decryptHistory, quotes as allQuotes, ownerOrg } from '../quotes.js';
 import { syncQuotes, lastSyncError as qsError, online as qsOnline } from '../quotesync.js';
-import { openSheet, on, esc, toast, confirmSheet, emptyState } from '../ui.js';
+import { openSheet, on, esc, toast, confirmSheet, emptyState, field } from '../ui.js';
 import {
   accounts, addAccount, updateAccount, deleteAccount, balance,
   categories, addCategory, updateCategory, deleteCategory,
@@ -1298,20 +1298,64 @@ async function logoSheet(ctx, back) {
 
 
 /* ── Quotation history ─────────────────────────────────────────
-   A one-time backfill of what lived in the spreadsheet, read from a
-   file you pick rather than one shipped with the app — the records
-   carry client names, phone numbers and prices, and anything served
-   next to the app is readable by anyone who opens it.
+   The backfill of what lived in the spreadsheet. Two ways in, both
+   ending in the same place.
 
-   Safe to run more than once: it matches on MR number and adds only
-   what is missing, so nothing edited here is ever overwritten. */
+   The bundled copy is encrypted, because the records carry client
+   names, phone numbers and prices and the app is served publicly —
+   ciphertext can sit next to the app, the passphrase cannot. It is
+   decrypted in the browser, so the readable data never crosses the
+   network and never exists on any server but your own.
+
+   Safe to run more than once either way: matching is on number,
+   client, date and figures together, so nothing already here is
+   duplicated and nothing edited here is overwritten. */
 async function historySheet(ctx, back) {
   openSheet({
     title: 'Quotation history',
-    body: `<div class="sheet-body" data-hist></div>`,
+    body: `<div class="sheet-body" data-hist></div>
+           <input type="file" accept="application/json,.json" data-file hidden>`,
     onMount(root) {
       const host = root.querySelector('[data-hist]');
+      const input = root.querySelector('[data-file]');
+
+      /* Bound once. paint() only rewrites the panel above them, so
+         nothing here is ever wired twice — two live handlers would
+         mean two imports racing on the same click. */
+      on(root, '[data-decrypt]', async (e, b) => {
+        const pass = root.querySelector('[data-pass]').value.trim();
+        if (!pass) { toast('Enter the passphrase', 'err'); return; }
+        b.disabled = true;
+        b.textContent = 'Unlocking…';
+        try {
+          done(await importHistory(await decryptHistory(pass)));
+        } catch (err) {
+          console.error('[kontour] import failed', err);
+          paint({ error: err.message || 'That file could not be opened' });
+        }
+        b.disabled = false;
+        b.textContent = 'Unlock and import';
+      });
+
+      on(root, '[data-pick]', () => input.click());
+      input.onchange = async () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        try {
+          done(await importHistory(JSON.parse(await file.text())));
+        } catch (err) {
+          console.error('[kontour] import failed', err);
+          paint({ error: err.message || 'That file could not be read' });
+        }
+        input.value = '';
+      };
+
       paint();
+
+      function done(r) {
+        toast(r.added ? `${r.added} quotations imported` : 'Nothing new to import');
+        paint(r);
+      }
 
       function paint(result) {
         const n = allQuotes().length;
@@ -1321,37 +1365,28 @@ async function historySheet(ctx, back) {
             the older BOQ-headed documents and the current ones alike — as
             records you can open, revise and reprint.
           </p>
+
           ${result ? `<div class="snip-none" style="border-style:solid">
-              ${icon('check', 20)}
-              <span>${result.added} added${result.skipped ? `, ${result.skipped} already here` : ''}</span>
+              ${icon(result.error ? 'alert' : 'check', 20)}
+              <span>${esc(result.error
+                || `${result.added} added${result.skipped ? `, ${result.skipped} already here` : ''}`)}</span>
             </div>` : ''}
+
+          <p class="tray-lbl">From the bundled history</p>
+          ${field('Passphrase',
+            `<input class="control" type="password" data-pass autocomplete="off"
+                    placeholder="four words and a number">`,
+            'Sent to you separately. The file ships encrypted and is opened on this device.')}
+          <button class="btn" data-decrypt>Unlock and import</button>
+
+          <p class="tray-lbl sp">Or from a file</p>
+          <button class="btn sec sm" data-pick>Choose a JSON file</button>
+
           <p class="qb-hint">
             ${n ? `${n} quotation${n === 1 ? '' : 's'} on file.` : 'Nothing imported yet.'}
-            Matching is by MR number, so running this again only fills gaps.
-            The file stays on this device.
+            Running this again only fills gaps.
           </p>
-          <input type="file" accept="application/json,.json" data-file hidden>
-          <button class="btn" data-pick>${n ? 'Import anything missing' : 'Choose the history file'}</button>
         `;
-
-        const input = host.querySelector('[data-file]');
-        on(host, '[data-pick]', () => input.click());
-
-        input.onchange = async () => {
-          const file = input.files && input.files[0];
-          if (!file) return;
-          try {
-            const rows = JSON.parse(await file.text());
-            const r = await importHistory(rows);
-            toast(r.added ? `${r.added} quotations imported` : 'Nothing new to import');
-            paint(r);
-            if (back) back();
-          } catch (err) {
-            console.error('[kontour] import failed', err);
-            toast(err.message || 'That file could not be read', 'err');
-            paint();
-          }
-        };
       }
     },
   });

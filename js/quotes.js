@@ -593,6 +593,38 @@ export function setStatus(id, status) {
    Numbers the sheet reused for different clients come in flagged
    rather than merged or dropped — the data is real either way, and
    only you can say which one should keep the number. */
+/* The bundled history, decrypted here rather than on a server.
+   The ciphertext ships with the app because ciphertext is safe to
+   publish; the passphrase never does. AES-256-GCM authenticates as
+   well as encrypts, so a tampered blob fails to open rather than
+   opening to something someone else chose. */
+export async function decryptHistory(passphrase, url = 'data/quotations.enc.json') {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Could not read the history file (${res.status})`);
+  const blob = await res.json();
+
+  const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const enc = new TextEncoder();
+
+  const base = await crypto.subtle.importKey(
+    'raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: b64(blob.kdf.salt),
+      iterations: blob.kdf.iterations, hash: blob.kdf.hash },
+    base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+
+  let plain;
+  try {
+    plain = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: b64(blob.iv) }, key, b64(blob.data));
+  } catch (e) {
+    // GCM refuses on a wrong key and on a tampered blob alike, and
+    // cannot tell you which — so neither can this message.
+    throw new Error('That passphrase does not open the file');
+  }
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
 export async function importHistory(rows) {
   if (typeof rows === 'string') {
     const res = await fetch(rows, { cache: 'no-store' });
