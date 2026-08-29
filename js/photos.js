@@ -4,6 +4,7 @@
 
 import { photos } from './db.js';
 import { uid } from './store.js';
+import { imageSrc } from './format.js';
 
 const MAX_EDGE = 1600;     // plenty for a GST bill, small enough to store many
 const QUALITY = 0.82;
@@ -113,4 +114,15 @@ export async function toBase64(blob) {
   return btoa(bin);
 }
 
-export { photos };
+/* A picked file, ready to be written straight onto a record: shrunk,
+   re-encoded, and carrying the data: prefix an <img> needs. The three
+   pictures the app holds in a record rather than in the photo store —
+   the logo, a design's photograph, a quotation line's image — all come
+   through here, so none of them can be saved as something the browser
+   will not draw. */
+export async function toDataUrl(file) {
+  const { blob } = await shrink(file);
+  return imageSrc(await toBase64(blob));
+}
+
+export { photos, imageSrc };

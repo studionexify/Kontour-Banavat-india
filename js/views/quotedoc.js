@@ -14,8 +14,8 @@
 
 import { icon } from '../icons.js';
 import { openSheet, esc, on, toast } from '../ui.js';
-import { getQuote, quoteTotals, lineAmount, settings, renderTerms } from '../quotes.js';
-import { inr, dmy } from '../format.js';
+import { getQuote, quoteTotals, lineAmount, linePhoto, settings, renderTerms } from '../quotes.js';
+import { inr, dmy, imageSrc } from '../format.js';
 import { markHTML, hasLogo } from '../brand.js';
 
 export function openQuoteDoc(id) {
@@ -97,7 +97,7 @@ export function docHTML(q) {
           ${lines.length ? lines.map((l, i) => `
             <tr>
               <td class="c-sr">${i + 1}</td>
-              <td class="c-img">${l.photo ? `<img src="${esc(l.photo)}" alt="">` : ''}</td>
+              <td class="c-img">${linePhoto(l) ? `<img src="${esc(imageSrc(linePhoto(l)))}" alt="">` : ''}</td>
               <td class="c-name">${esc(l.name)}${l.finish ? `<span class="doc-fin">${esc(l.finish)}</span>` : ''}</td>
               <td class="c-desc">${multiline(l.description)}</td>
               <td class="c-dim">${multiline(l.dims)}</td>

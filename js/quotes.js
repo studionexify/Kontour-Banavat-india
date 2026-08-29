@@ -383,7 +383,7 @@ export function newLine(input = {}) {
     description: input.description || '',
     dims: input.dims || '',
     finish: input.finish || '',
-    photo: input.photo || '',
+    photo: input.photo || input.image || '',
     qty: input.qty == null ? 1 : Number(input.qty),
     unitPrice: Number(input.unitPrice) || 0,
   };
@@ -401,6 +401,32 @@ export function lineFromDesign(design, finish = '') {
     qty: 1,
     unitPrice: designPrice(design, chosen),
   });
+}
+
+/* The picture that prints in the Image column. A line usually carries
+   its own — taken from the library design it came from, or added by
+   hand — but an imported line has none, because the sheet's images do
+   not survive being read as text. Where such a line names a design
+   that is in the library, the library's photograph stands in, so
+   filling the library retrofits pictures onto the history rather than
+   leaving 98 quotations with an empty column forever. */
+export function linePhoto(line) {
+  if (!line) return '';
+  if (line.photo) return line.photo;
+  const d = line.designCode ? getDesign(line.designCode)
+    // An imported line has no code — the sheet named the piece, it did
+    // not reference the library — so fall back to the name. Matching at
+    // render time rather than at import means a design photographed
+    // next month still shows on a quotation filed last year.
+    : matchByName(line.name);
+  return (d && d.photo) || '';
+}
+
+function matchByName(name) {
+  const needle = String(name || '').trim().toLowerCase();
+  if (!needle) return null;
+  return state.designs.find((d) => !d.deletedAt && !d.archived
+    && (d.name || '').trim().toLowerCase() === needle) || null;
 }
 
 /* A lump-sum line is one unit at the negotiated figure, so it prints

@@ -17,10 +17,10 @@ import { icon } from '../icons.js';
 import { openSheet, on, esc, toast, field, emptyState } from '../ui.js';
 import {
   getQuote, addQuote, updateQuote, newLine, newShipping, lineAmount, quoteTotals,
-  LINE_KINDS, designs, getDesign, lineFromDesign, settings, mrNoTaken,
+  LINE_KINDS, designs, getDesign, lineFromDesign, linePhoto, settings, mrNoTaken,
   defaultValidUntil,
 } from '../quotes.js';
-import { pickImage, shrink, toBase64 } from '../photos.js';
+import { pickImage, toDataUrl, imageSrc } from '../photos.js';
 import { inr, todayISO } from '../format.js';
 import { openQuoteDoc } from './quotedoc.js';
 
@@ -159,7 +159,7 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
         on(host, '[data-line-img]', async (e, b) => {
           const files = await pickImage({ camera: false });
           if (!files || !files[0]) return;
-          const photo = await toBase64(await shrink(files[0]));
+          const photo = await toDataUrl(files[0]);
           setLines(quote.lines.map((l) => l.id === b.dataset.lineImg ? { ...l, photo } : l));
         });
 
@@ -233,14 +233,17 @@ function linesBlock(q) {
 
 function lineRow(l, i) {
   const design = l.designCode ? getDesign(l.designCode) : null;
+  // What the document will print here — the line's own picture, or
+  // the library's for the design it came from.
+  const shown = linePhoto(l);
   return `
     <article class="qline">
       <div class="qline-head">
         <span class="qline-n">${i + 1}</span>
         <span class="qline-imgwrap">
-          <button class="qline-img ${l.photo ? 'has' : ''}" data-line-img="${esc(l.id)}"
+          <button class="qline-img ${shown ? 'has' : ''}" data-line-img="${esc(l.id)}"
                   aria-label="${l.photo ? 'Replace image' : 'Add image'}">
-            ${l.photo ? `<img src="${esc(l.photo)}" alt="">` : icon('camera', 16)}
+            ${shown ? `<img src="${esc(imageSrc(shown))}" alt="">` : icon('camera', 16)}
           </button>
           ${l.photo ? `<button class="qline-img-x" data-line-img-rm="${esc(l.id)}" aria-label="Remove image">×</button>` : ''}
         </span>
@@ -438,7 +441,7 @@ function pickDesign(onPick) {
 function pickCard(d) {
   return `
     <button class="dcard" data-take="${esc(d.code)}">
-      ${d.photo ? `<img class="dcard-img" src="${esc(d.photo)}" alt="">`
+      ${d.photo ? `<img class="dcard-img" src="${esc(imageSrc(d.photo))}" alt="">`
                 : `<span class="dcard-img ph">${icon('box', 26)}</span>`}
       <div class="dcard-body">
         <div class="dcard-code">${esc(d.code)}</div>

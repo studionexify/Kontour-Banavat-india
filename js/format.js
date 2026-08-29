@@ -136,3 +136,16 @@ export function ago(ts) {
   if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
   return dayLabel(isoOf(new Date(ts)));
 }
+
+/* An image held on a record, as something an <img> can actually show.
+   Pictures are kept as data URLs, but older records — and any history
+   file written before that was settled — hold bare base64 with no
+   prefix, which a browser renders as a broken image rather than an
+   error you would notice. Both come back as a usable src here, so one
+   normalisation covers every surface that draws one. */
+export function imageSrc(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  if (/^(data:|https?:|blob:)/i.test(s)) return s;
+  return `data:image/jpeg;base64,${s}`;
+}

@@ -13,7 +13,7 @@ import {
   importAll, wipe, entries,
 } from '../store.js';
 import { inr } from '../format.js';
-import { photos, humanBytes, pickImage, shrink, toBase64 } from '../photos.js';
+import { photos, humanBytes, pickImage, toDataUrl, imageSrc } from '../photos.js';
 import { exportBackup, readBackupFile } from '../export.js';
 import { status, connectDrive, disconnectDrive, driveConfigured, syncPending, sharedDrive } from '../sync.js';
 import { cloudConfigured } from '../config.js';
@@ -1258,7 +1258,7 @@ async function logoSheet(ctx, back) {
       paint();
 
       function paint() {
-        const src = qSettings().logo || '';
+        const src = imageSrc(qSettings().logo || '');
         host.innerHTML = `
           <p class="sheet-lede">
             Shown at the head of every quotation, on the sign-in and lock
@@ -1278,8 +1278,7 @@ async function logoSheet(ctx, back) {
         on(host, '[data-pick]', async () => {
           const files = await pickImage({ camera: false });
           if (!files || !files[0]) return;
-          const blob = await shrink(files[0]);
-          updateQSettings({ logo: await toBase64(blob) });
+          updateQSettings({ logo: await toDataUrl(files[0]) });
           toast('Logo saved');
           paint();
           if (back) back();
@@ -1390,6 +1389,15 @@ async function historySheet(ctx, back) {
           <p class="qb-hint">
             ${n ? `${n} quotation${n === 1 ? '' : 's'} on file.` : 'Nothing imported yet.'}
             Running this again only fills gaps.
+          </p>
+
+          <p class="qb-hint">
+            The spreadsheet's Image column does not survive being read as
+            text, so imported quotations arrive without pictures. A line
+            takes the photograph of the design library item of the same
+            name, so photographing the library fills the column across the
+            whole history at once; a one-off still takes its own picture
+            from the camera button on the line.
           </p>
         `;
       }

@@ -13,7 +13,7 @@
 import { icon } from '../icons.js';
 import { on, esc, emptyState, toast, openSheet, field, confirmSheet } from '../ui.js';
 import { designs, getDesign, addDesign, updateDesign, deleteDesign, CATEGORIES } from '../quotes.js';
-import { pickImage, shrink, toBase64 } from '../photos.js';
+import { pickImage, toDataUrl, imageSrc } from '../photos.js';
 import { inr } from '../format.js';
 
 let cat = 'All';
@@ -67,7 +67,7 @@ export async function render(root, ctx) {
 function card(d) {
   return `
     <button class="dcard reveal" data-edit="${esc(d.code)}">
-      ${d.photo ? `<img class="dcard-img" src="${esc(d.photo)}" alt="">`
+      ${d.photo ? `<img class="dcard-img" src="${esc(imageSrc(d.photo))}" alt="">`
                 : `<span class="dcard-img ph">${icon('box', 26)}</span>`}
       <div class="dcard-body">
         <div class="dcard-code">${esc(d.code)}</div>
@@ -132,7 +132,7 @@ export function openDesignSheet({ code = '', onSaved } = {}) {
         host.innerHTML = `
           <section class="qb-sec">
             <button class="dphoto ${draft.photo ? 'has' : ''}" data-photo>
-              ${draft.photo ? `<img src="${esc(draft.photo)}" alt="">`
+              ${draft.photo ? `<img src="${esc(imageSrc(draft.photo))}" alt="">`
                             : `<span>${icon('camera', 26)}<small>Add a photograph</small></span>`}
             </button>
 
@@ -179,9 +179,9 @@ export function openDesignSheet({ code = '', onSaved } = {}) {
         on(host, '[data-photo]', async () => {
           const files = await pickImage({ camera: true });
           if (!files || !files[0]) return;
-          const blob = await shrink(files[0]);
+          const photo = await toDataUrl(files[0]);
           readForm();
-          draft.photo = await toBase64(blob);
+          draft.photo = photo;
           paint();
         });
 

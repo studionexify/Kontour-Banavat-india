@@ -9,6 +9,7 @@
 
 import { settings } from './quotes.js';
 import { esc } from './ui.js';
+import { imageSrc } from './format.js';
 
 export function logo() {
   try { return settings().logo || ''; } catch (e) { return ''; }
@@ -19,7 +20,7 @@ export function hasLogo() { return Boolean(logo()); }
 /* `alt` is empty on purpose wherever a text label sits beside the
    mark — a screen reader should hear the name once, not twice. */
 export function markHTML({ size = 34, className = 'brand-mark', alt = '' } = {}) {
-  const src = logo();
+  const src = imageSrc(logo());
   if (!src) return '';
   return `<img class="${esc(className)}" src="${esc(src)}" alt="${esc(alt)}"
                style="width:${size}px;height:${size}px" width="${size}" height="${size}">`;
