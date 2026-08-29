@@ -598,30 +598,41 @@ export function setStatus(id, status) {
    publish; the passphrase never does. AES-256-GCM authenticates as
    well as encrypts, so a tampered blob fails to open rather than
    opening to something someone else chose. */
-export async function decryptHistory(passphrase, url = 'data/quotations.enc.json') {
+export async function decryptHistory(passphrase, onProgress, url = 'data/quotations.enc.json') {
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Could not read the history file (${res.status})`);
   const blob = await res.json();
 
-  const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-  const enc = new TextEncoder();
-
-  const base = await crypto.subtle.importKey(
-    'raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
-  const key = await crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: b64(blob.kdf.salt),
-      iterations: blob.kdf.iterations, hash: blob.kdf.hash },
-    base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const b64 = (s2) => Uint8Array.from(atob(s2), (c) => c.charCodeAt(0));
+  const salt = b64(blob.kdf.salt);
+  const iv = b64(blob.iv);
+  const data = b64(blob.data);
+  const pass = new TextEncoder().encode(passphrase);
 
   let plain;
-  try {
-    plain = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: b64(blob.iv) }, key, b64(blob.data));
-  } catch (e) {
-    // GCM refuses on a wrong key and on a tampered blob alike, and
-    // cannot tell you which — so neither can this message.
-    throw new Error('That passphrase does not open the file');
+  if (globalThis.crypto && crypto.subtle && crypto.subtle.importKey) {
+    const base = await crypto.subtle.importKey(
+      'raw', pass, 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: blob.kdf.iterations, hash: blob.kdf.hash },
+      base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    try {
+      plain = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data));
+    } catch (e) {
+      // GCM refuses on a wrong key and on a tampered blob alike, and
+      // cannot tell you which — so neither can this message.
+      throw new Error('That passphrase does not open the file');
+    }
+  } else {
+    // No crypto.subtle: the app is being read over plain http, or from
+    // a frame with an opaque origin. Do it the slow way rather than
+    // leave the history shut. Takes a few seconds.
+    const { pbkdf2, gcmDecrypt } = await import('./softcrypto.js');
+    const key = pbkdf2(pass, salt, blob.kdf.iterations, 32, onProgress);
+    plain = gcmDecrypt(key, iv, data);
+    if (!plain) throw new Error('That passphrase does not open the file');
   }
+
   return JSON.parse(new TextDecoder().decode(plain));
 }
 

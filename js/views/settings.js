@@ -1326,7 +1326,12 @@ async function historySheet(ctx, back) {
         const pass = root.querySelector('[data-pass]').value.trim();
         if (!pass) { toast('Enter the passphrase', 'err'); return; }
         b.disabled = true;
-        b.textContent = 'Unlocking…';
+        /* Without crypto.subtle this runs in plain JavaScript on this
+           thread and takes a few seconds, so say so and let the browser
+           draw the message before the grind starts. */
+        const slow = !(globalThis.crypto && crypto.subtle && crypto.subtle.importKey);
+        b.textContent = slow ? 'Unlocking… this takes a few seconds' : 'Unlocking…';
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         try {
           done(await importHistory(await decryptHistory(pass)));
         } catch (err) {
