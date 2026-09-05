@@ -15,8 +15,9 @@
 import { icon } from '../icons.js';
 import { on, esc, emptyState, toast, confirmSheet, field, openSheet, haptic } from '../ui.js';
 import {
-  quoteFamilies, quoteTotals, STATUS, setStatus, deleteQuote, getQuote,
+  quoteFamilies, quoteTotals, quoteName, STATUS, setStatus, deleteQuote, getQuote,
   reviseQuote, duplicateQuote, pipelineValue, archiveQuote, unarchiveQuote, isArchived,
+  jobValueFor,
 } from '../quotes.js';
 import { inr, dmy, fyOf } from '../format.js';
 import { openQuoteSheet } from './quotebuilder.js';
@@ -28,9 +29,10 @@ let query = '';
 let fy = 'all';
 let archived = false;
 
-/* Opening one quotation straight from the Dashboard. */
+/* Opening one quotation straight from the Dashboard — the same
+   read-only view a card in this list opens to. */
 export function openById(id, ctx) {
-  openQuoteSheet({ id, onSaved: ctx.refresh });
+  openQuoteDoc(id, { onSaved: ctx.refresh });
 }
 
 export function setFilter(next) {
@@ -142,11 +144,13 @@ export async function render(root, ctx) {
     openActions(b.dataset.more, ctx);
   });
 
-  // The card itself opens the editor — but only when the tap did not
-  // land on one of the actions sitting inside it.
+  // The card opens the document as it stands — the same view.js is
+  // for. Editing is a deliberate second step, from there or from the
+  // sheet below, never the first tap: a card in a scrolling list is
+  // too easy to hit by accident to drop someone into an edit.
   on(root, '[data-open]', (e, b) => {
     if (e.target.closest('.qcard-acts') || e.target.closest('.qcard-hist')) return;
-    openQuoteSheet({ id: b.dataset.open, onSaved: ctx.refresh });
+    openQuoteDoc(b.dataset.open, { onSaved: ctx.refresh });
   });
 
   const q = root.querySelector('[data-q]');
@@ -167,24 +171,31 @@ function card({ head: q, family, revisions }) {
   const st = STATUS[q.status];
   const lines = (q.lines || []).length;
   const older = family.filter((x) => x.id !== q.id);
+  const jobValue = q.status === 'accepted' ? jobValueFor(q) : t.total;
+  const adjusted = q.approvedTotal != null;
 
   return `
     <article class="qcard reveal" data-open="${esc(q.id)}" tabindex="0" role="button">
       <div class="qcard-top">
         <div class="qcard-id">
-          <div class="qcard-client">${esc(q.client.name || 'Unnamed client')}</div>
+          <div class="qcard-client">${esc(quoteName(q))}</div>
           <div class="qcard-line">
-            <span class="qcard-mr">${esc(q.mrNo)}</span>
-            <span class="qcard-dot"></span>${esc(dmy(q.date))}
+            ${esc(dmy(q.date))}
             <span class="qcard-dot"></span>${lines} item${lines === 1 ? '' : 's'}
             ${revisions > 1 ? `<span class="qcard-dot"></span>rev ${revisions}` : ''}
           </div>
         </div>
         <div class="qcard-money">
-          <div class="qcard-amt num">${inr(t.total)}</div>
+          <div class="qcard-amt num">${inr(jobValue)}</div>
           <span class="pill ${st.tone}">${esc(st.label)}</span>
         </div>
       </div>
+
+      ${adjusted || q.jobExcludesGst ? `
+        <div class="qcard-flags">
+          ${adjusted ? `<span class="pill mut sm">Approved at ${inr(jobValue)}, quoted ${inr(t.total)}</span>` : ''}
+          ${q.jobExcludesGst ? `<span class="pill mut sm">Job value excl. GST</span>` : ''}
+        </div>` : ''}
 
       ${q.title ? `<p class="qcard-title">${esc(q.title)}</p>` : ''}
 
@@ -253,7 +264,7 @@ function openActions(id, ctx) {
     rows.push(['sent', 'check', 'Mark as sent', 'It is with the client now']);
   }
   if (!gone && (q.status === 'sent' || q.status === 'draft')) {
-    rows.push(['accept', 'check', 'Client approved', 'Opens the job and archives this']);
+    rows.push(['accept', 'check', 'Client approved', 'Opens the job in Phynance']);
     rows.push(['decline', 'close', 'Client declined', 'Moves it to the archive']);
   }
   if (gone) {
@@ -268,7 +279,7 @@ function openActions(id, ctx) {
   rows.push(['del', 'trash', 'Delete', '']);
 
   const h = openSheet({
-    title: `MR # ${q.mrNo}`,
+    title: quoteName(q),
     body: `
       <div class="sheet-body">
         <div class="actlist">
@@ -323,37 +334,63 @@ function openActions(id, ctx) {
   });
 }
 
-/* Accepting is the one action that reaches into Phynance, so it
-   asks for the job code rather than inventing one. */
+/* Accepting is the one action that reaches into Phynance, and one
+   form covers the three ways a quotation is actually approved:
+   as quoted, at a figure the client negotiated to, or with GST kept
+   out of the job's own value. The amount field is what tells the
+   two apart — editing it away from the quoted total is what makes a
+   sub-quotation, not a separate button, because that is the one
+   piece of information that decides it. */
 async function openAccept(id, ctx) {
   const { acceptQuote, quoteTotals: totals, baseNo } = await import('../quotes.js');
   const q = getQuote(id);
   if (!q) return;
   const t = totals(q);
+  let includeGst = true;
 
-  openSheet({
-    title: 'Quotation accepted',
+  const h = openSheet({
+    title: 'Quotation approved',
     body: `
       <div class="sheet-body">
-      <p class="sheet-lede">
-        This opens the job and sets its order value to
-        <strong class="num">${inr(t.total)}</strong>, so Phynance starts
-        tracking payment against the figure the client agreed to. The
-        quotation moves to the archive.
-      </p>
+      <p class="sheet-lede">This opens the job in Phynance and moves the quotation to the archive.</p>
+
       ${field('Job code',
         `<input class="control" data-code value="${esc(q.jobCode || baseNo(q.mrNo) || '')}" autocapitalize="characters">`)}
-      <button class="btn" data-go>Accept and open job</button>
+
+      ${field('Approved amount',
+        `<input class="control num" data-amount type="number" inputmode="decimal" value="${t.total}">`,
+        'Leave as quoted, or change it to what the client actually agreed — that writes a sub-quotation carrying this figure rather than editing the one you sent.')}
+
+      <label class="switchrow" data-gst-row>
+        <div><div class="sw-t">Count GST in the job value</div>
+          <div class="sw-s">Off books the job at ${inr(t.sub)} — the pre-tax figure — and the quotation shows it was approved that way.</div></div>
+        <div class="switch on" data-gst-switch></div>
+      </label>
+
+      <button class="btn" data-go>Approve and open job</button>
       </div>
     `,
-    onMount(sheet, h) {
+    onMount(sheet, hdl) {
+      const amountEl = sheet.querySelector('[data-amount]');
+      const swEl = sheet.querySelector('[data-gst-switch]');
+
+      on(sheet, '[data-gst-row]', () => {
+        includeGst = !includeGst;
+        swEl.classList.toggle('on', includeGst);
+      });
+
       sheet.querySelector('[data-go]').onclick = () => {
         const code = sheet.querySelector('[data-code]').value.trim().toUpperCase();
-        acceptQuote(id, code);
-        toast(code ? `Accepted · job ${code} open` : 'Accepted');
-        h.close();
+        const approvedTotal = Number(amountEl.value) || 0;
+        const result = acceptQuote(id, { jobCode: code, approvedTotal, excludeGst: !includeGst });
+        const differed = result && result.approvedTotal != null;
+        toast(code
+          ? `Approved${differed ? ` at ${inr(approvedTotal)}` : ''} · job ${code} open`
+          : 'Approved');
+        hdl.close();
         ctx.refresh();
       };
     },
   });
+  return h;
 }

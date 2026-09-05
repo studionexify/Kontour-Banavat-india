@@ -1,12 +1,18 @@
 /* views/quotedoc.js — the quotation as the client receives it.
  *
  * A faithful rendering of the printed document: the same header
- * pairs, the same eight columns, the same totals ladder with
- * shipping added after tax, and the same boilerplate underneath.
+ * pairs, the same columns, the same totals ladder with shipping
+ * added after tax, and the same boilerplate underneath.
  *
  * This is the artefact the whole module exists to produce, so it is
  * built from the stored quote alone — if a figure is wrong here it
  * is wrong in the data, not in a second copy of the arithmetic.
+ *
+ * It is also where a saved quotation is looked at: read-only, the
+ * way the client sees it, with one Edit button rather than every
+ * field standing open. Tapping a card in the list lands here, not
+ * in the builder — a card in a scrolling list is too easy to hit by
+ * accident to drop someone into an edit form.
  *
  * Printing goes through the browser. `@media print` in the
  * stylesheet drops the app around it and leaves the page.
@@ -15,19 +21,25 @@
 import { icon } from '../icons.js';
 import { openSheet, esc, on, toast, haptic } from '../ui.js';
 import { shareQuotePdf, downloadQuotePdf } from '../quotepdf.js';
-import { getQuote, quoteTotals, lineAmount, settings, renderTerms } from '../quotes.js';
+import {
+  getQuote, quoteTotals, quoteName, lineAmount, lineGst, settings, renderTerms, jobValueFor,
+} from '../quotes.js';
 import { inr, dmy } from '../format.js';
 import { markHTML, hasLogo } from '../brand.js';
 
-export function openQuoteDoc(id) {
+export function openQuoteDoc(id, { onSaved } = {}) {
   const q = getQuote(id);
   if (!q) return;
 
-  openSheet({
-    title: `MR # ${q.mrNo}`,
+  const h = openSheet({
+    title: quoteName(q),
     full: true,
     wide: true,
-    headRight: `<button class="icon-btn plain" data-print aria-label="Print">${icon('reports', 20)}</button>`,
+    headRight: `
+      <div class="sheet-head-acts">
+        <button class="icon-btn plain" data-print aria-label="Print">${icon('reports', 20)}</button>
+        <button class="icon-btn plain" data-edit aria-label="Edit">${icon('edit', 19)}</button>
+      </div>`,
     body: `
       <div class="qb">
         <div class="qb-scroll doc-scroll">${docHTML(q)}</div>
@@ -53,6 +65,17 @@ export function openQuoteDoc(id) {
         } catch { toast('Could not share that', 'err'); }
       });
 
+      on(root, '[data-edit]', async () => {
+        h.close();
+        const { openQuoteSheet } = await import('./quotebuilder.js');
+        openQuoteSheet({ id, onSaved: () => { if (onSaved) onSaved(); openQuoteDoc(id, { onSaved }); } });
+      });
+
+      // A photo taken on a phone in bad light is the one thing on this
+      // document worth a second look — tap it and it fills the screen
+      // instead of staying a 78px thumbnail.
+      on(root, '[data-zoom]', (e, b) => openLightbox(b.dataset.zoom, b.dataset.zoomCaption));
+
       on(root, '[data-print]', () => {
         document.body.classList.add('printing');
         const done = () => {
@@ -66,6 +89,16 @@ export function openQuoteDoc(id) {
       });
     },
   });
+  return h;
+}
+
+function openLightbox(src, caption) {
+  if (!src) return;
+  openSheet({
+    title: caption || 'Photograph',
+    dark: true,
+    body: `<div class="lightbox"><img src="${esc(src)}" alt=""></div>`,
+  });
 }
 
 export function docHTML(q) {
@@ -73,6 +106,8 @@ export function docHTML(q) {
   const t = quoteTotals(q);
   const lines = q.lines || [];
   const ship = q.shipping || [];
+  const lineItemGst = q.gstMode === 'lineitem' && t.taxed;
+  const decided = q.status === 'accepted';
 
   return `
   <article class="doc" data-doc>
@@ -88,6 +123,11 @@ export function docHTML(q) {
     ${q.status === 'superseded' || q.status === 'declined'
       ? `<p class="doc-stamp">This quotation is ${q.status === 'superseded'
           ? 'superseded by a later revision' : 'no longer under offer'}.</p>` : ''}
+
+    ${decided && (q.approvedTotal != null || q.jobExcludesGst) ? `
+      <p class="doc-stamp ok">
+        Approved${q.approvedTotal != null ? ` at ${inr(jobValueFor(q))} — quoted at ${inr(t.total)}` : ''}${q.jobExcludesGst ? '. The job in Phynance is booked excluding GST.' : '.'}
+      </p>` : ''}
 
     <div class="doc-meta">
       <dl>
@@ -114,22 +154,29 @@ export function docHTML(q) {
             <th class="c-dim">Dimensions</th>
             <th class="c-num">Unit Price</th>
             <th class="c-num">Quantity</th>
-            <th class="c-num">Total</th>
+            <th class="c-num">Amount</th>
+            ${lineItemGst ? `<th class="c-num">GST (${q.gstRate}%)</th><th class="c-num">Line Total</th>` : ''}
           </tr>
         </thead>
         <tbody>
-          ${lines.length ? lines.map((l, i) => `
+          ${lines.length ? lines.map((l, i) => {
+            const amt = lineAmount(l);
+            const gst = lineItemGst ? lineGst(l, q) : 0;
+            return `
             <tr>
               <td class="c-sr">${i + 1}</td>
-              <td class="c-img">${l.photo ? `<img src="${esc(l.photo)}" alt="">` : ''}</td>
+              <td class="c-img">${l.photo
+                ? `<button class="doc-img-btn" data-zoom="${esc(l.photo)}" data-zoom-caption="${esc(l.name)}" aria-label="Enlarge photograph"><img src="${esc(l.photo)}" alt=""></button>`
+                : `<span class="doc-img-ph">${icon('camera', 18)}</span>`}</td>
               <td class="c-name">${esc(l.name)}${l.finish ? `<span class="doc-fin">${esc(l.finish)}</span>` : ''}</td>
               <td class="c-desc">${multiline(l.description)}</td>
               <td class="c-dim">${multiline(l.dims)}</td>
               <td class="c-num num">${inr(l.unitPrice)}</td>
               <td class="c-num num">${l.kind === 'lump' ? 1 : l.qty}</td>
-              <td class="c-num num">${inr(lineAmount(l))}</td>
+              <td class="c-num num">${inr(amt)}</td>
+              ${lineItemGst ? `<td class="c-num num">${inr(gst)}</td><td class="c-num num">${inr(amt + gst)}</td>` : ''}
             </tr>
-          `).join('') : `<tr><td colspan="8" class="doc-empty">No items yet</td></tr>`}
+          `; }).join('') : `<tr><td colspan="${lineItemGst ? 10 : 8}" class="doc-empty">No items yet</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -142,7 +189,7 @@ export function docHTML(q) {
 
       <section class="doc-sums">
         <div class="doc-sum"><span>Sub - Total</span><b class="num">${inr(t.sub)}</b></div>
-        ${t.taxed ? `<div class="doc-sum"><span>GST (${q.gstRate}%)</span><b class="num">${inr(t.gst)}</b></div>` : ''}
+        ${t.taxed ? `<div class="doc-sum"><span>GST (${q.gstRate}%)${lineItemGst ? ' — as above' : ''}</span><b class="num">${inr(t.gst)}</b></div>` : ''}
         <div class="doc-sum a"><span>Sub Total A</span><b class="num">${inr(t.subA)}</b></div>
       </section>
     </div>

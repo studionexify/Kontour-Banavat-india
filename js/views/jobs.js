@@ -139,7 +139,10 @@ export function openJob(code, ctx) {
         </div>
 
         <div class="list" style="padding:2px 14px;margin-bottom:14px">
-          <div class="kv"><span>Order value</span><b class="num">${j.orderValue ? inr(j.orderValue) : 'not set'}</b></div>
+          <div class="kv">
+            <span>Order value${j.orderExcludesGst ? ' <span class="pill mut sm">excl. GST</span>' : ''}</span>
+            <b class="num">${j.orderValue ? inr(j.orderValue) : 'not set'}</b>
+          </div>
           ${s.outstanding !== null
             ? `<div class="kv"><span>Still to collect</span><b class="num" style="color:${s.outstanding > 0 ? 'var(--out)' : 'var(--in)'}">${inr(Math.max(0, s.outstanding))}</b></div>`
             : ''}

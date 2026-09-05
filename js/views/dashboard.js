@@ -10,7 +10,7 @@
 import { icon } from '../icons.js';
 import { on, esc, emptyState } from '../ui.js';
 import { jobs, jobSummary, sortedEntries, accountName, categoryName } from '../store.js';
-import { openQuotes, pipelineValue, recentQuotes, quoteTotals, STATUS } from '../quotes.js';
+import { openQuotes, pipelineValue, recentQuotes, quoteTotals, quoteName, STATUS } from '../quotes.js';
 import { inr, inrShort, todayISO, dmy, fyOf, ago } from '../format.js';
 import { openEntryDetail } from './entry.js';
 
@@ -93,8 +93,8 @@ function quotesHTML(list) {
     return `
       <button class="qrow" data-quote="${esc(q.id)}">
         <div class="qrow-main">
-          <div class="qrow-t">${esc(q.client.name || 'Unnamed client')}</div>
-          <div class="qrow-s">MR # ${esc(q.mrNo)}${q.validUntil ? ` · valid to ${esc(dmy(q.validUntil))}` : ''}</div>
+          <div class="qrow-t">${esc(quoteName(q))}</div>
+          <div class="qrow-s">${q.validUntil ? `valid to ${esc(dmy(q.validUntil))}` : 'no expiry set'}</div>
         </div>
         <div class="qrow-side">
           <span class="qrow-amt num">${inr(t.total)}</span>
@@ -144,8 +144,8 @@ function activityHTML() {
       html: `
         <button class="qrow" data-quote="${esc(q.id)}">
           <div class="qrow-main">
-            <div class="qrow-t">MR # ${esc(q.mrNo)}</div>
-            <div class="qrow-s">${esc(q.client.name || 'Unnamed client')} · quotation</div>
+            <div class="qrow-t">${esc(quoteName(q))}</div>
+            <div class="qrow-s">quotation</div>
           </div>
           <div class="qrow-side">
             <span class="qrow-amt num">${inrShort(quoteTotals(q).total)}</span>

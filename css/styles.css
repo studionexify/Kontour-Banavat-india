@@ -524,6 +524,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 }
 .icon-btn:active { background:rgba(var(--accent-rgb), .2); transform:scale(.92); }
 .icon-btn.plain { color:var(--ink-2); background:var(--tea-soft); border-color:transparent; }
+/* A sheet header offering more than one action — the document view's
+   print and edit buttons — needs the same row layout .sheet-head
+   itself already uses for its three slots. */
+.sheet-head-acts { display:flex; align-items:center; gap:8px; }
 
 /* three-up stat row */
 .stat-row { display:flex; align-items:flex-start; }
@@ -1118,6 +1122,7 @@ select.control { padding-right:34px; background-position:right 13px center; back
 .pill.out { background:var(--out-soft); color:var(--out); }
 .pill.warn { background:var(--warn-soft); color:var(--warn); }
 .pill.mut { background:var(--tea-soft); color:var(--pine-700); }
+.pill.sm { padding:2px 8px; font-size:9.5px; letter-spacing:.2px; vertical-align:1px; }
 
 .kv {
   display:flex; justify-content:space-between; gap:14px;
@@ -1971,6 +1976,8 @@ select.control { padding-right:34px; background-position:right 13px center; back
 .control.flush:focus { border-color:var(--pine-500); background:var(--paper); }
 
 .qline-kind { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
+.seg.wide { display:flex; gap:6px; margin-top:2px; }
+.seg.wide .seg-mini { flex:1; text-align:center; }
 .seg-mini {
   padding:6px 13px; border-radius:999px;
   font-size:12px; font-weight:600;
@@ -2171,8 +2178,22 @@ select.control { padding-right:34px; background-position:right 13px center; back
   white-space:nowrap;
 }
 .doc-table .c-sr { width:46px; text-align:center; }
-.doc-table .c-img { width:78px; }
-.doc-table .c-img img { width:100%; border-radius:3px; display:block; }
+/* The photograph is what a furniture quotation is actually looked at
+   for, so its column is sized to show the piece, not to fit a table:
+   wider than the rest, and square rather than however tall the
+   original happened to be, so a row of different photos still reads
+   as one grid down the column. */
+.doc-table .c-img { width:104px; padding:6px; }
+.doc-img-btn {
+  display:block; width:100%; aspect-ratio:1; padding:0; border:0;
+  border-radius:6px; overflow:hidden; cursor:zoom-in; background:#F1F1F3;
+}
+.doc-img-btn img { width:100%; height:100%; object-fit:cover; display:block; }
+.doc-img-ph {
+  display:flex; align-items:center; justify-content:center;
+  aspect-ratio:1; border-radius:6px; color:#B7B7BE;
+  background:#F7F7F8; border:1px dashed #D8D8DC;
+}
 .doc-table .c-name { min-width:130px; font-weight:600; }
 .doc-table .c-desc { min-width:210px; }
 .doc-table .c-dim { min-width:130px; white-space:nowrap; }
@@ -2295,6 +2316,13 @@ select.control { padding-right:34px; background-position:right 13px center; back
   border:1px solid #C9C9CF; border-left:3px solid #111113;
   background:#F7F7F8; font-size:11.5px; font-weight:600;
 }
+.doc-stamp.ok { border-left-color:#0B6B45; background:#EFF7F2; color:#0B6B45; }
+
+/* A photograph, life-size in the room it opens in — everything else
+   on the document is fine at a glance, this is the one thing worth a
+   second look. */
+.lightbox { display:flex; align-items:center; justify-content:center; padding:4px 16px 20px; }
+.lightbox img { max-width:100%; max-height:72vh; border-radius:10px; display:block; }
 
 /* The rail wears the mark beside the name. */
 .tabbar .rail-brand {

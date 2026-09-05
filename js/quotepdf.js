@@ -12,7 +12,7 @@
  */
 
 import { createPdf, wrapText, dataUriToBytes, readJpeg, A4 } from './pdf.js';
-import { quoteTotals, lineAmount, settings, renderTerms } from './quotes.js';
+import { quoteTotals, lineAmount, lineGst, jobValueFor, settings, renderTerms } from './quotes.js';
 import { dmy } from './format.js';
 
 const M = 42;                       // page margin
@@ -150,36 +150,82 @@ function render(quote, photos) {
   });
   y = metaTop + Math.max(pairs.length, dates.length) * 15 + 12;
 
+  // A quotation approved at a different figure, or with GST kept out
+  // of the job value, is worth saying on the document that goes out —
+  // it is the record of what was actually agreed, not just what was
+  // originally offered.
+  if (quote.status === 'accepted' && (quote.approvedTotal != null || quote.jobExcludesGst)) {
+    const note = quote.approvedTotal != null
+      ? `Approved at ${money(jobValueFor(quote))} (quoted at ${money(t.total)})${quote.jobExcludesGst ? ', excluding GST' : ''}.`
+      : 'Approved excluding GST.';
+    doc.text(note, M, y + 8, { size: 9, bold: true, gray: 0.15 });
+    y += 20;
+  }
+
   /* ── Items ──
-     Six columns: number, photograph, name + spec, dimensions, rate,
-     amount. The image column only takes its width when something on
-     the quotation actually has a photograph — a quotation of plain
-     lines should not print a column of empty boxes.
+     Photograph, name + spec, dimensions, rate, qty, and either one
+     amount column or three — amount, GST, line total — when the
+     quotation is set to show tax per line rather than as one figure
+     under the sub-total. The image column only takes its width when
+     something on the quotation actually has a photograph, so a
+     quotation of plain lines prints across the full page.
 
      The description wraps, so a row's height is whatever its tallest
      cell needs, and a row that would cross the foot moves to a new
      page whole rather than splitting mid-description. */
   const anyPhoto = lines.some((l) => photos.has(l.id));
-  const imgW = anyPhoto ? 46 : 0;
+  const lineItemGst = quote.gstMode === 'lineitem' && t.taxed;
+  const imgW = anyPhoto ? 58 : 0;
+
+  // Right-aligned columns, positioned by their right edge and laid
+  // out from RIGHT leftward: each step reserves that column's own
+  // width before leaving a gap for the next one — skipping the
+  // column's own width here is what let AMOUNT and QTY print on top
+  // of each other the first time this was written. Rate and Qty
+  // always sit just before the Amount; GST and Line Total exist only
+  // when the quotation is set to show tax per line, and sit after it.
+  const GAP = 8;
+  const W = { rate: 54, qty: 28, amt: 60, gst: 52, lineTotal: 62 };
+  let edge = RIGHT;
+  const lineTotalRight = edge;
+  if (lineItemGst) edge -= W.lineTotal + GAP;
+  const gstRight = edge;
+  if (lineItemGst) edge -= W.gst + GAP;
+  const amtRight = edge;
+  edge -= W.amt + GAP;
+  const qtyRight = edge;
+  edge -= W.qty + GAP;
+  const rateRight = edge;
+  edge -= W.rate + GAP;
+
+  // Five numeric columns and a photograph leave too little of a
+  // portrait page for a *sixth* text column: Dimensions folds into
+  // the item's own column, as one more wrapped line under the
+  // description, rather than being squeezed into a sliver that
+  // collides with the numbers next to it.
+  const foldDims = lineItemGst;
+
   const C = {
     sr: M,
     img: M + 20,
     name: M + 20 + imgW + (anyPhoto ? 8 : 0),
-    amt: RIGHT,
   };
-  C.dim = C.name + (anyPhoto ? 148 : 190);
-  C.qty = C.dim + (anyPhoto ? 96 : 108) + 62;
-  const nameW = (anyPhoto ? 140 : 182);
-  const dimW = (anyPhoto ? 88 : 100);
+  C.dim = foldDims ? 0 : C.name + (anyPhoto ? 132 : 176);
+  const nameW = (foldDims ? edge : C.dim) - C.name - 8;
+  const dimW = foldDims ? 0 : edge - C.dim - 8;
 
   const header = () => {
     doc.fill(M, y, BODY, 20, 0.93);
     doc.text('#', C.sr + 4, y + 14, { size: 9, bold: true, gray: 0.3 });
-    doc.text('ITEM', C.name, y + 14, { size: 9, bold: true, gray: 0.3 });
-    doc.text('DIMENSIONS', C.dim, y + 14, { size: 9, bold: true, gray: 0.3 });
-    doc.text('RATE', C.qty - 8, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
-    doc.text('QTY', C.amt - 78, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
-    doc.text('AMOUNT', C.amt, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
+    doc.text(foldDims ? 'ITEM (WITH DIMENSIONS)' : 'ITEM', C.name, y + 14, { size: 9, bold: true, gray: 0.3 });
+    if (!foldDims) doc.text('DIMENSIONS', C.dim, y + 14, { size: 9, bold: true, gray: 0.3 });
+    doc.text('RATE', rateRight, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
+    doc.text('QTY', qtyRight, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
+    doc.text('AMOUNT', amtRight, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
+    if (lineItemGst) {
+      doc.text(`GST`, gstRight, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
+      doc.text('LINE TOTAL', lineTotalRight, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
+    }
     y += 20;
   };
   header();
@@ -193,11 +239,14 @@ function render(quote, photos) {
     const photo = photos.get(l.id);
     const nameLines = wrapText(l.name || 'Item', nameW, 10, true);
     const descLines = l.description ? wrapText(l.description, nameW, 9) : [];
-    const dimLines = l.dims ? wrapText(l.dims, dimW, 9) : [];
+    // Folded in, a dimension string prints as "Dim: 38 x 1 x 58"" so
+    // it still reads as its own fact rather than a second description.
+    const foldedDimLines = foldDims && l.dims ? wrapText(`Dim: ${l.dims}`, nameW, 9) : [];
+    const dimLines = foldDims ? [] : (l.dims ? wrapText(l.dims, dimW, 9) : []);
     const rowH = Math.max(
-      nameLines.length * 13 + descLines.length * 11 + (l.finish ? 11 : 0),
+      nameLines.length * 13 + descLines.length * 11 + foldedDimLines.length * 11 + (l.finish ? 11 : 0),
       dimLines.length * 11,
-      photo ? 46 : 18,
+      photo ? imgW : 18,
     ) + 12;
 
     if (y + rowH > FOOT_LIMIT) { doc.addPage(); y = M; header(); }
@@ -209,13 +258,20 @@ function render(quote, photos) {
     for (const ln of nameLines) { doc.text(ln, C.name, ty, { size: 10, bold: true, gray: 0.1 }); ty += 13; }
     if (l.finish) { doc.text(l.finish, C.name, ty, { size: 9, gray: 0.45 }); ty += 11; }
     for (const ln of descLines) { doc.text(ln, C.name, ty, { size: 9, gray: 0.4 }); ty += 11; }
+    for (const ln of foldedDimLines) { doc.text(ln, C.name, ty, { size: 9, gray: 0.4 }); ty += 11; }
 
     let dy = y + 12;
     for (const ln of dimLines) { doc.text(ln, C.dim, dy, { size: 9, gray: 0.35 }); dy += 11; }
 
-    doc.text(money(l.unitPrice), C.qty - 8, y + 12, { size: 10, align: 'right', gray: 0.15 });
-    doc.text(String(l.kind === 'lump' ? 1 : l.qty), C.amt - 78, y + 12, { size: 10, align: 'right', gray: 0.15 });
-    doc.text(money(lineAmount(l)), C.amt, y + 12, { size: 10, bold: true, align: 'right', gray: 0.05 });
+    const amt = lineAmount(l);
+    doc.text(money(l.unitPrice), rateRight, y + 12, { size: 10, align: 'right', gray: 0.15 });
+    doc.text(String(l.kind === 'lump' ? 1 : l.qty), qtyRight, y + 12, { size: 10, align: 'right', gray: 0.15 });
+    doc.text(money(amt), amtRight, y + 12, { size: 10, bold: !lineItemGst, align: 'right', gray: lineItemGst ? 0.15 : 0.05 });
+    if (lineItemGst) {
+      const gst = lineGst(l, quote);
+      doc.text(money(gst), gstRight, y + 12, { size: 10, align: 'right', gray: 0.15 });
+      doc.text(money(amt + gst), lineTotalRight, y + 12, { size: 10, bold: true, align: 'right', gray: 0.05 });
+    }
 
     y += rowH;
     doc.line(M, y, RIGHT, y, { gray: 0.86 });
@@ -225,7 +281,7 @@ function render(quote, photos) {
         shipping added after it as Sub Total B. ── */
   const ladder = [
     ['Sub - Total', money(t.sub), false],
-    ...(t.taxed ? [[`GST (${quote.gstRate}%)`, money(t.gst), false]] : []),
+    ...(t.taxed ? [[`GST (${quote.gstRate}%)${lineItemGst ? ' — as above' : ''}`, money(t.gst), false]] : []),
     ['Sub Total A', money(t.subA), false],
     ...ship.map((x) => [x.label || 'Shipping', money(x.amount), false]),
     ['Sub Total B', money(t.subB), false],

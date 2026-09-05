@@ -19,7 +19,8 @@ import { icon } from '../icons.js';
 import { openSheet, on, esc, toast, emptyState, haptic } from '../ui.js';
 import {
   getQuote, addQuote, updateQuote, newLine, newShipping, lineAmount, quoteTotals,
-  LINE_KINDS, designs, getDesign, lineFromDesign, mrNoTaken, defaultValidUntil,
+  LINE_KINDS, GST_MODES, designs, getDesign, lineFromDesign, mrNoTaken, defaultValidUntil,
+  quoteName,
 } from '../quotes.js';
 import { pickImage, shrink, toBase64 } from '../photos.js';
 import { inr, todayISO } from '../format.js';
@@ -35,7 +36,7 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
   }
 
   return openSheet({
-    title: `MR # ${quote.mrNo}`,
+    title: quoteName(quote),
     full: true,
     wide: true,
     headRight: `<button class="icon-btn plain" data-preview aria-label="Preview document">${icon('note', 20)}</button>`,
@@ -124,6 +125,7 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
               // was typed, and redrawing would move the caret out from
               // under the person typing.
               quote = updateQuote(quote.id, { client: { ...quote.client, [d.f.slice(7)]: val } });
+              if (d.f === 'client.name') renderTitle();
             } else {
               quote = updateQuote(quote.id, { [d.f]: val });
             }
@@ -174,6 +176,11 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
           renderFoot();
         });
 
+        on(host, '[data-gstmode]', (e, b) => {
+          quote = updateQuote(quote.id, { gstMode: b.dataset.gstmode });
+          renderExtras();
+        });
+
         /* A line can carry its own photograph even when it did not come
            from the library — a one-off still prints in the Image column. */
         on(host, '[data-line-img]', async (e, b) => {
@@ -205,10 +212,11 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
         on(host, '[data-done]', () => { handle.close(); if (onSaved) onSaved(); });
       }
 
-      /* The MR number is editable, so the sheet's own title follows it. */
+      /* The number and the client are both editable, and both are in
+         the title, so either one changing has to repaint it. */
       function renderTitle() {
         const h2 = root.querySelector('.sheet-head h2');
-        if (h2) h2.textContent = `MR # ${quote.mrNo}`;
+        if (h2) h2.textContent = quoteName(quote);
       }
 
       on(root, '[data-preview]', () => openQuoteDoc(quote.id));
@@ -348,6 +356,20 @@ function extrasBlock(q, openPanels) {
 
   return `
     <section class="qb-sec">
+      <details class="qdisc panel-disc" data-panel="tax" ${openPanels.has('tax') ? 'open' : ''}>
+        <summary>
+          ${icon('chevR', 15)}
+          <span class="qdisc-t">GST display</span>
+          <span class="qdisc-v">${GST_MODES[q.gstMode].label}</span>
+        </summary>
+        <div class="seg wide">
+          ${Object.entries(GST_MODES).map(([k, v]) => `
+            <button class="seg-mini ${q.gstMode === k ? 'on' : ''}" data-gstmode="${k}">${esc(v.label)}</button>
+          `).join('')}
+        </div>
+        <p class="qb-hint">${esc(GST_MODES[q.gstMode].hint)} — the total owed is the same either way.</p>
+      </details>
+
       <details class="qdisc panel-disc" data-panel="ship" ${openPanels.has('ship') ? 'open' : ''}>
         <summary>
           ${icon('chevR', 15)}

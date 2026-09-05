@@ -56,6 +56,35 @@ export function baseNo(mrNo) {
   return String(mrNo || '').split('-')[0];
 }
 
+/* The name a quotation goes by everywhere it is listed: the number
+   that identifies the document, and the client it was written for.
+   "C135 - Rahi Construction" is how the business already says it out
+   loud, so it is how the card, the sheet title and the file name say
+   it too — nowhere is left showing the number alone. */
+export function quoteName(q) {
+  if (!q) return '';
+  const client = (q.client && q.client.name || '').trim();
+  return client ? `${q.mrNo} - ${client}` : `${q.mrNo} - Unnamed client`;
+}
+
+/* Two ways of printing the same tax. "Total" foots the whole
+   quotation once, the way a builder normally quotes. "Line item"
+   carries the rate down onto every row instead, for the client who
+   is comparing pieces and wants to see what each one costs including
+   tax before the figures are added up. Neither one changes what is
+   owed — quoteTotals() is the same call either way. */
+export const GST_MODES = {
+  total:    { label: 'Total',     hint: 'One GST line under the sub-total' },
+  lineitem: { label: 'Line item', hint: 'GST shown against every item' },
+};
+
+/** What one line owes in GST, on its own — only meaningful once the
+    quotation is taxed at all. */
+export function lineGst(line, quote) {
+  if (!quote || quote.gstApplicable === false) return 0;
+  return round2(lineAmount(line) * (Number(quote.gstRate) || 0) / 100);
+}
+
 export const CATEGORIES = [
   'Seating', 'Table', 'Bed', 'Storage', 'Lighting',
   'Mirror', 'Metalwork', 'Decor', 'Modular', 'Other',
@@ -194,6 +223,12 @@ function read() {
       if (q.archivedAt === undefined && (q.status === 'accepted' || q.status === 'declined')) {
         q.archivedAt = q.updatedAt || q.createdAt || Date.now();
       }
+      // Records written before these existed get the values addQuote
+      // would have given them, so every caller can read them without
+      // an `|| default` at every use.
+      if (!GST_MODES[q.gstMode]) q.gstMode = 'total';
+      if (q.approvedTotal === undefined) q.approvedTotal = null;
+      if (q.jobExcludesGst === undefined) q.jobExcludesGst = false;
     }
     return out;
   } catch (e) {
@@ -478,12 +513,19 @@ export function addQuote(input = {}) {
     // 18% of nothing, so it is a flag rather than a zero rate — and the
     // document drops the row entirely rather than printing a ₹0.
     gstApplicable: input.gstApplicable == null ? true : Boolean(input.gstApplicable),
+    // How the same tax is printed — see GST_MODES. Purely a document
+    // choice; it never changes what quoteTotals() comes to.
+    gstMode: GST_MODES[input.gstMode] ? input.gstMode : 'total',
     paymentTerms: input.paymentTerms == null ? s.paymentTerms : input.paymentTerms,
     fabricRate: input.fabricRate == null ? s.fabricRate : Number(input.fabricRate),
     leadTime: input.leadTime == null ? s.leadTime : input.leadTime,
     notes: input.notes || '',
     status: 'draft',
     jobCode: '',
+    // Set only by acceptQuote, when the figure sent to Phynance is not
+    // simply this document's own total — see acceptQuote's own note.
+    approvedTotal: null,
+    jobExcludesGst: false,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -538,6 +580,7 @@ export function duplicateQuote(id) {
     shipping: (old.shipping || []).map((x) => ({ ...x, id: uid('s') })),
     gstRate: old.gstRate,
     gstApplicable: old.gstApplicable,
+    gstMode: old.gstMode,
     paymentTerms: old.paymentTerms,
     fabricRate: old.fabricRate,
     leadTime: old.leadTime,
@@ -562,18 +605,59 @@ export function reviseQuote(id) {
    The MR number is already the job code — the ledger has filed
    entries under B121 and C123 since before this module existed. So
    accepting does not invent a code, it simply opens the job that
-   the quotation has been named after all along and sets its order
-   value to the quoted total. */
-export function acceptQuote(id, jobCode = '') {
-  const q = getQuote(id);
+   the quotation has been named after all along.
+
+   The figure that job opens with is not always this document's own
+   total, in three ways staff actually approve a quotation:
+
+     - as quoted — the job takes quoteTotals(q).total, same as before.
+     - at a different figure — a client negotiates the number down
+       (or up) from what was quoted. That agreed figure is not this
+       document any more, so a sub-quotation is written under the
+       next revision number carrying it, and *that* is what gets
+       accepted and opened — the original stays exactly what was
+       sent, superseded rather than silently rewritten.
+     - excluding GST — some jobs are booked on the pre-tax figure,
+       with the tax collected and accounted separately. The document
+       is unchanged; only what Phynance is told to expect is smaller,
+       and the quotation carries a flag so that is visible wherever
+       it is shown, not just in the job. */
+
+/** What the job should be opened at, given how this quote was approved. */
+export function jobValueFor(quote) {
+  const t = quoteTotals(quote);
+  if (quote.approvedTotal != null) return quote.approvedTotal;
+  return quote.jobExcludesGst ? t.sub : t.total;
+}
+
+export function acceptQuote(id, { jobCode = '', approvedTotal = null, excludeGst = false } = {}) {
+  let q = getQuote(id);
   if (!q) return null;
+  const t = quoteTotals(q);
+
+  // A figure that is not (within rounding of) the document's own
+  // total is a different quotation, not an edit to this one.
+  const differs = approvedTotal != null && Math.abs(approvedTotal - t.total) > 0.5;
+  if (differs) {
+    q = addQuote({
+      ...q,
+      revisionOf: q.mrNo,
+      mrNo: '',
+      lines: (q.lines || []).map((l) => ({ ...l, id: uid('l') })),
+      shipping: (q.shipping || []).map((s) => ({ ...s, id: uid('s') })),
+      status: 'draft',
+    });
+  }
+
   // The revision suffix belongs to the quotation, not the job — all
   // three rounds of C129 are quoting the same job, so the ledger must
   // not end up with C129, C129-1 and C129-2 as separate jobs.
   const code = (jobCode || q.jobCode || baseNo(q.mrNo) || '').trim().toUpperCase();
+  q.approvedTotal = differs ? approvedTotal : null;
+  q.jobExcludesGst = Boolean(excludeGst);
   if (code) {
     ensureJob(code, { silent: true, title: q.title, client: q.client.name });
-    updateJob(code, { orderValue: quoteTotals(q).total });
+    updateJob(code, { orderValue: jobValueFor(q), orderExcludesGst: q.jobExcludesGst });
     q.jobCode = code;
   }
   q.status = 'accepted';
