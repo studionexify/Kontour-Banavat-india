@@ -43,6 +43,7 @@ const P = {
   chart:     '<path d="M21 21H3V3"/><path d="m7 15 4-4 3 3 5-6"/>',
   box:       '<path d="m12 2.5 8.5 4.7v9.6L12 21.5 3.5 16.8V7.2z"/><path d="M3.5 7.2 12 12l8.5-4.8M12 12v9.5"/>',
   inbox:     '<path d="M3.5 13.5h4l1.5 3h6l1.5-3h4"/><path d="M5.4 4.5h13.2l3.4 9V18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4.5z"/>',
+  percent:   '<circle cx="7" cy="7" r="2.6"/><circle cx="17" cy="17" r="2.6"/><path d="M19 5 5 19"/>',
 };
 
 /** icon('home', 22) -> svg string */

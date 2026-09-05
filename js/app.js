@@ -12,6 +12,8 @@ import * as jobs from './views/jobs.js';
 import * as reports from './views/reports.js';
 import * as quotes from './views/quotelist.js';
 import * as library from './views/library.js';
+import * as commission from './views/commission.js';
+import { load as loadCommissions } from './commissions.js';
 import { openDesignSheet } from './views/library.js';
 import { openQuoteSheet } from './views/quotebuilder.js';
 import { openSettings } from './views/settings.js';
@@ -35,6 +37,7 @@ const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: 'home', route: 'dashboard' },
   { id: 'phynance', label: 'Phynance', icon: 'ledger', route: 'home' },
   { id: 'quotation', label: 'Quotation', icon: 'tag', route: 'quotes' },
+  { id: 'commission', label: 'Commission', icon: 'percent', route: 'commission' },
 ];
 
 const SUBNAV = {
@@ -50,7 +53,7 @@ const SUBNAV = {
   ],
 };
 
-const VIEWS = { dashboard, home, ledger, jobs, reports, quotes, library };
+const VIEWS = { dashboard, home, ledger, jobs, reports, quotes, library, commission };
 
 /* One primary action per screen, in one place. Every screen that can
    make something used to hide its own "+" in the top-right corner of
@@ -65,6 +68,9 @@ const PRIMARY = {
   reports: { label: 'New entry', run: (ctx) => openEntrySheet({ onSaved: ctx.refresh }) },
   quotes:  { label: 'New quotation', run: (ctx) => openQuoteSheet({ onSaved: ctx.refresh }) },
   library: { label: 'Add design', run: (ctx) => openDesignSheet({ onSaved: ctx.refresh }) },
+  // Commission has its own + in the hero, next to the title, the way
+  // Jobs does — a partner is added far less often than an entry, so
+  // it does not need the thumb's own floating button.
 };
 
 /* Which module a screen belongs to. The Dashboard is Kontour's
@@ -73,6 +79,7 @@ const SECTION_OF = {
   dashboard: 'dashboard',
   home: 'phynance', ledger: 'phynance', jobs: 'phynance', reports: 'phynance',
   quotes: 'quotation', library: 'quotation',
+  commission: 'commission',
 };
 
 function sectionOf(where) {
@@ -82,7 +89,7 @@ function sectionOf(where) {
 let route = 'dashboard';
 // Re-entering a module from the rail returns you to the screen you
 // were last on in it, the way switching apps does.
-let lastInSection = { dashboard: 'dashboard', phynance: 'home', quotation: 'quotes' };
+let lastInSection = { dashboard: 'dashboard', phynance: 'home', quotation: 'quotes', commission: 'commission' };
 let painting = false;
 let detachScroll = null;   // hero↔topbar binding for the live screen
 let revealIO = null;       // entrance observer for the live screen
@@ -414,6 +421,7 @@ async function show(where) {
 function start() {
   load();
   loadQuotes();
+  loadCommissions();
   buildTabs();
   attachRipple($('#app'));
 

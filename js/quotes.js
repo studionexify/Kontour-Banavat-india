@@ -810,6 +810,16 @@ export async function importHistory(rows) {
       useNo = `${mrNo}#${n}`;
     }
 
+    // Everything in the sheet went out to a client; what came back of
+    // it usually is not recorded there, so a row arrives awaiting a
+    // reply by default. A caller that cross-referenced its own record
+    // of what was actually ordered — a production sheet, a payments
+    // ledger — can say otherwise: status/jobCode/archivedAt carry that
+    // decision across exactly the way accepting a quotation by hand
+    // would leave it, without this file needing to know where the
+    // caller's evidence came from.
+    const status = ['draft', 'sent', 'accepted', 'declined', 'superseded'].includes(row.status)
+      ? row.status : 'sent';
     state.quotes.push({
       id: uid('q'),
       mrNo: useNo,
@@ -821,16 +831,21 @@ export async function importHistory(rows) {
       shipping: (row.shipping || []).map((x) => newShipping(x)),
       gstRate: state.settings.gstRate,
       gstApplicable: row.gstApplicable !== false,
+      gstMode: GST_MODES[row.gstMode] ? row.gstMode : 'total',
       paymentTerms: row.paymentTerms || state.settings.paymentTerms,
       fabricRate: state.settings.fabricRate,
       leadTime: state.settings.leadTime,
       notes: '',
-      // Everything in the sheet went out to a client; what came back is
-      // not recorded there, so they arrive awaiting a reply.
-      status: 'sent',
-      jobCode: '',
+      status,
+      jobCode: status === 'accepted' ? (row.jobCode || baseNo(useNo)).toUpperCase() : (row.jobCode || ''),
+      approvedTotal: row.approvedTotal == null ? null : Number(row.approvedTotal),
+      jobExcludesGst: Boolean(row.jobExcludesGst),
       imported: true,
       numberClash: Boolean(row.numberClash) && useNo !== mrNo,
+      // A row the caller has already marked decided is filed away like
+      // any other decided quotation, so it does not sit in the working
+      // list next to the ones genuinely still awaiting a reply.
+      archivedAt: (status === 'accepted' || status === 'declined') ? Date.now() : 0,
       createdAt: Date.parse(`${row.date}T00:00:00`) || Date.now(),
       updatedAt: Date.now(),
     });
