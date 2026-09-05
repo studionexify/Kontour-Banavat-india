@@ -131,7 +131,39 @@ function buildPad(root, onKey) {
    says which books these are; the PIN says this is still the person
    who was holding the phone. A copy with no cloud configured skips
    the first entirely and behaves exactly as it always has. */
+/* ── The shell's height ────────────────────────────────────────
+   CSS units are a guess at how tall the screen is: 100vh is too tall
+   whenever a browser toolbar is showing, and 100dvh still comes out
+   wrong in a home-screen app on a phone with a home indicator. Both
+   ways the shell ends above the bottom of the screen and leaves a
+   dead strip under the tab bar.
+   The visual viewport is not a guess — it is the area actually being
+   looked at — so the shell is sized from it, and re-sized whenever it
+   changes: rotation, a keyboard opening, a toolbar sliding away. */
+function trackViewportHeight() {
+  const vv = window.visualViewport;
+  let last = 0;
+  const apply = () => {
+    const h = Math.round((vv && vv.height) || window.innerHeight || 0);
+    // A toolbar sliding away reports dozens of intermediate heights.
+    // Only a real change is worth a relayout of the whole shell.
+    if (h > 0 && Math.abs(h - last) > 2) {
+      last = h;
+      document.documentElement.style.setProperty('--app-h', `${h}px`);
+    }
+  };
+  apply();
+  if (vv) {
+    vv.addEventListener('resize', apply);
+    // iOS reports the new height a beat after the rotation lands.
+    window.addEventListener('orientationchange', () => setTimeout(apply, 260));
+  } else {
+    window.addEventListener('resize', apply, { passive: true });
+  }
+}
+
 async function boot() {
+  trackViewportHeight();
   const gate = $('#gate');
   // The PIN gate's markup ships in index.html, and the sign-in screen
   // paints over the same element. Held here so it can be put back.

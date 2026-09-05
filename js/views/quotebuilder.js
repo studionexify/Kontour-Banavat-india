@@ -1,28 +1,30 @@
 /* views/quotebuilder.js — writing the quotation.
  *
- * Laid out in the order the printed document is read: who it is
- * for, what is being supplied, how it is paid for, what it ships
- * as, what it comes to. The totals ladder is pinned at the foot in
- * the same shape it prints — Sub Total A, Sub Total B, Total —
- * so the figure being negotiated is never a scroll away and never
- * a different sum from the one the client will see.
+ * A quotation is written on a phone, in someone's showroom, with one
+ * thumb. So the screen carries only what is being decided right now:
+ * who it is for, and what is on it. Everything that has a sensible
+ * default already — the number, the dates, shipping, the terms that
+ * print on every quotation — is folded away until it is wanted.
+ *
+ * Fields cluster rather than stack. A label above every input turned
+ * eight facts into two screens of scrolling; grouped into one card
+ * with inline labels, the same eight fit above the fold.
  *
  * Every edit writes straight through to the store. A quotation is
- * revised over days, often on a phone in someone's showroom, and
- * losing an afternoon's pricing to a closed tab is not a risk worth
- * taking for the sake of a Save button.
+ * revised over days, and losing an afternoon's pricing to a closed
+ * tab is not a risk worth taking for the sake of a Save button.
  */
 
 import { icon } from '../icons.js';
-import { openSheet, on, esc, toast, field, emptyState } from '../ui.js';
+import { openSheet, on, esc, toast, emptyState, haptic } from '../ui.js';
 import {
   getQuote, addQuote, updateQuote, newLine, newShipping, lineAmount, quoteTotals,
-  LINE_KINDS, designs, getDesign, lineFromDesign, settings, mrNoTaken,
-  defaultValidUntil,
+  LINE_KINDS, designs, getDesign, lineFromDesign, mrNoTaken, defaultValidUntil,
 } from '../quotes.js';
 import { pickImage, shrink, toBase64 } from '../photos.js';
 import { inr, todayISO } from '../format.js';
 import { openQuoteDoc } from './quotedoc.js';
+import { shareQuotePdf, downloadQuotePdf } from '../quotepdf.js';
 
 export function openQuoteSheet({ id = '', onSaved } = {}) {
   let quote = id ? getQuote(id) : null;
@@ -36,7 +38,7 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
     title: `MR # ${quote.mrNo}`,
     full: true,
     wide: true,
-    headRight: `<button class="icon-btn plain" data-preview aria-label="Preview document">${icon('reports', 20)}</button>`,
+    headRight: `<button class="icon-btn plain" data-preview aria-label="Preview document">${icon('note', 20)}</button>`,
     body: `<div class="qb" data-qb></div>`,
     onMount(root, handle) {
       const host = root.querySelector('[data-qb]');
@@ -49,24 +51,24 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
         <div class="qb-scroll">
           <div data-client></div>
           <div data-lines></div>
-          <div data-ship></div>
-          <div data-terms></div>
+          <div data-extras></div>
         </div>
         <div data-foot></div>
       `;
       const region = (n) => host.querySelector(`[data-${n}]`);
 
-      // Declared before the first paint: the breakdown panel's state
-      // outlives the repaint that every edit triggers.
+      // Declared before the first paint: disclosure state outlives the
+      // repaint that every edit triggers.
       let footOpen = false;
+      const openLines = new Set();
+      const openPanels = new Set();
 
       region('client').innerHTML = clientBlock(quote);
-      region('terms').innerHTML = termsBlock(quote);
-      renderLines(); renderShip(); renderFoot();
+      renderLines(); renderExtras(); renderFoot();
       bindOnce();
 
-      function renderLines() { region('lines').innerHTML = linesBlock(quote); }
-      function renderShip() { region('ship').innerHTML = shipBlock(quote); }
+      function renderLines() { region('lines').innerHTML = linesBlock(quote, openLines); }
+      function renderExtras() { region('extras').innerHTML = extrasBlock(quote, openPanels); }
       function renderFoot() {
         region('foot').innerHTML = footBlock(quoteTotals(quote), quote, footOpen);
       }
@@ -77,12 +79,26 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
       }
       function setShip(shipping) {
         quote = updateQuote(quote.id, { shipping });
-        renderShip(); renderFoot();
+        renderExtras(); renderFoot();
       }
 
       /* Delegated once on the host, so a repaint of any region never
          stacks a second copy of these handlers. */
       function bindOnce() {
+        // `toggle` does not bubble, so the disclosure state is caught
+        // on the way down instead — a repaint would otherwise snap
+        // every open line shut.
+        host.addEventListener('toggle', (e) => {
+          const d = e.target;
+          if (!d.dataset) return;
+          if (d.dataset.lineMore) {
+            if (d.open) openLines.add(d.dataset.lineMore); else openLines.delete(d.dataset.lineMore);
+          }
+          if (d.dataset.panel) {
+            if (d.open) openPanels.add(d.dataset.panel); else openPanels.delete(d.dataset.panel);
+          }
+        }, true);
+
         host.addEventListener('change', (e) => {
           const inp = e.target;
           const d = inp.dataset || {};
@@ -140,7 +156,11 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
         on(host, '[data-kind]', (e, b) =>
           setLines(quote.lines.map((l) => l.id === b.dataset.l ? { ...l, kind: b.dataset.kind } : l)));
         on(host, '[data-rm]', (e, b) => setLines(quote.lines.filter((l) => l.id !== b.dataset.rm)));
-        on(host, '[data-add-blank]', () => setLines([...quote.lines, newLine()]));
+        on(host, '[data-add-blank]', () => {
+          const line = newLine();
+          openLines.add(line.id);         // a blank line opens ready to fill
+          setLines([...quote.lines, line]);
+        });
         on(host, '[data-pick]', () => pickDesign((line) => setLines([...quote.lines, line])));
 
         on(host, '[data-add-ship]', () => setShip([...quote.shipping, newShipping()]));
@@ -168,6 +188,17 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
 
         on(host, '[data-brk]', () => { footOpen = !footOpen; renderFoot(); });
 
+        on(host, '[data-share]', async () => {
+          haptic();
+          try {
+            const how = await shareQuotePdf(quote);
+            if (how === 'downloaded') toast('PDF saved — attach it from Downloads');
+            else if (how === 'shared') toast('Shared');
+          } catch { toast('Could not share that', 'err'); }
+        });
+
+        on(host, '[data-pdf]', () => { downloadQuotePdf(quote); toast('PDF saved'); });
+
         on(host, '[data-done]', () => { handle.close(); if (onSaved) onSaved(); });
       }
 
@@ -185,172 +216,191 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
 
 /* ── Blocks ────────────────────────────────────────────────────── */
 
+/** A label and its control on one line, inside a clustered card. */
+function pair(label, controlHtml) {
+  return `<div class="qpair"><span class="qpair-l">${esc(label)}</span>${controlHtml}</div>`;
+}
+
+/* Client, number and dates as one card of paired rows. The name is
+   the only thing that has to be typed, so it leads at full size; the
+   rest carry defaults and sit underneath at label-and-value size. */
 function clientBlock(q) {
   return `
     <section class="qb-sec">
-      <h3 class="qb-h">Client</h3>
-      <div class="qb-grid">
-        ${field('Client name', `<input class="control" data-f="client.name" value="${esc(q.client.name)}" placeholder="Rahi Construction">`)}
-        ${field('Contact number', `<input class="control" data-f="client.phone" value="${esc(q.client.phone)}" inputmode="tel">`)}
-        ${field('Email', `<input class="control" type="email" data-f="client.email" value="${esc(q.client.email || '')}" placeholder="Optional">`)}
-        ${field('Delivery city', `<input class="control" data-f="client.shippingAddress" value="${esc(q.client.shippingAddress)}" placeholder="Vadodara">`,
-          'City only — that is what the quotation prints.')}
+      <input class="control lead" data-f="client.name" value="${esc(q.client.name)}"
+             placeholder="Client name" autocapitalize="words">
+
+      <div class="qcluster">
+        ${pair('Phone', `<input class="control flush" data-f="client.phone" value="${esc(q.client.phone)}" inputmode="tel" placeholder="—">`)}
+        ${pair('City', `<input class="control flush" data-f="client.shippingAddress" value="${esc(q.client.shippingAddress)}" placeholder="Vadodara">`)}
+        ${pair('Number', `<input class="control flush" data-f="mrNo" value="${esc(q.mrNo)}" autocapitalize="characters">`)}
+        ${pair('Quoted', `<input class="control flush" type="date" data-f="date" value="${esc(q.date)}">`)}
+        ${pair('Valid till', `<input class="control flush" type="date" data-f="validUntil" value="${esc(q.validUntil)}">`)}
       </div>
 
-      <div class="qb-grid">
-        ${field('Quotation number',
-          `<input class="control" data-f="mrNo" value="${esc(q.mrNo)}" autocapitalize="characters">`,
-          'Offered as the previous number plus one. Type over it if you need to.')}
-        ${field('Quoted date', `<input class="control" type="date" data-f="date" value="${esc(q.date)}">`)}
-        ${field('Valid till', `<input class="control" type="date" data-f="validUntil" value="${esc(q.validUntil)}">`,
-          'Two months from the quoted date by default.')}
-      </div>
-      ${field('Job name',
-        `<input class="control" data-f="title" value="${esc(q.title)}" placeholder="Table and grill">`,
-        'For your own filing. It does not print on the quotation.')}
+      <details class="qdisc" data-panel="client-more">
+        <summary>${icon('chevR', 15)} Email and job name</summary>
+        <div class="qcluster">
+          ${pair('Email', `<input class="control flush" type="email" data-f="client.email" value="${esc(q.client.email || '')}" placeholder="—">`)}
+          ${pair('Job name', `<input class="control flush" data-f="title" value="${esc(q.title)}" placeholder="Table and grill">`)}
+        </div>
+      </details>
     </section>
   `;
 }
 
-function linesBlock(q) {
+function linesBlock(q, openLines) {
   return `
     <section class="qb-sec">
       <div class="qb-sec-head">
-        <h3 class="qb-h">Items</h3>
+        <h3 class="qb-h">Items <span class="qb-count">${q.lines.length}</span></h3>
         <div class="qb-sec-acts">
-          <button class="mini" data-pick>${icon('box', 14)} From library</button>
-          <button class="mini" data-add-blank>${icon('plus', 14)} Blank line</button>
+          <button class="mini" data-pick>${icon('box', 14)} Library</button>
+          <button class="mini" data-add-blank>${icon('plus', 14)} Blank</button>
         </div>
       </div>
-      ${q.lines.length ? q.lines.map(lineRow).join('')
-        : `<div class="qb-none">${icon('box', 22)}
-             <p>No items yet</p>
-             <small>Pick a design from the library, or add a blank line for a one-off.</small>
-           </div>`}
+      ${q.lines.length ? q.lines.map((l, i) => lineRow(l, i, openLines.has(l.id))).join('')
+        : `<div class="qb-none">${icon('box', 22)}<p>No items yet</p></div>`}
     </section>
   `;
 }
 
-function lineRow(l, i) {
+/* A line shows the three things that change the total — name, rate,
+   quantity — and folds the specification underneath. The document
+   needs the description; pricing the job does not. */
+function lineRow(l, i, open) {
   const design = l.designCode ? getDesign(l.designCode) : null;
+  const spec = [l.description, l.dims].filter(Boolean).join(' · ');
+
   return `
     <article class="qline">
       <div class="qline-head">
-        <span class="qline-n">${i + 1}</span>
         <span class="qline-imgwrap">
           <button class="qline-img ${l.photo ? 'has' : ''}" data-line-img="${esc(l.id)}"
                   aria-label="${l.photo ? 'Replace image' : 'Add image'}">
-            ${l.photo ? `<img src="${esc(l.photo)}" alt="">` : icon('camera', 16)}
+            ${l.photo ? `<img src="${esc(l.photo)}" alt="">` : icon('camera', 15)}
           </button>
           ${l.photo ? `<button class="qline-img-x" data-line-img-rm="${esc(l.id)}" aria-label="Remove image">×</button>` : ''}
         </span>
         <input class="control flush qline-title" data-l="${esc(l.id)}" data-k="name"
-               value="${esc(l.name)}" placeholder="Name">
-        <button class="mini danger" data-rm="${esc(l.id)}" aria-label="Remove line">${icon('trash', 14)}</button>
-      </div>
-
-      <div class="qline-kind">
-        ${Object.entries(LINE_KINDS).map(([k, v]) => `
-          <button class="seg-mini ${l.kind === k ? 'on' : ''}" data-kind="${k}" data-l="${esc(l.id)}">${esc(v.label)}</button>
-        `).join('')}
-        ${l.designCode ? `<span class="qline-code">${esc(l.designCode)}</span>` : ''}
-      </div>
-
-      <textarea class="control qline-spec" data-l="${esc(l.id)}" data-k="description" rows="2"
-                placeholder="Description — material, finish, construction">${esc(l.description)}</textarea>
-
-      <textarea class="control qline-spec" data-l="${esc(l.id)}" data-k="dims" rows="1"
-                placeholder="Dimensions — 38 x 1 x 58&quot;, Dia 8 inch, as per drawing">${esc(l.dims)}</textarea>
-
-      ${design && design.finishes.length ? `
-        <div class="qline-dims">
-          <label class="grow">Finish
-            <select class="control mini-in" data-l="${esc(l.id)}" data-k="finish">
-              ${design.finishes.map((f) => `
-                <option value="${esc(f.name)}" ${f.name === l.finish ? 'selected' : ''}>${esc(f.name)}</option>
-              `).join('')}
-            </select>
-          </label>
-        </div>` : ''}
-
-      <div class="qline-money">
-        <label>Unit price
-          <input class="control mini-in" type="number" min="0" data-l="${esc(l.id)}" data-k="unitPrice" value="${l.unitPrice}">
-        </label>
-        ${l.kind === 'unit' ? `
-          <label>Qty
-            <input class="control mini-in" type="number" min="0" data-l="${esc(l.id)}" data-k="qty" value="${l.qty}">
-          </label>` : `<span class="qline-lump">one lot</span>`}
+               value="${esc(l.name)}" placeholder="Item ${i + 1}">
         <span class="qline-amt num">${inr(lineAmount(l))}</span>
       </div>
+
+      <div class="qline-money">
+        <label class="qmoney">
+          <span>Rate</span>
+          <input class="control mini-in" type="number" min="0" inputmode="numeric"
+                 data-l="${esc(l.id)}" data-k="unitPrice" value="${l.unitPrice}">
+        </label>
+        ${l.kind === 'unit' ? `
+          <label class="qmoney">
+            <span>Qty</span>
+            <input class="control mini-in" type="number" min="0" inputmode="numeric"
+                   data-l="${esc(l.id)}" data-k="qty" value="${l.qty}">
+          </label>` : `<span class="qline-lump">one lot</span>`}
+        <div class="qline-kind">
+          ${Object.entries(LINE_KINDS).map(([k, v]) => `
+            <button class="seg-mini ${l.kind === k ? 'on' : ''}" data-kind="${k}" data-l="${esc(l.id)}">${esc(v.label)}</button>
+          `).join('')}
+        </div>
+      </div>
+
+      <details class="qdisc tight" data-line-more="${esc(l.id)}" ${open ? 'open' : ''}>
+        <summary>
+          ${icon('chevR', 14)}
+          <span class="qdisc-peek">${spec ? esc(spec) : 'Description and dimensions'}</span>
+          ${l.designCode ? `<span class="qline-code">${esc(l.designCode)}</span>` : ''}
+        </summary>
+
+        <textarea class="control qline-spec" data-l="${esc(l.id)}" data-k="description" rows="2"
+                  placeholder="Material, finish, construction">${esc(l.description)}</textarea>
+
+        <textarea class="control qline-spec" data-l="${esc(l.id)}" data-k="dims" rows="1"
+                  placeholder="38 x 1 x 58&quot;, Dia 8 inch, as per drawing">${esc(l.dims)}</textarea>
+
+        ${design && design.finishes.length ? `
+          <div class="qcluster">
+            ${pair('Finish', `
+              <select class="control flush" data-l="${esc(l.id)}" data-k="finish">
+                ${design.finishes.map((f) => `
+                  <option value="${esc(f.name)}" ${f.name === l.finish ? 'selected' : ''}>${esc(f.name)}</option>
+                `).join('')}
+              </select>`)}
+          </div>` : ''}
+
+        <button class="mini danger wide" data-rm="${esc(l.id)}">${icon('trash', 14)} Remove item</button>
+      </details>
     </article>
   `;
 }
 
-/* Shipping is its own short table on the document, added after tax
-   rather than inside it, so it gets its own block here too. */
-function shipBlock(q) {
+/* Shipping and the printed terms both have defaults that are right
+   most of the time, so both stay shut until someone disagrees with
+   them. The summary carries the current value, so a closed panel
+   still answers the question it is hiding. */
+function extrasBlock(q, openPanels) {
+  const shipTotal = (q.shipping || []).reduce((n, s) => n + (Number(s.amount) || 0), 0);
+  const termCount = String(q.paymentTerms || '').split('\n').filter((x) => x.trim()).length;
+
   return `
     <section class="qb-sec">
-      <div class="qb-sec-head">
-        <h3 class="qb-h">Shipping</h3>
-        <button class="mini" data-add-ship>${icon('plus', 14)} Add row</button>
-      </div>
-      ${(q.shipping || []).map((s) => `
-        <div class="fin-row">
-          <input class="control" data-s="${esc(s.id)}" data-k="label"
-                 value="${esc(s.label)}" placeholder="Delivery City - Vadodara">
-          <input class="control mini-in" type="number" min="0" data-s="${esc(s.id)}" data-k="amount" value="${s.amount}">
-          <button class="mini danger" data-rm-ship="${esc(s.id)}" aria-label="Remove row">${icon('trash', 14)}</button>
+      <details class="qdisc panel-disc" data-panel="ship" ${openPanels.has('ship') ? 'open' : ''}>
+        <summary>
+          ${icon('chevR', 15)}
+          <span class="qdisc-t">Shipping</span>
+          <span class="qdisc-v num">${shipTotal ? inr(shipTotal) : 'None'}</span>
+        </summary>
+        ${(q.shipping || []).map((s) => `
+          <div class="fin-row">
+            <input class="control" data-s="${esc(s.id)}" data-k="label"
+                   value="${esc(s.label)}" placeholder="Delivery - Vadodara">
+            <input class="control mini-in" type="number" min="0" inputmode="numeric"
+                   data-s="${esc(s.id)}" data-k="amount" value="${s.amount}">
+            <button class="mini danger" data-rm-ship="${esc(s.id)}" aria-label="Remove row">${icon('trash', 14)}</button>
+          </div>
+        `).join('')}
+        <button class="mini wide" data-add-ship>${icon('plus', 14)} Add a shipping row</button>
+      </details>
+
+      <details class="qdisc panel-disc" data-panel="terms" ${openPanels.has('terms') ? 'open' : ''}>
+        <summary>
+          ${icon('chevR', 15)}
+          <span class="qdisc-t">Terms</span>
+          <span class="qdisc-v">${termCount} line${termCount === 1 ? '' : 's'}</span>
+        </summary>
+        <textarea class="control" data-f="paymentTerms" rows="3"
+                  placeholder="50% advance">${esc(q.paymentTerms)}</textarea>
+        <div class="qcluster">
+          ${pair('Lead time', `<input class="control flush" data-f="leadTime" value="${esc(q.leadTime || '')}" placeholder="25–30 days">`)}
+          ${pair('Fabric up to', `<input class="control flush" type="number" min="0" inputmode="numeric" data-f="fabricRate" value="${q.fabricRate || 0}">`)}
         </div>
-      `).join('')}
-      <p class="qb-hint">Charged at actuals, and added after GST — the document totals it as Sub Total B.</p>
+      </details>
+
+      <details class="qdisc panel-disc" data-panel="note" ${openPanels.has('note') ? 'open' : ''}>
+        <summary>
+          ${icon('chevR', 15)}
+          <span class="qdisc-t">Private note</span>
+          <span class="qdisc-v">${q.notes ? 'Written' : 'None'}</span>
+        </summary>
+        <textarea class="control" data-f="notes" rows="2" placeholder="Not printed">${esc(q.notes)}</textarea>
+      </details>
     </section>
   `;
 }
 
-function termsBlock(q) {
-  return `
-    <section class="qb-sec">
-      <h3 class="qb-h">Payment terms</h3>
-      ${field('Printed on this quotation',
-        `<textarea class="control" data-f="paymentTerms" rows="3">${esc(q.paymentTerms)}</textarea>`,
-        'One per line. Usually 50% advance; 70% on larger orders.')}
-      <h3 class="qb-h">Standing terms, this quotation</h3>
-      <div class="qb-grid">
-        ${field('Lead time',
-          `<input class="control" data-f="leadTime" value="${esc(q.leadTime || '')}" placeholder="25–30 business days">`,
-          'Prints as "Lead time for delivery is …".')}
-        ${field('Fabric included up to',
-          `<input class="control" type="number" min="0" data-f="fabricRate" value="${q.fabricRate || 0}">`,
-          'Per meter. Prints inside the fabric clause.')}
-      </div>
-
-      ${field('Private note',
-        `<textarea class="control" data-f="notes" rows="2" placeholder="Not printed">${esc(q.notes)}</textarea>`)}
-      <p class="qb-hint">
-        The rest of the terms, banking and contact details print on every
-        quotation and are set once, in Settings.
-      </p>
-    </section>
-  `;
-}
-
-/* The foot mirrors the document's own ladder, so the number here is
-   the number the client sees, arrived at the same way. */
-/* The foot carries one figure and one action, because that is what
-   it is for: the total the client will see, and the way out. The
-   ladder behind it — sub-total, tax, shipping — is a summary line you
-   can open when you want to check the arithmetic, and it stays shut
-   the rest of the time so the items keep the screen.
+/* The foot carries one figure and the three things done with it: send
+   it, save it, close it. The ladder behind the total — sub-total, tax,
+   shipping — opens when you want to check the arithmetic and stays
+   shut the rest of the time so the items keep the screen.
 
    `open` is passed in rather than read from the DOM so the panel
    survives the repaint that every edit triggers. */
 function footBlock(t, q, open = false) {
   const parts = [
     `Sub ${inr(t.sub)}`,
-    t.taxed ? `GST ${q.gstRate}% ${inr(t.gst)}` : 'no GST',
-    t.subB ? `Shipping ${inr(t.subB)}` : null,
+    t.taxed ? `GST ${q.gstRate}%` : 'no GST',
+    t.subB ? `Ship ${inr(t.subB)}` : null,
   ].filter(Boolean);
 
   return `
@@ -382,7 +432,12 @@ function footBlock(t, q, open = false) {
           <span>Total</span>
           <b class="num">${inr(t.total)}</b>
         </div>
-        <button class="btn sm" data-done>Done</button>
+      </div>
+
+      <div class="qb-acts">
+        <button class="act" data-pdf aria-label="Download as PDF">${icon('download', 18)}<span>PDF</span></button>
+        <button class="act" data-share aria-label="Share this quotation">${icon('upload', 18)}<span>Share</span></button>
+        <button class="btn sm grow" data-done>Done</button>
       </div>
     </footer>
   `;

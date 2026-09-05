@@ -13,7 +13,8 @@
  */
 
 import { icon } from '../icons.js';
-import { openSheet, esc, on, toast } from '../ui.js';
+import { openSheet, esc, on, toast, haptic } from '../ui.js';
+import { shareQuotePdf, downloadQuotePdf } from '../quotepdf.js';
 import { getQuote, quoteTotals, lineAmount, settings, renderTerms } from '../quotes.js';
 import { inr, dmy } from '../format.js';
 import { markHTML, hasLogo } from '../brand.js';
@@ -26,9 +27,29 @@ export function openQuoteDoc(id) {
     title: `MR # ${q.mrNo}`,
     full: true,
     wide: true,
-    headRight: `<button class="icon-btn plain" data-print aria-label="Print">${icon('download', 20)}</button>`,
-    body: `<div class="qb"><div class="qb-scroll doc-scroll">${docHTML(q)}</div></div>`,
+    headRight: `<button class="icon-btn plain" data-print aria-label="Print">${icon('reports', 20)}</button>`,
+    body: `
+      <div class="qb">
+        <div class="qb-scroll doc-scroll">${docHTML(q)}</div>
+        <footer class="qb-foot">
+          <div class="qb-acts">
+            <button class="act" data-pdf aria-label="Download as PDF">${icon('download', 18)}<span>PDF</span></button>
+            <button class="btn sm grow" data-share>${icon('upload', 17)} Share with client</button>
+          </div>
+        </footer>
+      </div>`,
     onMount(root) {
+      on(root, '[data-pdf]', () => { downloadQuotePdf(q); toast('PDF saved'); });
+
+      on(root, '[data-share]', async () => {
+        haptic();
+        try {
+          const how = await shareQuotePdf(q);
+          if (how === 'downloaded') toast('PDF saved — attach it from Downloads');
+          else if (how === 'shared') toast('Shared');
+        } catch { toast('Could not share that', 'err'); }
+      });
+
       on(root, '[data-print]', () => {
         document.body.classList.add('printing');
         const done = () => {

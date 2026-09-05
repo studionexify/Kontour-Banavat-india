@@ -179,6 +179,22 @@ function read() {
       if (!Array.isArray(out[k])) out[k] = [];
     }
     out.orgId = typeof s.orgId === 'string' ? s.orgId : '';
+
+    /* Quotations decided before the archive existed have no stamp, so
+       they would sit in the working list forever. Backdating to the
+       last edit puts them where they belong without inventing a date:
+       the decision is when the record last moved. Deliberately not
+       written back here — read() is also how a sync-pulled state is
+       normalised, and a save on every read would touch every record.
+
+       A quotation pulled back out of the archive stores a 0 rather
+       than losing the field, so this only ever fires on records
+       written before the archive existed — never on a restore. */
+    for (const q of out.quotes) {
+      if (q.archivedAt === undefined && (q.status === 'accepted' || q.status === 'declined')) {
+        q.archivedAt = q.updatedAt || q.createdAt || Date.now();
+      }
+    }
     return out;
   } catch (e) {
     console.error('[kontour] could not read quotations', e);
@@ -357,7 +373,7 @@ export function familyOf(mrNo) {
    stays as long as the job count rather than the revision count.
    "Current" is the one that was decided if any was, otherwise the
    most recent — which is what you would hand a client today. */
-export function quoteFamilies({ status = null, q = '' } = {}) {
+export function quoteFamilies({ status = null, q = '', archived = false } = {}) {
   const seen = new Set();
   const out = [];
   for (const quote of quotes({ q })) {
@@ -368,6 +384,9 @@ export function quoteFamilies({ status = null, q = '' } = {}) {
     const head = family.find((x) => x.status === 'accepted')
       || family.find((x) => x.status !== 'superseded')
       || family[0];
+    // A job is filed away when its live revision is — the earlier
+    // rounds fold under it either way, so they do not get a say.
+    if (archived !== null && isArchived(head) !== Boolean(archived)) continue;
     if (status && status !== 'all' && head.status !== status) continue;
     out.push({ base, head, family, revisions: family.length });
   }
@@ -558,6 +577,9 @@ export function acceptQuote(id, jobCode = '') {
     q.jobCode = code;
   }
   q.status = 'accepted';
+  // Agreed work is tracked as a job from here on, so the quotation
+  // files itself away rather than sitting in the working list.
+  q.archivedAt = Date.now();
   q.updatedAt = Date.now();
   // Finalising one revision closes every other revision of the same
   // job, whichever direction it sits in — an older C129 and a newer
@@ -575,7 +597,29 @@ export function acceptQuote(id, jobCode = '') {
 export function setStatus(id, status) {
   if (!STATUS[status]) return null;
   if (status === 'accepted') return acceptQuote(id);
+  // Declining is the end of the conversation, so it files itself away
+  // for the same reason accepting does — the working list is what is
+  // still in play, and neither of these is.
+  if (status === 'declined') return updateQuote(id, { status, archivedAt: Date.now() });
   return updateQuote(id, { status });
+}
+
+/* ── Archive ──────────────────────────────────────────────────
+   Decided quotations leave the working list without leaving the
+   books. Nothing here changes a status: an accepted quotation that
+   is un-archived is still accepted, and the job it opened is
+   untouched either way. */
+
+export function archiveQuote(id) {
+  return updateQuote(id, { archivedAt: Date.now() });
+}
+
+export function unarchiveQuote(id) {
+  return updateQuote(id, { archivedAt: 0 });
+}
+
+export function isArchived(quote) {
+  return Boolean(quote && quote.archivedAt);
 }
 
 /* ── Importing the history ────────────────────────────────────

@@ -234,7 +234,13 @@
 
 html, body {
   margin:0; padding:0;
-  height:100%;
+  /* --app-h is measured from the visual viewport in app.js. The
+     fallbacks are there for the first paint and for browsers without
+     visualViewport; dvh is right nearly always, and 100% covers the
+     rest. Anything that resolves taller than the visible area leaves
+     a dead strip below the tab bar, which is what this is guarding
+     against — the shell must be exactly as tall as the screen. */
+  height:var(--app-h, 100%);
   color:var(--ink);
   font-family:"Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size:16px;
@@ -428,7 +434,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 }
 
 /* ── App shell ────────────────────────────────────────────── */
-.app { height:100%; position:relative; overflow:hidden; }
+.app { height:var(--app-h, 100%); position:relative; overflow:hidden; }
 .screen {
   position:absolute; inset:0;
   overflow-y:auto; overflow-x:hidden;
@@ -1208,9 +1214,11 @@ select.control { padding-right:34px; background-position:right 13px center; back
 :root { --content-w:100%; --rail-w:0px; }
 
 /* The shell tracks the *dynamic* viewport, so a mobile browser
-   collapsing its toolbar cannot leave the tab bar stranded. */
+   collapsing its toolbar cannot leave the tab bar stranded. The
+   measured --app-h overrides this the moment app.js runs; dvh is the
+   value used for the first paint. */
 @supports (height:100dvh) {
-  html, body, .app { height:100dvh; }
+  html, body, .app { height:var(--app-h, 100dvh); }
 }
 
 /* ── Compact phones (small iPhone SE, older Androids) ───────── */
@@ -1729,20 +1737,96 @@ select.control { padding-right:34px; background-position:right 13px center; back
 @media (hover:hover) and (pointer:fine) {
   .qcard:hover { box-shadow:var(--e2); transform:translateY(-1px); }
 }
-.qcard-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
-.qcard-num { font-size:12px; font-weight:600; color:var(--ink-3); letter-spacing:.3px; }
-.qcard-client { font-size:16px; font-weight:700; color:var(--ink); margin-top:2px; }
+/* One cluster of facts: who, then the identifiers under it, with the
+   figure and its status opposite. Four separate rows of label-and-
+   value took a whole phone screen per card; this takes a third of it
+   and answers the same questions. */
+.qcard-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.qcard-id { min-width:0; }
+.qcard-client {
+  font-size:16.5px; font-weight:700; color:var(--ink); letter-spacing:-.2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.qcard-line {
+  display:flex; align-items:center; flex-wrap:wrap; gap:5px;
+  margin-top:3px; font-size:12px; color:var(--ink-3);
+}
+.qcard-line .qcard-mr { font-weight:700; color:var(--ink-2); letter-spacing:.2px; }
+.qcard-dot {
+  width:3px; height:3px; border-radius:50%; background:var(--ink-3);
+  opacity:.55; flex:none;
+}
+.qcard-money { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:none; }
 .qcard-title {
   margin:0; font-size:13.5px; color:var(--ink-2); line-height:1.45;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
-.qcard-foot {
-  display:flex; align-items:flex-end; justify-content:space-between; gap:10px;
-  padding-top:9px; border-top:1px solid var(--line-soft);
-}
-.qcard-meta { font-size:11.5px; color:var(--ink-3); }
 .qcard-amt { font-size:19px; font-weight:700; color:var(--ink); letter-spacing:-.4px; }
-.qcard-acts { display:flex; flex-wrap:wrap; gap:6px; }
+
+/* The actions a quotation is actually used for, as a row of equal
+   targets across the foot of the card. Everything rarer is one tap
+   further in, behind the last one. */
+.qcard-acts {
+  display:flex; align-items:stretch; gap:7px;
+  padding-top:11px; border-top:1px solid var(--line-soft);
+}
+.act {
+  flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+  min-height:40px; padding:8px 10px; border-radius:13px;
+  background:var(--tea-soft); color:var(--ink-2);
+  font-size:12.5px; font-weight:600;
+  transition:background var(--t-fast), color var(--t-fast), transform .12s var(--ease);
+}
+.act:active { transform:scale(.96); }
+.act.ghost { flex:none; width:44px; background:transparent; border:1px solid var(--line); }
+.act.grow { flex:2; }
+.act:focus-visible { outline:2px solid var(--pine-700); outline-offset:2px; }
+@media (hover:hover) and (pointer:fine) {
+  .act:hover { background:var(--tea); color:var(--ink); }
+}
+@media (max-width:360px) {
+  .act span { display:none; }
+  .act { gap:0; }
+}
+
+/* ── The action sheet ──────────────────────────────────────────
+   Row targets, not a menu: 52px of tappable height each, the icon
+   carrying the meaning and the sub-line saying what it costs. */
+.actlist { display:flex; flex-direction:column; gap:2px; margin:2px 0 6px; }
+.actrow {
+  display:flex; align-items:center; gap:12px; width:100%;
+  padding:12px 6px; border-radius:14px; text-align:left;
+  color:var(--ink); transition:background var(--t-fast);
+}
+.actrow-ico {
+  flex:none; width:36px; height:36px; border-radius:12px;
+  display:grid; place-items:center;
+  background:var(--tea-soft); color:var(--ink-2);
+}
+.actrow-t { flex:1; min-width:0; font-size:14.5px; font-weight:600; }
+.actrow-t small {
+  display:block; font-size:12px; font-weight:400; color:var(--ink-3);
+  margin-top:1px; line-height:1.35;
+}
+.actrow svg:last-child { color:var(--ink-3); flex:none; }
+.actrow.danger { color:var(--out); }
+.actrow.danger .actrow-ico { background:var(--out-soft); color:var(--out); }
+.actrow:active { background:var(--tea-soft); }
+@media (hover:hover) and (pointer:fine) {
+  .actrow:hover { background:var(--tea-soft); }
+}
+
+/* A search field reads as one the moment it carries the glyph. */
+.searchbar { position:relative; }
+.searchbar-ico {
+  position:absolute; left:13px; top:50%; transform:translateY(-50%);
+  color:var(--ink-3); pointer-events:none; display:flex;
+}
+.searchbar .control { padding-left:38px; }
+.chipbar-sep {
+  flex:none; width:1px; align-self:stretch; margin:4px 3px;
+  background:var(--line);
+}
 
 .mini {
   display:inline-flex; align-items:center; gap:5px;
@@ -1785,6 +1869,76 @@ select.control { padding-right:34px; background-position:right 13px center; back
 
 .qb-grid { display:grid; grid-template-columns:1fr; gap:0 12px; }
 @media (min-width:520px) { .qb-grid { grid-template-columns:1fr 1fr; } }
+
+.qb-count {
+  display:inline-grid; place-items:center; min-width:19px; height:19px;
+  padding:0 5px; margin-left:5px; border-radius:999px;
+  background:var(--tea); color:var(--ink-2);
+  font-size:11px; font-weight:700; letter-spacing:0;
+}
+
+/* ── Clusters ──────────────────────────────────────────────────
+   A label above every input turns six facts into six blocks and a
+   screen and a half of scrolling. Paired on one line inside a single
+   card, the same six read as one thing — which is what they are:
+   the header of the document. */
+.control.lead {
+  font-size:17px; font-weight:700; letter-spacing:-.2px;
+  padding-top:13px; padding-bottom:13px;
+}
+.qcluster {
+  margin-top:10px; border-radius:var(--r-md);
+  background:var(--paper); border:1px solid var(--line-soft);
+  box-shadow:var(--e1); overflow:hidden;
+}
+.qpair {
+  display:flex; align-items:center; gap:10px;
+  padding:2px 12px 2px 14px; min-height:46px;
+}
+.qpair + .qpair { border-top:1px solid var(--line-soft); }
+.qpair-l {
+  flex:none; width:82px; font-size:12.5px; font-weight:600; color:var(--ink-3);
+}
+.qpair .control { flex:1; min-width:0; text-align:right; padding-right:2px; }
+.qpair .control:focus { text-align:left; }
+.qpair input[type="date"] { text-align:right; }
+
+/* ── Disclosure ────────────────────────────────────────────────
+   Everything with a default that is usually right: shut, with the
+   current value on the summary so a closed panel still answers the
+   question it is hiding. */
+.qdisc { margin-top:10px; }
+.qdisc > summary {
+  display:flex; align-items:center; gap:8px;
+  padding:11px 12px; border-radius:13px; cursor:pointer;
+  font-size:13px; font-weight:600; color:var(--ink-2);
+  background:var(--tea-soft);
+  list-style:none;
+}
+.qdisc > summary::-webkit-details-marker { display:none; }
+.qdisc > summary svg { flex:none; color:var(--ink-3); transition:transform var(--t-fast); }
+.qdisc[open] > summary svg { transform:rotate(90deg); }
+.qdisc[open] > summary { border-radius:13px 13px 0 0; }
+.qdisc-t { flex:1; }
+.qdisc-v { font-size:12.5px; font-weight:600; color:var(--ink-3); }
+.qdisc-peek {
+  flex:1; min-width:0; font-weight:500; color:var(--ink-3); font-size:12.5px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.qdisc.panel-disc > div,
+.qdisc > .fin-row:first-of-type { margin-top:8px; }
+.qdisc.tight > summary { background:transparent; padding:9px 2px; }
+.qdisc.tight[open] > summary { border-bottom:1px solid var(--line-soft); border-radius:0; }
+.mini.wide {
+  width:100%; justify-content:center; margin-top:9px; padding:10px 12px;
+}
+.qmoney { display:flex; align-items:center; gap:7px; }
+.qmoney span { font-size:11.5px; font-weight:600; color:var(--ink-3); }
+
+/* The builder's own action row, on the same shape as the card's. */
+.qb-acts { display:flex; align-items:stretch; gap:8px; margin-top:11px; }
+.qb-acts .act { min-height:46px; }
+.qb-acts .btn.sm.grow { flex:2; margin:0; }
 
 .qb-none {
   text-align:center; padding:26px 18px; color:var(--ink-3);
@@ -1842,13 +1996,19 @@ select.control { padding-right:34px; background-position:right 13px center; back
 
 .qline-spec { margin-top:10px; font-size:13px; }
 
+/* Rate, quantity and what the line is charged as — the three things
+   that move the total — on one row under the name. The kind toggle
+   pushes to the right so the two numbers stay side by side, which is
+   how they are checked. */
 .qline-money {
   display:flex; align-items:center; gap:10px; flex-wrap:wrap;
   margin-top:11px; padding-top:11px; border-top:1px solid var(--line-soft);
 }
+.qline-money .qline-kind { margin:0 0 0 auto; }
 .qline-amt {
-  margin-left:auto; font-size:16px; font-weight:700; color:var(--ink);
+  flex:none; font-size:16px; font-weight:700; color:var(--ink); letter-spacing:-.3px;
 }
+.qline-money .mini-in { width:82px; }
 
 /* ── The foot that stays put ───────────────────────────────── */
 .qb-foot {
@@ -2088,13 +2248,6 @@ select.control { padding-right:34px; background-position:right 13px center; back
 
 /* ── Revision families, brand mark, GST switch ───────────────── */
 
-.qcard-pills { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:none; }
-.qcard-rev {
-  display:inline-block; margin-left:7px;
-  font-size:10.5px; font-weight:600; letter-spacing:.2px;
-  color:var(--ink-3);
-}
-
 .qcard-hist { margin-top:2px; }
 .qcard-hist summary {
   cursor:pointer; list-style:none;
@@ -2231,44 +2384,7 @@ button.qline-img img { width:100%; height:100%; object-fit:cover; }
   .qb-tot { flex:1; }
 }
 
-/* The MR number names the document, so it opens it. */
-.qcard-mr {
-  font: inherit; color:var(--ink-3); padding:0;
-  border-bottom:1px dashed var(--line);
-  transition:color var(--t-fast), border-color var(--t-fast);
-}
-@media (hover:hover) and (pointer:fine) {
-  .qcard-mr:hover { color:var(--ink); border-color:var(--ink-3); }
-}
-.qcard-mr:focus-visible { outline:2px solid var(--pine-700); outline-offset:2px; }
-
-/* ── The card's secondary actions ────────────────────────────
-   The decision — accepted, declined — stays on the face of the
-   card. Revise, duplicate, edit and delete fold behind one mark,
-   because across seventy cards six buttons apiece is not a list
-   any more, it is a wall. */
-.qmore { position:relative; }
-.qmore > summary {
-  list-style:none; cursor:pointer;
-  padding:6px 12px; letter-spacing:1px; line-height:1;
-}
-.qmore > summary::-webkit-details-marker { display:none; }
-.qmore[open] > summary { background:var(--tea); color:var(--ink); }
-
-.qmore-menu {
-  position:absolute; right:0; bottom:calc(100% + 6px); z-index:12;
-  display:flex; flex-direction:column; min-width:150px;
-  padding:5px; border-radius:14px;
-  background:var(--paper); border:1px solid var(--line);
-  box-shadow:var(--e3);
-}
-.qmore-item {
-  padding:9px 12px; border-radius:9px;
-  font-size:13px; font-weight:500; text-align:left; color:var(--ink-2);
-  transition:background var(--t-fast), color var(--t-fast);
-}
-.qmore-item.danger { color:var(--out); }
-@media (hover:hover) and (pointer:fine) {
-  .qmore-item:hover { background:var(--tea-soft); color:var(--ink); }
-  .qmore-item.danger:hover { background:var(--out-soft); color:var(--out); }
-}
+/* The card's long tail of actions moved into a sheet — see .actlist.
+   A dropdown anchored to a card in a scrolling list had to be closed
+   as carefully as it was opened, and on a phone it opened under the
+   thumb that had just tapped it. */

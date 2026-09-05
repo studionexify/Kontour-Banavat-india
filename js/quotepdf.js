@@ -1,0 +1,263 @@
+/* quotepdf.js — the quotation as a file you can hand to a client.
+ *
+ * Laid out in the same order as the printed document and the on-screen
+ * one: who it is for, what is being supplied, what it comes to, then
+ * the boilerplate. The figures come from quoteTotals, the same call the
+ * other two use, so the three can never disagree.
+ *
+ * Sharing goes through the Web Share API where the device has it —
+ * which on a phone is the WhatsApp sheet, the thing this is actually
+ * for. Everywhere else it falls back to a download, and the caller is
+ * told which happened so it can say so.
+ */
+
+import { createPdf, wrapText, textWidth, A4 } from './pdf.js';
+import { quoteTotals, lineAmount, settings, renderTerms } from './quotes.js';
+import { dmy } from './format.js';
+
+const M = 42;                       // page margin
+const RIGHT = A4.w - M;
+const BODY = RIGHT - M;
+const FOOT_LIMIT = A4.h - 58;       // where a page has to break
+
+/* WinAnsi has no ₹, so money is spelled. Grouping stays Indian —
+   1,20,000 not 120,000 — because that is how the figure is read. */
+function money(n) {
+  const v = Math.round(Number(n) || 0);
+  const s = Math.abs(v).toString();
+  const last3 = s.slice(-3);
+  const rest = s.slice(0, -3);
+  const grouped = rest ? `${rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${last3}` : last3;
+  return `${v < 0 ? '-' : ''}Rs. ${grouped}`;
+}
+
+export function quoteFileName(q) {
+  const client = String(q.client?.name || 'client').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-');
+  return `MR-${q.mrNo}${client ? `-${client}` : ''}.pdf`;
+}
+
+/** The whole quotation as a PDF blob. */
+export function quotePdfBlob(quote) {
+  const s = settings();
+  const t = quoteTotals(quote);
+  const lines = quote.lines || [];
+  const ship = (quote.shipping || []).filter((x) => Number(x.amount) > 0 || x.label);
+  const doc = createPdf();
+  let y = M;
+
+  /* ── Letterhead ── */
+  doc.text(s.company.name || 'Banavat India', M, y + 12, { size: 17, bold: true, gray: 0.08 });
+  doc.text('QUOTATION', RIGHT, y + 12, { size: 15, bold: true, align: 'right', gray: 0.35 });
+  y += 22;
+  doc.text(`MR # ${quote.mrNo}`, RIGHT, y + 10, { size: 10, align: 'right', gray: 0.35 });
+  y += 20;
+  doc.line(M, y, RIGHT, y, { gray: 0.6, weight: 1 });
+  y += 20;
+
+  /* ── Who and when, two columns ── */
+  const colB = M + BODY / 2 + 10;
+  const pairs = [
+    ['Client', quote.client?.name || '-'],
+    ['Contact', quote.client?.phone || '-'],
+    ...(quote.client?.email ? [['Email', quote.client.email]] : []),
+    ['Delivery', quote.client?.shippingAddress || '-'],
+  ];
+  const dates = [
+    ['Quoted', quote.date ? dmy(quote.date) : '-'],
+    ['Valid till', quote.validUntil ? dmy(quote.validUntil) : '-'],
+    ['GST', t.taxed ? `${quote.gstRate}%` : 'Not applicable'],
+  ];
+  const metaTop = y;
+  pairs.forEach(([k, v], i) => {
+    doc.text(`${k}`, M, metaTop + i * 15, { size: 9, gray: 0.5 });
+    doc.text(v, M + 62, metaTop + i * 15, { size: 10, bold: k === 'Client', gray: 0.1 });
+  });
+  dates.forEach(([k, v], i) => {
+    doc.text(`${k}`, colB, metaTop + i * 15, { size: 9, gray: 0.5 });
+    doc.text(v, colB + 62, metaTop + i * 15, { size: 10, gray: 0.1 });
+  });
+  y = metaTop + Math.max(pairs.length, dates.length) * 15 + 12;
+
+  /* ── Items ──
+     Five columns: number, name + spec, dimensions, rate, amount.
+     The description wraps, so a row's height is whatever its tallest
+     cell needs, and a row that would cross the foot moves to a new
+     page whole rather than splitting mid-description. */
+  const C = {
+    sr: M,
+    name: M + 24,
+    dim: M + 24 + 190,
+    rate: M + 24 + 190 + 108,
+    qty: M + 24 + 190 + 108 + 62,
+    amt: RIGHT,
+  };
+  const nameW = 182;
+  const dimW = 100;
+
+  const header = () => {
+    doc.fill(M, y, BODY, 20, 0.93);
+    doc.text('#', C.sr + 4, y + 14, { size: 9, bold: true, gray: 0.3 });
+    doc.text('ITEM', C.name, y + 14, { size: 9, bold: true, gray: 0.3 });
+    doc.text('DIMENSIONS', C.dim, y + 14, { size: 9, bold: true, gray: 0.3 });
+    doc.text('RATE', C.qty - 8, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
+    doc.text('QTY', C.amt - 78, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
+    doc.text('AMOUNT', C.amt, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
+    y += 20;
+  };
+  header();
+
+  if (!lines.length) {
+    doc.text('No items on this quotation yet.', M + 4, y + 14, { size: 10, gray: 0.5 });
+    y += 26;
+  }
+
+  lines.forEach((l, i) => {
+    const nameLines = wrapText(l.name || 'Item', nameW, 10, true);
+    const descLines = l.description ? wrapText(l.description, nameW, 9) : [];
+    const dimLines = l.dims ? wrapText(l.dims, dimW, 9) : [];
+    const rowH = Math.max(
+      nameLines.length * 13 + descLines.length * 11 + (l.finish ? 11 : 0),
+      dimLines.length * 11, 18,
+    ) + 12;
+
+    if (y + rowH > FOOT_LIMIT) { doc.addPage(); y = M; header(); }
+
+    let ty = y + 12;
+    doc.text(String(i + 1), C.sr + 4, ty, { size: 9, gray: 0.45 });
+    for (const ln of nameLines) { doc.text(ln, C.name, ty, { size: 10, bold: true, gray: 0.1 }); ty += 13; }
+    if (l.finish) { doc.text(l.finish, C.name, ty, { size: 9, gray: 0.45 }); ty += 11; }
+    for (const ln of descLines) { doc.text(ln, C.name, ty, { size: 9, gray: 0.4 }); ty += 11; }
+
+    let dy = y + 12;
+    for (const ln of dimLines) { doc.text(ln, C.dim, dy, { size: 9, gray: 0.35 }); dy += 11; }
+
+    doc.text(money(l.unitPrice), C.qty - 8, y + 12, { size: 10, align: 'right', gray: 0.15 });
+    doc.text(String(l.kind === 'lump' ? 1 : l.qty), C.amt - 78, y + 12, { size: 10, align: 'right', gray: 0.15 });
+    doc.text(money(lineAmount(l)), C.amt, y + 12, { size: 10, bold: true, align: 'right', gray: 0.05 });
+
+    y += rowH;
+    doc.line(M, y, RIGHT, y, { gray: 0.86 });
+  });
+
+  /* ── The ladder, in the order it prints: tax inside Sub Total A,
+        shipping added after it as Sub Total B. ── */
+  const ladder = [
+    ['Sub - Total', money(t.sub), false],
+    ...(t.taxed ? [[`GST (${quote.gstRate}%)`, money(t.gst), false]] : []),
+    ['Sub Total A', money(t.subA), false],
+    ...ship.map((x) => [x.label || 'Shipping', money(x.amount), false]),
+    ['Sub Total B', money(t.subB), false],
+  ];
+  const ladderH = ladder.length * 15 + 34;
+  if (y + ladderH > FOOT_LIMIT) { doc.addPage(); y = M; }
+  y += 14;
+
+  const sumX = RIGHT - 210;
+  ladder.forEach(([k, v]) => {
+    doc.text(k, sumX, y + 10, { size: 9.5, gray: 0.4 });
+    doc.text(v, RIGHT, y + 10, { size: 9.5, align: 'right', gray: 0.15 });
+    y += 15;
+  });
+  y += 4;
+  doc.fill(sumX - 12, y, RIGHT - sumX + 12, 26, 0.93);
+  doc.text('TOTAL', sumX, y + 17, { size: 10, bold: true, gray: 0.2 });
+  doc.text(money(t.total), RIGHT - 6, y + 17, { size: 12, bold: true, align: 'right', gray: 0 });
+  y += 38;
+
+  /* ── Boilerplate ── */
+  const block = (title, body) => {
+    if (!body || !String(body).trim()) return;
+    const est = 20 + wrapText(body, BODY, 9).length * 12;
+    if (y + est > FOOT_LIMIT) { doc.addPage(); y = M; }
+    doc.text(title.toUpperCase(), M, y + 10, { size: 9, bold: true, gray: 0.35 });
+    y += 18;
+    for (const ln of String(body).split('\n').map((x) => x.trim()).filter(Boolean)) {
+      const wrapped = wrapText(ln.replace(/^[-–•]\s*/, ''), BODY - 12, 9);
+      doc.text('-', M, y + 8, { size: 9, gray: 0.5 });
+      wrapped.forEach((w, i) => { doc.text(w, M + 12, y + 8 + i * 11, { size: 9, gray: 0.25 }); });
+      y += wrapped.length * 11 + 3;
+    }
+    y += 10;
+  };
+
+  block('Payment terms', quote.paymentTerms);
+  block('Terms & conditions', renderTerms(quote));
+
+  const bankText = [
+    `Bank: ${s.bank.bank}`, `A/C Name: ${s.bank.name}`,
+    `A/C Number: ${s.bank.account}`, `IFSC: ${s.bank.ifsc}`, `Branch: ${s.bank.branch}`,
+  ].filter((x) => !/:\s*$/.test(x)).join('\n');
+  const contactText = [
+    s.company.name, s.company.gstin ? `GSTIN: ${s.company.gstin}` : '',
+    s.company.address, s.company.email, s.company.phone, s.company.website,
+  ].filter(Boolean).join('\n');
+
+  if (y + 96 > FOOT_LIMIT) { doc.addPage(); y = M; }
+  doc.line(M, y, RIGHT, y, { gray: 0.8 });
+  y += 16;
+  doc.text('BANKING DETAILS', M, y + 8, { size: 9, bold: true, gray: 0.35 });
+  doc.text('CONTACT', colB, y + 8, { size: 9, bold: true, gray: 0.35 });
+  y += 18;
+  const bankEnd = doc.paragraph(bankText, M, y + 8, BODY / 2 - 20, { size: 9, leading: 1.3, gray: 0.3 });
+  const contactEnd = doc.paragraph(contactText, colB, y + 8, BODY / 2 - 20, { size: 9, leading: 1.3, gray: 0.3 });
+  y = Math.max(bankEnd, contactEnd) + 6;
+
+  if (s.note) {
+    if (y + 60 > FOOT_LIMIT) { doc.addPage(); y = M; }
+    doc.text('NOTE', M, y + 8, { size: 9, bold: true, gray: 0.35 });
+    y = doc.paragraph(String(s.note).replace(/\n{2,}/g, '\n'), M, y + 22, BODY, { size: 9, gray: 0.3 }) + 4;
+  }
+
+  doc.text('*Terms and conditions apply.', M, Math.min(y + 12, A4.h - 30), { size: 8, gray: 0.5 });
+
+  return doc.blob();
+}
+
+/** The one-line message that rides along with a shared quotation. */
+export function quoteShareText(quote) {
+  const t = quoteTotals(quote);
+  const who = quote.client?.name ? ` for ${quote.client.name}` : '';
+  return `Quotation MR # ${quote.mrNo}${who} — ${money(t.total)}. ${settings().company.name || ''}`.trim();
+}
+
+function saveBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/** Downloads the quotation. Returns the file name so callers can say it. */
+export function downloadQuotePdf(quote) {
+  const name = quoteFileName(quote);
+  saveBlob(quotePdfBlob(quote), name);
+  return name;
+}
+
+/**
+ * Opens the device's share sheet with the PDF attached.
+ * Resolves to 'shared', 'downloaded' or 'cancelled', because those
+ * need three different things said to the person who tapped.
+ */
+export async function shareQuotePdf(quote) {
+  const name = quoteFileName(quote);
+  const blob = quotePdfBlob(quote);
+  const file = new File([blob], name, { type: 'application/pdf' });
+
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: `MR # ${quote.mrNo}`, text: quoteShareText(quote) });
+      return 'shared';
+    } catch (e) {
+      // A dismissed sheet is a decision, not a failure — only a real
+      // error should fall through to saving a file nobody asked for.
+      if (e && e.name === 'AbortError') return 'cancelled';
+    }
+  }
+  saveBlob(blob, name);
+  return 'downloaded';
+}
