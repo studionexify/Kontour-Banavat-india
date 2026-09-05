@@ -234,12 +234,14 @@
 
 html, body {
   margin:0; padding:0;
-  /* --app-h is measured from the visual viewport in app.js. The
-     fallbacks are there for the first paint and for browsers without
-     visualViewport; dvh is right nearly always, and 100% covers the
-     rest. Anything that resolves taller than the visible area leaves
-     a dead strip below the tab bar, which is what this is guarding
-     against — the shell must be exactly as tall as the screen. */
+  /* Plain 100% until dvh is known to be supported (below) or, on a
+     browser that lacks it, until app.js measures the real visible
+     height into --app-h. Never the other way around: a JS height
+     that overrides a dvh-capable browser is what caused the dead
+     strip under the tab bar on iOS Safari — its dvh already tracks
+     the safe area and the disappearing toolbar correctly, and the
+     one time this measured it independently it measured shorter than
+     the real screen and pinned that undersized height permanently. */
   height:var(--app-h, 100%);
   color:var(--ink);
   font-family:"Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1218,12 +1220,15 @@ select.control { padding-right:34px; background-position:right 13px center; back
 
 :root { --content-w:100%; --rail-w:0px; }
 
-/* The shell tracks the *dynamic* viewport, so a mobile browser
-   collapsing its toolbar cannot leave the tab bar stranded. The
-   measured --app-h overrides this the moment app.js runs; dvh is the
-   value used for the first paint. */
+/* dvh tracks the *dynamic* viewport on its own — a mobile browser
+   collapsing its toolbar, or the safe area around a home indicator,
+   is exactly what it was built to account for — so a dvh-capable
+   browser gets it unconditionally here, later in the cascade than
+   the var() above and at the same specificity, so it always wins
+   where it applies. app.js's own measurement is left to the browsers
+   this rule does not match. */
 @supports (height:100dvh) {
-  html, body, .app { height:var(--app-h, 100dvh); }
+  html, body, .app { height:100dvh; }
 }
 
 /* ── Compact phones (small iPhone SE, older Androids) ───────── */
@@ -1772,26 +1777,35 @@ select.control { padding-right:34px; background-position:right 13px center; back
    targets across the foot of the card. Everything rarer is one tap
    further in, behind the last one. */
 .qcard-acts {
-  display:flex; align-items:stretch; gap:7px;
+  display:flex; align-items:stretch; flex-wrap:wrap; gap:7px; width:100%;
   padding-top:11px; border-top:1px solid var(--line-soft);
 }
 .act {
-  flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
-  min-height:40px; padding:8px 10px; border-radius:13px;
+  /* min-width:0 is load-bearing: a flex item's default min-width is
+     the width of its own content, so without this a row that is a
+     little too narrow does not compress the buttons — it overflows
+     the card, and everything past the screen edge is simply gone,
+     with no scrollbar or visual sign anything is missing. That is
+     the bug this once was; flex-wrap above is the second line of
+     defence, so a row that still cannot fit drops to two rows,
+     visibly, rather than losing a button off the edge again. */
+  flex:1 1 72px; min-width:0; display:flex; align-items:center; justify-content:center; gap:6px;
+  min-height:40px; padding:8px 8px; border-radius:13px;
   background:var(--tea-soft); color:var(--ink-2);
   font-size:12.5px; font-weight:600;
   transition:background var(--t-fast), color var(--t-fast), transform .12s var(--ease);
 }
+.act span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .act:active { transform:scale(.96); }
 .act.ghost { flex:none; width:44px; background:transparent; border:1px solid var(--line); }
-.act.grow { flex:2; }
+.act.grow { flex:2 1 120px; }
 .act:focus-visible { outline:2px solid var(--pine-700); outline-offset:2px; }
 @media (hover:hover) and (pointer:fine) {
   .act:hover { background:var(--tea); color:var(--ink); }
 }
-@media (max-width:360px) {
+@media (max-width:400px) {
   .act span { display:none; }
-  .act { gap:0; }
+  .act { gap:0; flex-basis:44px; }
 }
 
 /* ── The action sheet ──────────────────────────────────────────
@@ -1941,9 +1955,9 @@ select.control { padding-right:34px; background-position:right 13px center; back
 .qmoney span { font-size:11.5px; font-weight:600; color:var(--ink-3); }
 
 /* The builder's own action row, on the same shape as the card's. */
-.qb-acts { display:flex; align-items:stretch; gap:8px; margin-top:11px; }
+.qb-acts { display:flex; align-items:stretch; flex-wrap:wrap; gap:8px; margin-top:11px; }
 .qb-acts .act { min-height:46px; }
-.qb-acts .btn.sm.grow { flex:2; margin:0; }
+.qb-acts .btn.sm.grow { flex:2 1 140px; min-width:0; margin:0; }
 
 .qb-none {
   text-align:center; padding:26px 18px; color:var(--ink-3);

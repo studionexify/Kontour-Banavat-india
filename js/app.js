@@ -132,15 +132,16 @@ function buildPad(root, onKey) {
    who was holding the phone. A copy with no cloud configured skips
    the first entirely and behaves exactly as it always has. */
 /* ── The shell's height ────────────────────────────────────────
-   CSS units are a guess at how tall the screen is: 100vh is too tall
-   whenever a browser toolbar is showing, and 100dvh still comes out
-   wrong in a home-screen app on a phone with a home indicator. Both
-   ways the shell ends above the bottom of the screen and leaves a
-   dead strip under the tab bar.
-   The visual viewport is not a guess — it is the area actually being
-   looked at — so the shell is sized from it, and re-sized whenever it
-   changes: rotation, a keyboard opening, a toolbar sliding away. */
+   Only for a browser that cannot do `100dvh` at all — everything
+   that can gets it straight from CSS (see styles.css) and this never
+   runs. It has to stay that way: this file measured
+   `visualViewport.height` on a real iPhone once and it came back
+   shorter than the actual screen, permanently pinning the shell
+   above the home indicator and reopening the exact dead strip this
+   was written to close. dvh does not have that failure mode — it is
+   the browser's own answer, not a second guess at it. */
 function trackViewportHeight() {
+  if (CSS.supports('height', '100dvh')) return;
   const vv = window.visualViewport;
   let last = 0;
   const apply = () => {
