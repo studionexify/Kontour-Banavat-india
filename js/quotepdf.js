@@ -42,13 +42,16 @@ function money(n) {
    THUMB_PX is the longest edge kept, generous against the ~46pt slot
    so the image still holds up if the PDF is printed or zoomed. */
 const THUMB_PX = 220;
+/* The mark is small and square in the letterhead, so a much smaller
+   target than a line photo is plenty and keeps the file light. */
+const LOGO_PX = 120;
 
-function reencode(uri) {
+function reencode(uri, maxPx = THUMB_PX) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
       try {
-        const scale = Math.min(1, THUMB_PX / Math.max(img.width, img.height));
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(img.width * scale));
         canvas.height = Math.max(1, Math.round(img.height * scale));
@@ -97,6 +100,25 @@ async function prepareImages(lines) {
   return ready;
 }
 
+/** Reads the uploaded mark as-is, if it already is a JPEG small
+    enough to place directly — the same fast path a line photo gets,
+    and for the same reason: it costs no await. */
+function readLogoDirect() {
+  const uri = settings().logo;
+  if (!uri) return null;
+  const direct = readJpeg(dataUriToBytes(uri));
+  return (direct && Math.max(direct.w, direct.h) <= LOGO_PX * 2) ? direct : null;
+}
+
+/** The uploaded mark, ready to place — re-encoded through a canvas
+    when it is not already a small JPEG, since settings().logo can in
+    principle be any format a browser can decode. */
+async function prepareLogo() {
+  const uri = settings().logo;
+  if (!uri) return null;
+  return readLogoDirect() || reencode(uri, LOGO_PX);
+}
+
 export function quoteFileName(q) {
   const client = String(q.client?.name || 'client').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-');
   return `MR-${q.mrNo}${client ? `-${client}` : ''}.pdf`;
@@ -105,11 +127,18 @@ export function quoteFileName(q) {
 /** The whole quotation as a PDF blob. Async only because a photograph
     that needs re-encoding has to be decoded by the browser first. */
 export async function quotePdfBlob(quote) {
-  return render(quote, await prepareImages(quote.lines || []));
+  const [photos, logo] = await Promise.all([
+    prepareImages(quote.lines || []),
+    prepareLogo(),
+  ]);
+  return render(quote, photos, logo);
 }
 
+/* Banavat India's own blue, wherever the company name prints. */
+const BRAND_BLUE = [0.122, 0.247, 0.561];
+
 /** The document itself, drawn from a quote and its prepared photos. */
-function render(quote, photos) {
+function render(quote, photos, logo = null) {
   const s = settings();
   const t = quoteTotals(quote);
   const lines = quote.lines || [];
@@ -117,14 +146,21 @@ function render(quote, photos) {
   const doc = createPdf();
   let y = M;
 
-  /* ── Letterhead ── */
-  doc.text(s.company.name || 'Banavat India', M, y + 12, { size: 17, bold: true, gray: 0.08 });
-  doc.text('QUOTATION', RIGHT, y + 12, { size: 15, bold: true, align: 'right', gray: 0.35 });
-  y += 22;
-  doc.text(`MR # ${quote.mrNo}`, RIGHT, y + 10, { size: 10, align: 'right', gray: 0.35 });
-  y += 20;
-  doc.line(M, y, RIGHT, y, { gray: 0.6, weight: 1 });
-  y += 20;
+  /* ── Letterhead: mark + name in blue on the left, QUOTATION big on
+     the right, one row and a rule under it — how it actually prints,
+     not the fuller boxed layout the early mockups used. ── */
+  let nameX = M;
+  if (logo) {
+    const box = doc.image(logo, M, y - 4, 24, 24);
+    if (box) nameX = M + 24 + 8;
+  }
+  doc.text(s.company.name || 'Banavat India', nameX, y + 12, { size: 15, bold: true, rgb: BRAND_BLUE });
+  doc.text('QUOTATION', RIGHT, y + 14, { size: 20, bold: true, align: 'right', gray: 0.07 });
+  y += 30;
+  doc.line(M, y, RIGHT, y, { gray: 0.2, weight: 1.4 });
+  y += 16;
+  doc.text(`MR # ${quote.mrNo}`, RIGHT, y + 2, { size: 10, align: 'right', gray: 0.35 });
+  y += 14;
 
   /* ── Who and when, two columns ── */
   const colB = M + BODY / 2 + 10;
@@ -280,7 +316,11 @@ function render(quote, photos) {
   /* ── The ladder, in the order it prints: tax inside Sub Total A,
         shipping added after it as Sub Total B. ── */
   const ladder = [
-    ['Sub - Total', money(t.sub), false],
+    [t.discount ? 'Total' : 'Sub - Total', money(t.sub), false],
+    ...(t.discount ? [
+      ['Discount', `-${money(t.discount)}`, false],
+      ['Sub-Total', money(t.afterDiscount), false],
+    ] : []),
     ...(t.taxed ? [[`GST (${quote.gstRate}%)${lineItemGst ? ' — as above' : ''}`, money(t.gst), false]] : []),
     ['Sub Total A', money(t.subA), false],
     ...ship.map((x) => [x.label || 'Shipping', money(x.amount), false]),
@@ -397,9 +437,10 @@ export async function downloadQuotePdf(quote) {
 export async function shareQuotePdf(quote) {
   const name = quoteFileName(quote);
   const { ready, needs } = collectPhotos(quote.lines || []);
+  const logo = settings().logo ? readLogoDirect() : undefined;   // undefined: no logo at all, nothing to wait on
   // Nothing to decode means nothing to await, so the share sheet is
   // still opening on the same tap that asked for it.
-  const blob = needs.length ? await quotePdfBlob(quote) : render(quote, ready);
+  const blob = (needs.length || logo === null) ? await quotePdfBlob(quote) : render(quote, ready, logo);
   const file = new File([blob], name, { type: 'application/pdf' });
 
   if (navigator.canShare && navigator.canShare({ files: [file] })) {

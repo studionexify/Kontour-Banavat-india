@@ -84,6 +84,15 @@ export function openSettings(ctx) {
                                  : 'Bring in the quotations from the sheet', 'history')}
           </div>
 
+          <p class="tray-lbl sp">Quotations</p>
+          <div class="list">
+            ${navRow('note', 'Company & banking', `${esc(qSettings().company.name)} · shown on every quotation`, 'qcompany')}
+            ${navRow('note', 'Payment terms', 'The bullets under each quote’s items', 'qpayment')}
+            ${navRow('note', 'Terms & Conditions', `${(qSettings().terms || '').split('\n').filter(Boolean).length} bullets`, 'qterms')}
+            ${navRow('note', 'Note Please', `${(qSettings().note || '').split(/\n{2,}/).filter(Boolean).length} paragraphs`, 'qnote')}
+            ${navRow('gear', 'Quote defaults', `${qSettings().gstRate}% GST · ${qSettings().leadTimeDays || 15}-day lead time`, 'qdefaults')}
+          </div>
+
         `;
       }
 
@@ -94,6 +103,8 @@ export function openSettings(ctx) {
           gst: gstSheet, drive: driveSheet, ai: aiSheet, pending: pendingSheet,
           pin: pinSheet, backup: backupSheet, about: aboutSheet, logo: logoSheet, history: historySheet, qsync: qsyncSheet,
           people: peopleSheet, sync: syncSheet, account: accountSheet,
+          qcompany: qCompanySheet, qpayment: qPaymentSheet,
+          qterms: qTermsSheet, qnote: qNoteSheet, qdefaults: qDefaultsSheet,
         };
         await map[where](ctx, paint);
       });
@@ -1244,6 +1255,182 @@ function accountSheet(ctx, back) {
 }
 
 
+/* ── Quotation settings ──────────────────────────────────────────
+   The boilerplate every quotation prints, editable instead of baked
+   into the code — see js/quotes.js's SHARED_QUOTE_SETTINGS for the
+   full list of what a change here carries to every device on the
+   same books. */
+
+function qCompanySheet(ctx, back) {
+  const s = qSettings();
+  const c = s.company, b = s.bank;
+  const h = openSheet({
+    title: 'Company & banking',
+    body: `
+      <div class="sheet-body">
+        <p class="tray-lbl">Shown in every quotation's letterhead and contact block</p>
+        <div class="field"><label>Company name</label><input class="control" data-name value="${esc(c.name)}"></div>
+        <div class="field"><label>GSTIN</label><input class="control" data-gstin value="${esc(c.gstin)}"></div>
+        <div class="field"><label>Address</label><input class="control" data-address value="${esc(c.address)}"></div>
+        <div class="field-2">
+          <div class="field"><label>Email</label><input class="control" data-email value="${esc(c.email)}"></div>
+          <div class="field"><label>Phone</label><input class="control" data-phone value="${esc(c.phone)}"></div>
+        </div>
+        <div class="field"><label>Website</label><input class="control" data-website value="${esc(c.website)}"></div>
+
+        <p class="tray-lbl sp">Banking details</p>
+        <div class="field"><label>Bank</label><input class="control" data-bank value="${esc(b.bank)}"></div>
+        <div class="field-2">
+          <div class="field"><label>A/C name</label><input class="control" data-bname value="${esc(b.name)}"></div>
+          <div class="field"><label>A/C number</label><input class="control" data-bacc value="${esc(b.account)}"></div>
+        </div>
+        <div class="field-2">
+          <div class="field"><label>IFSC</label><input class="control" data-bifsc value="${esc(b.ifsc)}"></div>
+          <div class="field"><label>Branch</label><input class="control" data-bbranch value="${esc(b.branch)}"></div>
+        </div>
+        <button class="btn" data-save>Save</button>
+      </div>`,
+    onMount(root) {
+      on(root, '[data-save]', () => {
+        updateQSettings({
+          company: {
+            name: root.querySelector('[data-name]').value,
+            gstin: root.querySelector('[data-gstin]').value,
+            address: root.querySelector('[data-address]').value,
+            email: root.querySelector('[data-email]').value,
+            phone: root.querySelector('[data-phone]').value,
+            website: root.querySelector('[data-website]').value,
+          },
+          bank: {
+            bank: root.querySelector('[data-bank]').value,
+            name: root.querySelector('[data-bname]').value,
+            account: root.querySelector('[data-bacc]').value,
+            ifsc: root.querySelector('[data-bifsc]').value,
+            branch: root.querySelector('[data-bbranch]').value,
+          },
+        });
+        toast('Saved');
+        h.close();
+        back();
+      });
+    },
+  });
+  return h;
+}
+
+function qPaymentSheet(ctx, back) {
+  const s = qSettings();
+  const h = openSheet({
+    title: 'Payment terms',
+    body: `
+      <div class="sheet-body">
+        <div class="field">
+          <label>One line per bullet</label>
+          <textarea class="control" data-terms rows="6">${esc(s.paymentTerms || '')}</textarea>
+          <div class="hint">Printed under Payment Terms on every quotation — only the default a new one starts from; each quotation can still edit its own.</div>
+        </div>
+        <button class="btn" data-save>Save</button>
+      </div>`,
+    onMount(root) {
+      on(root, '[data-save]', () => {
+        updateQSettings({ paymentTerms: root.querySelector('[data-terms]').value });
+        toast('Saved');
+        h.close();
+        back();
+      });
+    },
+  });
+  return h;
+}
+
+function qTermsSheet(ctx, back) {
+  const s = qSettings();
+  const h = openSheet({
+    title: 'Terms & Conditions',
+    body: `
+      <div class="sheet-body">
+        <div class="field">
+          <label>One line per bullet</label>
+          <textarea class="control" data-terms rows="10">${esc(s.terms || '')}</textarea>
+          <div class="hint">{{leadTime}} and {{fabricRate}} are filled in from each quotation's own figures when it prints.</div>
+        </div>
+        <button class="btn" data-save>Save</button>
+      </div>`,
+    onMount(root) {
+      on(root, '[data-save]', () => {
+        updateQSettings({ terms: root.querySelector('[data-terms]').value });
+        toast('Saved');
+        h.close();
+        back();
+      });
+    },
+  });
+  return h;
+}
+
+function qNoteSheet(ctx, back) {
+  const s = qSettings();
+  const h = openSheet({
+    title: 'Note Please',
+    body: `
+      <div class="sheet-body">
+        <div class="field">
+          <label>Paragraphs, one blank line between each</label>
+          <textarea class="control" data-note rows="10">${esc(s.note || '')}</textarea>
+          <div class="hint">Printed under "Note Please", right after Terms & Conditions.</div>
+        </div>
+        <button class="btn" data-save>Save</button>
+      </div>`,
+    onMount(root) {
+      on(root, '[data-save]', () => {
+        updateQSettings({ note: root.querySelector('[data-note]').value });
+        toast('Saved');
+        h.close();
+        back();
+      });
+    },
+  });
+  return h;
+}
+
+function qDefaultsSheet(ctx, back) {
+  const s = qSettings();
+  const h = openSheet({
+    title: 'Quote defaults',
+    body: `
+      <div class="sheet-body">
+        <div class="field">
+          <label>Default GST rate %</label>
+          <input class="control num" data-gstrate type="number" min="0" max="28" value="${s.gstRate}">
+        </div>
+        <div class="field">
+          <label>Default lead time (days)</label>
+          <input class="control num" data-leaddays type="number" min="0" inputmode="numeric" value="${s.leadTimeDays || 15}">
+        </div>
+        <div class="field">
+          <label>Default delivery city</label>
+          <input class="control" data-city value="${esc(s.defaultCity || '')}">
+        </div>
+        <button class="btn" data-save>Save</button>
+      </div>`,
+    onMount(root) {
+      on(root, '[data-save]', () => {
+        const days = Number(root.querySelector('[data-leaddays]').value) || 15;
+        updateQSettings({
+          gstRate: Number(root.querySelector('[data-gstrate]').value) || 0,
+          leadTimeDays: days,
+          leadTime: `${days}–${days + 5} business days`,
+          defaultCity: root.querySelector('[data-city]').value,
+        });
+        toast('Saved');
+        h.close();
+        back();
+      });
+    },
+  });
+  return h;
+}
+
 /* ── Brand ─────────────────────────────────────────────────────
    One image, used by the quotation document, the rail wordmark and
    the lock screen. Stored with the quotation settings rather than
@@ -1278,8 +1465,8 @@ async function logoSheet(ctx, back) {
         on(host, '[data-pick]', async () => {
           const files = await pickImage({ camera: false });
           if (!files || !files[0]) return;
-          const blob = await shrink(files[0]);
-          updateQSettings({ logo: await toBase64(blob) });
+          const { blob } = await shrink(files[0]);
+          updateQSettings({ logo: `data:image/jpeg;base64,${await toBase64(blob)}` });
           toast('Logo saved');
           paint();
           if (back) back();

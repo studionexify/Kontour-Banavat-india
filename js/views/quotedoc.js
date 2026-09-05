@@ -112,12 +112,9 @@ export function docHTML(q) {
   return `
   <article class="doc" data-doc>
     <header class="doc-head">
-      ${hasLogo() ? markHTML({ size: 58, className: 'doc-logo', alt: s.company.name })
-                  : `<div class="doc-logo ph">${esc(s.company.name)}</div>`}
-      <div class="doc-head-t">
-        <h1 class="doc-title">QUOTATION</h1>
-        <p class="doc-head-sub">${esc(s.company.name)}</p>
-      </div>
+      ${hasLogo() ? markHTML({ size: 34, className: 'doc-logo', alt: '' }) : ''}
+      <span class="doc-brand">${esc(s.company.name)}</span>
+      <h1 class="doc-title">QUOTATION</h1>
     </header>
 
     ${q.status === 'superseded' || q.status === 'declined'
@@ -188,7 +185,10 @@ export function docHTML(q) {
       </section>
 
       <section class="doc-sums">
-        <div class="doc-sum"><span>Sub - Total</span><b class="num">${inr(t.sub)}</b></div>
+        <div class="doc-sum"><span>${t.discount ? 'Total' : 'Sub - Total'}</span><b class="num">${inr(t.sub)}</b></div>
+        ${t.discount ? `
+          <div class="doc-sum"><span>Discount</span><b class="num">-${inr(t.discount)}</b></div>
+          <div class="doc-sum"><span>Sub-Total</span><b class="num">${inr(t.afterDiscount)}</b></div>` : ''}
         ${t.taxed ? `<div class="doc-sum"><span>GST (${q.gstRate}%)${lineItemGst ? ' — as above' : ''}</span><b class="num">${inr(t.gst)}</b></div>` : ''}
         <div class="doc-sum a"><span>Sub Total A</span><b class="num">${inr(t.subA)}</b></div>
       </section>

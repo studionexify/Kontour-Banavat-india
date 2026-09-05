@@ -138,7 +138,11 @@ export function createPdf({ size = A4 } = {}) {
       return doc;
     },
 
-    text(str, x, y, { size: fs = 10, bold = false, align = 'left', width = 0, gray = 0 } = {}) {
+    /* Grayscale (`gray`) is the whole document's palette but for one
+       exception: the business's own name prints in its brand blue on
+       the letterhead. `rgb` — [r, g, b], each 0–1 — overrides `gray`
+       when given, switching the fill operator from `g` to `rg`. */
+    text(str, x, y, { size: fs = 10, bold = false, align = 'left', width = 0, gray = 0, rgb = null } = {}) {
       const s = String(str == null ? '' : str);
       if (!s) return doc;
       let tx = x;
@@ -146,7 +150,7 @@ export function createPdf({ size = A4 } = {}) {
       else if (align === 'center') tx = x + (width - textWidth(s, fs, bold)) / 2;
       ops.push(
         'BT',
-        `${gray} g`,
+        rgb ? `${rgb[0]} ${rgb[1]} ${rgb[2]} rg` : `${gray} g`,
         `/${bold ? 'F2' : 'F1'} ${fs} Tf`,
         `1 0 0 1 ${tx.toFixed(2)} ${(size.h - y).toFixed(2)} Tm`,
         `(${pdfString(s)}) Tj`,
@@ -156,8 +160,11 @@ export function createPdf({ size = A4 } = {}) {
     },
 
     /** A filled rectangle — used for table headers and status bands. */
-    fill(x, y, w, h, gray = 0.92) {
-      ops.push(`${gray} g`, `${x.toFixed(2)} ${(size.h - y - h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`);
+    fill(x, y, w, h, gray = 0.92, rgb = null) {
+      ops.push(
+        rgb ? `${rgb[0]} ${rgb[1]} ${rgb[2]} rg` : `${gray} g`,
+        `${x.toFixed(2)} ${(size.h - y - h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`,
+      );
       return doc;
     },
 
