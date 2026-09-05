@@ -39,7 +39,10 @@ export function openQuoteDoc(id) {
         </footer>
       </div>`,
     onMount(root) {
-      on(root, '[data-pdf]', () => { downloadQuotePdf(q); toast('PDF saved'); });
+      on(root, '[data-pdf]', async () => {
+        try { await downloadQuotePdf(q); toast('PDF saved'); }
+        catch { toast('Could not make that PDF', 'err'); }
+      });
 
       on(root, '[data-share]', async () => {
         haptic();

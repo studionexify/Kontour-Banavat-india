@@ -197,7 +197,10 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
           } catch { toast('Could not share that', 'err'); }
         });
 
-        on(host, '[data-pdf]', () => { downloadQuotePdf(quote); toast('PDF saved'); });
+        on(host, '[data-pdf]', async () => {
+          try { await downloadQuotePdf(quote); toast('PDF saved'); }
+          catch { toast('Could not make that PDF', 'err'); }
+        });
 
         on(host, '[data-done]', () => { handle.close(); if (onSaved) onSaved(); });
       }

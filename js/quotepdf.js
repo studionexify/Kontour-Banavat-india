@@ -11,7 +11,7 @@
  * told which happened so it can say so.
  */
 
-import { createPdf, wrapText, textWidth, A4 } from './pdf.js';
+import { createPdf, wrapText, dataUriToBytes, readJpeg, A4 } from './pdf.js';
 import { quoteTotals, lineAmount, settings, renderTerms } from './quotes.js';
 import { dmy } from './format.js';
 
@@ -31,13 +31,85 @@ function money(n) {
   return `${v < 0 ? '-' : ''}Rs. ${grouped}`;
 }
 
+/* ── Photographs ────────────────────────────────────────────────
+   Item photographs are captured through photos.js, which already
+   shrinks everything to a JPEG — so the common path is simply reading
+   the bytes out of the data URI and handing them to the writer
+   untouched. Anything else, or anything far larger than the slot it
+   will occupy, goes through a canvas first: a 3000px photograph in a
+   40pt box is several megabytes nobody can WhatsApp.
+
+   THUMB_PX is the longest edge kept, generous against the ~46pt slot
+   so the image still holds up if the PDF is printed or zoomed. */
+const THUMB_PX = 220;
+
+function reencode(uri) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, THUMB_PX / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        // JPEG has no transparency; without this a PNG's clear pixels
+        // come out black rather than as the paper behind them.
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(readJpeg(dataUriToBytes(canvas.toDataURL('image/jpeg', 0.72))));
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = uri;
+  });
+}
+
+/* Sorted into what can be placed as it stands and what has to go
+   through the browser first. The split matters beyond tidiness:
+   navigator.share() only works while the tap that called it is still
+   the current activation, and Safari drops that across an await. So
+   when nothing needs re-encoding — which is the ordinary case, since
+   photos.js already writes small JPEGs — sharing builds the whole
+   file synchronously and stays inside the gesture. */
+function collectPhotos(lines) {
+  const ready = new Map();
+  const needs = [];
+  for (const l of lines) {
+    if (!l.photo) continue;
+    const direct = readJpeg(dataUriToBytes(l.photo));
+    if (direct && Math.max(direct.w, direct.h) <= THUMB_PX * 2) ready.set(l.id, direct);
+    else needs.push(l);
+  }
+  return { ready, needs };
+}
+
+/** Every line's photograph, ready to place, keyed by line id. */
+async function prepareImages(lines) {
+  const { ready, needs } = collectPhotos(lines);
+  for (const l of needs) {
+    // A photograph that cannot be read is not worth failing the whole
+    // document over — the line simply prints without one.
+    const img = await reencode(l.photo);
+    if (img) ready.set(l.id, img);
+  }
+  return ready;
+}
+
 export function quoteFileName(q) {
   const client = String(q.client?.name || 'client').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-');
   return `MR-${q.mrNo}${client ? `-${client}` : ''}.pdf`;
 }
 
-/** The whole quotation as a PDF blob. */
-export function quotePdfBlob(quote) {
+/** The whole quotation as a PDF blob. Async only because a photograph
+    that needs re-encoding has to be decoded by the browser first. */
+export async function quotePdfBlob(quote) {
+  return render(quote, await prepareImages(quote.lines || []));
+}
+
+/** The document itself, drawn from a quote and its prepared photos. */
+function render(quote, photos) {
   const s = settings();
   const t = quoteTotals(quote);
   const lines = quote.lines || [];
@@ -79,20 +151,26 @@ export function quotePdfBlob(quote) {
   y = metaTop + Math.max(pairs.length, dates.length) * 15 + 12;
 
   /* ── Items ──
-     Five columns: number, name + spec, dimensions, rate, amount.
+     Six columns: number, photograph, name + spec, dimensions, rate,
+     amount. The image column only takes its width when something on
+     the quotation actually has a photograph — a quotation of plain
+     lines should not print a column of empty boxes.
+
      The description wraps, so a row's height is whatever its tallest
      cell needs, and a row that would cross the foot moves to a new
      page whole rather than splitting mid-description. */
+  const anyPhoto = lines.some((l) => photos.has(l.id));
+  const imgW = anyPhoto ? 46 : 0;
   const C = {
     sr: M,
-    name: M + 24,
-    dim: M + 24 + 190,
-    rate: M + 24 + 190 + 108,
-    qty: M + 24 + 190 + 108 + 62,
+    img: M + 20,
+    name: M + 20 + imgW + (anyPhoto ? 8 : 0),
     amt: RIGHT,
   };
-  const nameW = 182;
-  const dimW = 100;
+  C.dim = C.name + (anyPhoto ? 148 : 190);
+  C.qty = C.dim + (anyPhoto ? 96 : 108) + 62;
+  const nameW = (anyPhoto ? 140 : 182);
+  const dimW = (anyPhoto ? 88 : 100);
 
   const header = () => {
     doc.fill(M, y, BODY, 20, 0.93);
@@ -112,15 +190,19 @@ export function quotePdfBlob(quote) {
   }
 
   lines.forEach((l, i) => {
+    const photo = photos.get(l.id);
     const nameLines = wrapText(l.name || 'Item', nameW, 10, true);
     const descLines = l.description ? wrapText(l.description, nameW, 9) : [];
     const dimLines = l.dims ? wrapText(l.dims, dimW, 9) : [];
     const rowH = Math.max(
       nameLines.length * 13 + descLines.length * 11 + (l.finish ? 11 : 0),
-      dimLines.length * 11, 18,
+      dimLines.length * 11,
+      photo ? 46 : 18,
     ) + 12;
 
     if (y + rowH > FOOT_LIMIT) { doc.addPage(); y = M; header(); }
+
+    if (photo) doc.image(photo, C.img, y + 5, imgW, rowH - 12);
 
     let ty = y + 12;
     doc.text(String(i + 1), C.sr + 4, ty, { size: 9, gray: 0.45 });
@@ -165,23 +247,38 @@ export function quotePdfBlob(quote) {
   y += 38;
 
   /* ── Boilerplate ── */
+  /* Clauses break one at a time rather than the block moving whole:
+     eight terms that do not fit in the remaining third of a page used
+     to leave that third blank and start again overleaf. A clause is
+     never split across pages, and a heading never ends one. */
   const block = (title, body) => {
     if (!body || !String(body).trim()) return;
-    const est = 20 + wrapText(body, BODY, 9).length * 12;
-    if (y + est > FOOT_LIMIT) { doc.addPage(); y = M; }
+    const clauses = String(body).split('\n').map((x) => x.trim()).filter(Boolean);
+    if (!clauses.length) return;
+
+    const firstH = wrapText(clauses[0].replace(/^[-–•]\s*/, ''), BODY - 12, 9).length * 11 + 3;
+    if (y + 18 + firstH > FOOT_LIMIT) { doc.addPage(); y = M; }
     doc.text(title.toUpperCase(), M, y + 10, { size: 9, bold: true, gray: 0.35 });
     y += 18;
-    for (const ln of String(body).split('\n').map((x) => x.trim()).filter(Boolean)) {
+
+    for (const ln of clauses) {
       const wrapped = wrapText(ln.replace(/^[-–•]\s*/, ''), BODY - 12, 9);
+      const h = wrapped.length * 11 + 3;
+      if (y + h > FOOT_LIMIT) { doc.addPage(); y = M; }
       doc.text('-', M, y + 8, { size: 9, gray: 0.5 });
       wrapped.forEach((w, i) => { doc.text(w, M + 12, y + 8 + i * 11, { size: 9, gray: 0.25 }); });
-      y += wrapped.length * 11 + 3;
+      y += h;
     }
     y += 10;
   };
 
   block('Payment terms', quote.paymentTerms);
   block('Terms & conditions', renderTerms(quote));
+  // The asterisk belongs to the clauses above it, so it sits with
+  // them — at the end of the document it either collided with the
+  // note or cost a whole page to itself.
+  doc.text('*Terms and conditions apply.', M, y - 2, { size: 8, gray: 0.5 });
+  y += 10;
 
   const bankText = [
     `Bank: ${s.bank.bank}`, `A/C Name: ${s.bank.name}`,
@@ -208,8 +305,6 @@ export function quotePdfBlob(quote) {
     y = doc.paragraph(String(s.note).replace(/\n{2,}/g, '\n'), M, y + 22, BODY, { size: 9, gray: 0.3 }) + 4;
   }
 
-  doc.text('*Terms and conditions apply.', M, Math.min(y + 12, A4.h - 30), { size: 8, gray: 0.5 });
-
   return doc.blob();
 }
 
@@ -232,9 +327,9 @@ function saveBlob(blob, name) {
 }
 
 /** Downloads the quotation. Returns the file name so callers can say it. */
-export function downloadQuotePdf(quote) {
+export async function downloadQuotePdf(quote) {
   const name = quoteFileName(quote);
-  saveBlob(quotePdfBlob(quote), name);
+  saveBlob(await quotePdfBlob(quote), name);
   return name;
 }
 
@@ -245,7 +340,10 @@ export function downloadQuotePdf(quote) {
  */
 export async function shareQuotePdf(quote) {
   const name = quoteFileName(quote);
-  const blob = quotePdfBlob(quote);
+  const { ready, needs } = collectPhotos(quote.lines || []);
+  // Nothing to decode means nothing to await, so the share sheet is
+  // still opening on the same tap that asked for it.
+  const blob = needs.length ? await quotePdfBlob(quote) : render(quote, ready);
   const file = new File([blob], name, { type: 'application/pdf' });
 
   if (navigator.canShare && navigator.canShare({ files: [file] })) {

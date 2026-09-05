@@ -129,12 +129,12 @@ export async function render(root, ctx) {
     await share(b.dataset.share);
   });
 
-  on(root, '[data-pdf]', (e, b) => {
+  on(root, '[data-pdf]', async (e, b) => {
     e.stopPropagation();
     const q = getQuote(b.dataset.pdf);
     if (!q) return;
-    downloadQuotePdf(q);
-    toast('PDF saved');
+    try { await downloadQuotePdf(q); toast('PDF saved'); }
+    catch { toast('Could not make that PDF', 'err'); }
   });
 
   on(root, '[data-more]', (e, b) => {
