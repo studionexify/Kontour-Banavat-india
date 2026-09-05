@@ -163,6 +163,12 @@ function blank() {
       // from.
       fabricRate: 800,
       leadTime: '25–30 business days',
+      // The number side of leadTime — a builder types "15" and the
+      // document prints the same 5-day range every quotation has used.
+      // leadTime itself stays the source of truth for printing (it
+      // survives a quote where the days were typed over by hand), this
+      // is only what a new quotation starts from.
+      leadTimeDays: 15,
       paymentTerms: PAYMENT_TERMS,
       terms: TERMS,
       note: NOTE,
@@ -253,6 +259,14 @@ export function updateSettings(changes) {
   state.settings = { ...state.settings, ...changes };
   write(); emit();
   return state.settings;
+}
+
+/** "15" -> "15–20 business days" — the range every quotation on file
+    actually uses, a fixed 5 days on from whatever number was typed. */
+export function leadTimeRangeText(days, span = 5) {
+  const n = Number(days);
+  if (!n) return '';
+  return `${n}–${n + span} business days`;
 }
 
 /* Fills {{fabricRate}} and {{leadTime}} in the standing terms from
@@ -396,6 +410,51 @@ export function getQuote(id) {
   return state.quotes.find((x) => x.id === id && !x.deletedAt) || null;
 }
 
+/* ── Client history ────────────────────────────────────────────
+   Not a separate list to keep in step — every quotation already
+   carries a full client, so the address book is just the newest
+   entry for each name, read out of the quotations themselves. */
+
+export function clientBook() {
+  const seen = new Map();
+  for (const q of state.quotes) {
+    if (q.deletedAt) continue;
+    const name = ((q.client || {}).name || '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const at = q.updatedAt || q.createdAt || 0;
+    const prev = seen.get(key);
+    if (!prev || at > prev.at) {
+      seen.set(key, {
+        name, phone: q.client.phone || '', shippingAddress: q.client.shippingAddress || '', at,
+      });
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) => b.at - a.at);
+}
+
+export function findClient(name) {
+  const q = (name || '').trim().toLowerCase();
+  if (!q) return null;
+  return clientBook().find((c) => c.name.toLowerCase() === q) || null;
+}
+
+/** Up to 8 names starting with, or containing, what's been typed. */
+export function clientSuggestions(query) {
+  const q = (query || '').trim().toLowerCase();
+  const book = clientBook();
+  if (!q) return book.slice(0, 8);
+  const starts = [];
+  const contains = [];
+  for (const c of book) {
+    const name = c.name.toLowerCase();
+    if (name === q) continue;
+    if (name.startsWith(q)) starts.push(c);
+    else if (name.includes(q)) contains.push(c);
+  }
+  return [...starts, ...contains].slice(0, 8);
+}
+
 /* Every revision of one job, newest first. */
 export function familyOf(mrNo) {
   const base = baseNo(mrNo);
@@ -474,17 +533,23 @@ export function newShipping(input = {}) {
 }
 
 /* The totals ladder, exactly as the document prints it: goods are
-   taxed, shipping is added after tax, and the two subtotals are
-   summed. Shipping is deliberately outside the GST base — that is
-   how these quotations have always been written. */
+   discounted, then taxed, and shipping is added after tax — the two
+   subtotals are summed. Shipping is deliberately outside the GST
+   base — that is how these quotations have always been written.
+   A discount comes off before GST, because GST is owed on what the
+   client actually pays: it is a flag alongside an amount, the same
+   shape as gstApplicable, so "no discount" and "a ₹0 discount" are
+   not the same document. */
 export function quoteTotals(quote) {
-  if (!quote) return { sub: 0, gst: 0, subA: 0, subB: 0, total: 0, taxed: false };
+  if (!quote) return { sub: 0, discount: 0, afterDiscount: 0, gst: 0, subA: 0, subB: 0, total: 0, taxed: false };
   const sub = round2((quote.lines || []).reduce((t, l) => t + lineAmount(l), 0));
+  const discount = quote.discountEnabled ? round2(Number(quote.discountAmount) || 0) : 0;
+  const afterDiscount = round2(sub - discount);
   const taxed = quote.gstApplicable !== false;
-  const gst = taxed ? round2(sub * (Number(quote.gstRate) || 0) / 100) : 0;
-  const subA = round2(sub + gst);
+  const gst = taxed ? round2(afterDiscount * (Number(quote.gstRate) || 0) / 100) : 0;
+  const subA = round2(afterDiscount + gst);
   const subB = round2((quote.shipping || []).reduce((t, s) => t + (Number(s.amount) || 0), 0));
-  return { sub, gst, subA, subB, total: round2(subA + subB), taxed };
+  return { sub, discount, afterDiscount, gst, subA, subB, total: round2(subA + subB), taxed };
 }
 
 export function addQuote(input = {}) {
@@ -519,6 +584,10 @@ export function addQuote(input = {}) {
     paymentTerms: input.paymentTerms == null ? s.paymentTerms : input.paymentTerms,
     fabricRate: input.fabricRate == null ? s.fabricRate : Number(input.fabricRate),
     leadTime: input.leadTime == null ? s.leadTime : input.leadTime,
+    leadTimeDays: input.leadTimeDays == null ? s.leadTimeDays : Number(input.leadTimeDays),
+    // A flat amount off the goods total, before GST — see quoteTotals().
+    discountEnabled: Boolean(input.discountEnabled),
+    discountAmount: Number(input.discountAmount) || 0,
     notes: input.notes || '',
     status: 'draft',
     jobCode: '',
@@ -584,6 +653,9 @@ export function duplicateQuote(id) {
     paymentTerms: old.paymentTerms,
     fabricRate: old.fabricRate,
     leadTime: old.leadTime,
+    leadTimeDays: old.leadTimeDays,
+    discountEnabled: old.discountEnabled,
+    discountAmount: old.discountAmount,
   });
 }
 
@@ -946,7 +1018,7 @@ export function applyRemote(rows) {
     prints. The logo is included: it belongs to the business, not to
     the device that happened to upload it. */
 export const SHARED_QUOTE_SETTINGS = [
-  'mrPrefix', 'gstRate', 'defaultCity', 'fabricRate', 'leadTime',
+  'mrPrefix', 'gstRate', 'defaultCity', 'fabricRate', 'leadTime', 'leadTimeDays',
   'paymentTerms', 'terms', 'note', 'company', 'bank', 'logo',
 ];
 

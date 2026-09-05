@@ -2311,19 +2311,17 @@ select.control { padding-right:34px; background-position:right 13px center; back
 /* The mark, wherever it appears. */
 .brand-mark { object-fit:contain; border-radius:6px; display:block; }
 
+/* Mark + company name in blue on the left, QUOTATION big on the
+   right, one row, a rule underneath — how the business's own
+   quotations actually print, not the boxed-mockup version. */
 .doc-head {
-  display:flex; align-items:center; gap:16px;
-  padding-bottom:18px; margin-bottom:18px;
-  border-bottom:1px solid #C9C9CF;
+  display:flex; align-items:center; gap:10px;
+  padding-bottom:14px; margin-bottom:18px;
+  border-bottom:2px solid #333;
 }
 .doc-logo { flex:none; object-fit:contain; }
-.doc-logo.ph {
-  font-size:13px; font-weight:700; letter-spacing:.4px;
-  color:#111113; white-space:nowrap;
-}
-.doc-head-t { flex:1; text-align:right; }
-.doc-head .doc-title { margin:0; text-align:right; }
-.doc-head-sub { margin:3px 0 0; font-size:11.5px; color:#55555E; }
+.doc-brand { flex:1; font-size:18px; font-weight:800; color:#1f3f8f; letter-spacing:.3px; }
+.doc-head .doc-title { flex:none; margin:0; text-align:right; }
 
 .doc-stamp {
   margin:0 0 16px; padding:8px 12px;

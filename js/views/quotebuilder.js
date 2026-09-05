@@ -20,7 +20,7 @@ import { openSheet, on, esc, toast, emptyState, haptic } from '../ui.js';
 import {
   getQuote, addQuote, updateQuote, newLine, newShipping, lineAmount, quoteTotals,
   LINE_KINDS, GST_MODES, designs, getDesign, lineFromDesign, mrNoTaken, defaultValidUntil,
-  quoteName,
+  quoteName, clientBook, findClient, leadTimeRangeText,
 } from '../quotes.js';
 import { pickImage, shrink, toBase64 } from '../photos.js';
 import { inr, todayISO } from '../format.js';
@@ -128,6 +128,13 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
               if (d.f === 'client.name') renderTitle();
             } else {
               quote = updateQuote(quote.id, { [d.f]: val });
+              // Patched in place rather than a full renderExtras() —
+              // the panel is open and mid-edit, and a repaint would
+              // only be worth it for a badge nobody is looking at yet.
+              if (d.f === 'discountAmount') {
+                const badge = host.querySelector('[data-panel="discount"] .qdisc-v');
+                if (badge) badge.textContent = quote.discountEnabled && quote.discountAmount ? inr(quote.discountAmount) : 'None';
+              }
             }
             renderFoot();
             return;
@@ -152,6 +159,32 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
             });
             quote = updateQuote(quote.id, { shipping });
             renderFoot();
+          }
+        });
+
+        /* Typing a name already on file fills in what was saved for
+           them last time — only into fields still blank, so it never
+           overwrites something already typed for this quote, and only
+           the two fields it touches, so the name field keeps its
+           caret rather than being wiped by a full repaint. */
+        host.addEventListener('input', (e) => {
+          const inp = e.target;
+          if (inp.dataset.f !== 'client.name') return;
+          const found = findClient(inp.value);
+          if (!found) return;
+          const phoneField = host.querySelector('[data-f="client.phone"]');
+          const cityField = host.querySelector('[data-f="client.shippingAddress"]');
+          const changes = {};
+          if (phoneField && !phoneField.value.trim() && found.phone) {
+            phoneField.value = found.phone;
+            changes.phone = found.phone;
+          }
+          if (cityField && !cityField.value.trim() && found.shippingAddress) {
+            cityField.value = found.shippingAddress;
+            changes.shippingAddress = found.shippingAddress;
+          }
+          if (Object.keys(changes).length) {
+            quote = updateQuote(quote.id, { client: { ...quote.client, ...changes } });
           }
         });
 
@@ -181,12 +214,27 @@ export function openQuoteSheet({ id = '', onSaved } = {}) {
           renderExtras();
         });
 
+        on(host, '[data-discount]', (e, b) => {
+          quote = updateQuote(quote.id, { discountEnabled: b.dataset.discount === 'on' });
+          renderExtras(); renderFoot();
+        });
+
+        host.addEventListener('input', (e) => {
+          const inp = e.target;
+          if (!inp.dataset || inp.dataset.leaddays === undefined) return;
+          const leadTime = leadTimeRangeText(inp.value);
+          quote = updateQuote(quote.id, { leadTimeDays: Number(inp.value) || 0, leadTime });
+          const hint = host.querySelector('[data-leadhint] b');
+          if (hint) hint.textContent = leadTime || '—';
+        });
+
         /* A line can carry its own photograph even when it did not come
            from the library — a one-off still prints in the Image column. */
         on(host, '[data-line-img]', async (e, b) => {
           const files = await pickImage({ camera: false });
           if (!files || !files[0]) return;
-          const photo = await toBase64(await shrink(files[0]));
+          const { blob } = await shrink(files[0]);
+          const photo = `data:image/jpeg;base64,${await toBase64(blob)}`;
           setLines(quote.lines.map((l) => l.id === b.dataset.lineImg ? { ...l, photo } : l));
         });
 
@@ -238,8 +286,11 @@ function pair(label, controlHtml) {
 function clientBlock(q) {
   return `
     <section class="qb-sec">
-      <input class="control lead" data-f="client.name" value="${esc(q.client.name)}"
-             placeholder="Client name" autocapitalize="words">
+      <input class="control lead" data-f="client.name" list="qb-client-list" autocomplete="off"
+             value="${esc(q.client.name)}" placeholder="Client name" autocapitalize="words">
+      <datalist id="qb-client-list">
+        ${clientBook().map((c) => `<option value="${esc(c.name)}">`).join('')}
+      </datalist>
 
       <div class="qcluster">
         ${pair('Phone', `<input class="control flush" data-f="client.phone" value="${esc(q.client.phone)}" inputmode="tel" placeholder="—">`)}
@@ -388,6 +439,21 @@ function extrasBlock(q, openPanels) {
         <button class="mini wide" data-add-ship>${icon('plus', 14)} Add a shipping row</button>
       </details>
 
+      <details class="qdisc panel-disc" data-panel="discount" ${openPanels.has('discount') ? 'open' : ''}>
+        <summary>
+          ${icon('chevR', 15)}
+          <span class="qdisc-t">Discount</span>
+          <span class="qdisc-v num">${q.discountEnabled && q.discountAmount ? inr(q.discountAmount) : 'None'}</span>
+        </summary>
+        <div class="fin-row">
+          <button class="seg-mini ${q.discountEnabled ? 'on' : ''}" data-discount="${q.discountEnabled ? 'off' : 'on'}">
+            ${q.discountEnabled ? 'Applied' : 'Not applied'}
+          </button>
+          ${q.discountEnabled ? `<input class="control mini-in" type="number" min="0" inputmode="numeric" data-f="discountAmount" value="${q.discountAmount || 0}">` : ''}
+        </div>
+        <p class="qb-hint">A flat amount off the goods total, taken before GST.</p>
+      </details>
+
       <details class="qdisc panel-disc" data-panel="terms" ${openPanels.has('terms') ? 'open' : ''}>
         <summary>
           ${icon('chevR', 15)}
@@ -397,9 +463,10 @@ function extrasBlock(q, openPanels) {
         <textarea class="control" data-f="paymentTerms" rows="3"
                   placeholder="50% advance">${esc(q.paymentTerms)}</textarea>
         <div class="qcluster">
-          ${pair('Lead time', `<input class="control flush" data-f="leadTime" value="${esc(q.leadTime || '')}" placeholder="25–30 days">`)}
+          ${pair('Lead time (days)', `<input class="control flush" type="number" min="0" inputmode="numeric" data-leaddays value="${q.leadTimeDays || ''}" placeholder="15">`)}
           ${pair('Fabric up to', `<input class="control flush" type="number" min="0" inputmode="numeric" data-f="fabricRate" value="${q.fabricRate || 0}">`)}
         </div>
+        <p class="qb-hint" data-leadhint>Shown on the quotation as <b>${esc(q.leadTime || leadTimeRangeText(q.leadTimeDays) || '—')}</b></p>
       </details>
 
       <details class="qdisc panel-disc" data-panel="note" ${openPanels.has('note') ? 'open' : ''}>
@@ -424,6 +491,7 @@ function extrasBlock(q, openPanels) {
 function footBlock(t, q, open = false) {
   const parts = [
     `Sub ${inr(t.sub)}`,
+    t.discount ? `Disc -${inr(t.discount)}` : null,
     t.taxed ? `GST ${q.gstRate}%` : 'no GST',
     t.subB ? `Ship ${inr(t.subB)}` : null,
   ].filter(Boolean);
@@ -432,7 +500,10 @@ function footBlock(t, q, open = false) {
     <footer class="qb-foot">
       ${open ? `
         <div class="qb-sums">
-          <div class="qb-sum"><span>Sub - Total</span><b class="num">${inr(t.sub)}</b></div>
+          <div class="qb-sum"><span>${t.discount ? 'Total' : 'Sub - Total'}</span><b class="num">${inr(t.sub)}</b></div>
+          ${t.discount ? `
+            <div class="qb-sum"><span>Discount</span><b class="num">-${inr(t.discount)}</b></div>
+            <div class="qb-sum"><span>Sub-Total</span><b class="num">${inr(t.afterDiscount)}</b></div>` : ''}
           <div class="qb-sum">
             <span>
               GST
