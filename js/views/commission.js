@@ -11,7 +11,7 @@ import { on, esc, emptyState, openSheet, toast, confirmSheet, field } from '../u
 import {
   partners, getPartner, addPartner, updatePartner, deletePartner,
   entriesFor, getEntry, addEntry, updateEntry, deleteEntry,
-  commissionOf, partnerSummary, totalSummary, seedKnownPartners,
+  commissionOf, netOf, partnerSummary, totalSummary, seedKnownPartners,
 } from '../commissions.js';
 import { inr, dmy, todayISO } from '../format.js';
 
@@ -176,7 +176,7 @@ function entryRow(e) {
   // does not actually hold.
   const basis = e.commissionOverride != null
     ? `${inr(commission)} commission`
-    : `${inr(e.baseAmount)} at ${e.pct}%`;
+    : `${e.pct}% inside ${inr(e.baseAmount)}`;
   return `
     <button class="row" data-entry="${esc(e.id)}">
       <span class="row-ico">${icon('box', 18)}</span>
@@ -205,12 +205,14 @@ function openEntrySheetFor(partnerId, entryId, parentSheet, ctx) {
         ${field('Project', `<input class="control" data-f="project" value="${esc(e?.project || '')}" placeholder="Gulabchand Jewellers (Mandvi)">`)}
         ${field('Job / MR No.', `<input class="control" data-f="jobCode" value="${esc(e?.jobCode || '')}" autocapitalize="characters" placeholder="Optional">`)}
         <div class="qb-grid">
-          ${field('Base amount (₹)', `<input class="control num" data-f="baseAmount" type="number" inputmode="decimal" value="${e?.baseAmount || ''}">`)}
+          ${field('Order total (₹)', `<input class="control num" data-f="baseAmount" type="number" inputmode="decimal" value="${e?.baseAmount || ''}">`,
+            'The commission comes out of this figure — it is not added on top.')}
           ${field('Commission (%)', `<input class="control num" data-f="pct" type="number" inputmode="decimal" value="${e?.pct ?? p?.defaultPct ?? 10}">`)}
         </div>
+        <p class="hint" data-preview style="margin:-8px 0 14px"></p>
         ${field('Commission override (₹)',
           `<input class="control num" data-f="commissionOverride" type="number" inputmode="decimal" value="${e?.commissionOverride ?? ''}">`,
-          'Leave blank to use base × rate. Set this when the real figure on record does not match that — a renegotiated rate, a manual rounding.')}
+          'Leave blank to extract it from the order total above. Set this when the real figure on record does not match that — a renegotiated rate, a manual rounding.')}
         <div class="qb-grid">
           ${field('Date', `<input class="control" type="date" data-f="date" value="${e?.date || todayISO()}">`)}
           ${field('Mode', `<input class="control" data-f="mode" value="${esc(e?.mode || '')}" placeholder="Cash, Bank, UPI">`)}
@@ -222,6 +224,22 @@ function openEntrySheetFor(partnerId, entryId, parentSheet, ctx) {
       </div>`,
     onMount(root) {
       const get = (k) => root.querySelector(`[data-f="${k}"]`).value;
+
+      const preview = root.querySelector('[data-preview]');
+      const updatePreview = () => {
+        const override = get('commissionOverride');
+        if (override !== '') { preview.textContent = ''; return; }
+        const base = Number(get('baseAmount')) || 0;
+        const pct = Number(get('pct')) || 0;
+        const fake = { baseAmount: base, pct, commissionOverride: null };
+        preview.textContent = base
+          ? `Commission ${inr(commissionOf(fake))} · Banavat India nets ${inr(netOf(fake))} of this ${inr(base)}`
+          : '';
+      };
+      root.querySelectorAll('[data-f="baseAmount"], [data-f="pct"], [data-f="commissionOverride"]')
+        .forEach((el) => el.addEventListener('input', updatePreview));
+      updatePreview();
+
       on(root, '[data-save]', () => {
         const payload = {
           partnerId,

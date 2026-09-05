@@ -115,7 +115,16 @@ export function deletePartner(id) {
    of the resulting commission has actually been paid. Commission is
    computed rather than typed, the same reason a line item's amount
    is qty × rate rather than its own field — a rate corrected after
-   the fact must not leave a stale total sitting next to it. */
+   the fact must not leave a stale total sitting next to it.
+
+   The rate is a share *of* baseAmount, not a cut added on top of it:
+   at 10% on a ₹1,18,000 order the commission is not simply 10% of
+   that figure (₹11,800, which would make the two payouts — to the
+   partner and out of the order — add up to more than the order was
+   ever worth). It is the amount already sitting inside that ₹1,18,000
+   which, once paid out, is 10% of the whole: commission = base × pct
+   ÷ (100 + pct) ≈ ₹10,727, leaving ₹1,07,273 as the order's own net.
+   See commissionOf(). */
 
 export function newEntry(input = {}) {
   return {
@@ -146,7 +155,14 @@ export function newEntry(input = {}) {
 
 export function commissionOf(entry) {
   if (entry.commissionOverride != null) return round2(entry.commissionOverride);
-  return round2((entry.baseAmount || 0) * (Number(entry.pct) || 0) / 100);
+  const pct = Number(entry.pct) || 0;
+  return round2((entry.baseAmount || 0) * pct / (100 + pct));
+}
+
+/** What the order is actually worth once the commission inside it is
+    taken out — the figure Banavat India itself nets from it. */
+export function netOf(entry) {
+  return round2((entry.baseAmount || 0) - commissionOf(entry));
 }
 
 export function entriesFor(partnerId) {
