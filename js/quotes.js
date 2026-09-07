@@ -34,6 +34,7 @@
  */
 
 import { uid, ensureJob, updateJob } from './store.js';
+import { lines as orderLines, addLine as addOrderLine } from './orders.js';
 import { todayISO, round2, fyStartYear } from './format.js';
 import { DEFAULT_LOGO } from './default-logo.js';
 
@@ -773,7 +774,53 @@ export function jobValueFor(quote) {
   return quote.jobExcludesGst ? t.sub : t.total;
 }
 
-export function acceptQuote(id, { jobCode = '', approvedTotal = null, excludeGst = false } = {}) {
+/* ── Accepting opens the floor's copy ──────────────────────────
+   A quotation is a promise; an order line is the thing being made.
+   Until now the two were only joined by a number, and every accepted
+   quotation had to be re-typed piece by piece on the production
+   screen. It doesn't any more: approving writes one production line
+   item per quoted piece, under the job's own MR number.
+
+   Shipping rows are not pieces and never come across. Nothing is
+   ever written twice — a line already carrying this quotation line's
+   id is left exactly as the floor has since edited it — so accepting
+   a second time, or accepting a revision of a job already running,
+   adds only what is genuinely new.
+
+   `qty` is deliberately kept as one line with a quantity rather than
+   split into four identical pieces: the floor tracks a set of four
+   dining chairs as one commissioning, one delivery, one check. */
+export function materialiseQuote(quote, { deliveryDate = '' } = {}) {
+  if (!quote) return [];
+  const mrNo = baseNo(quote.mrNo);
+  if (!mrNo) return [];
+  const existing = orderLines().filter((l) => l.mrNo === mrNo);
+  const made = [];
+
+  for (const line of quote.lines || []) {
+    if (line.kind === 'lump' && !line.name) continue;
+    const already = existing.some((l) => l.quoteLineId && l.quoteLineId === line.id);
+    if (already) continue;
+    made.push(addOrderLine({
+      mrNo,
+      client: (quote.client && quote.client.name) || '',
+      orderReceived: todayISO(),
+      deliveryDate,
+      name: line.name || 'Untitled piece',
+      specs: [line.description, line.finish && `Finish: ${line.finish}`]
+        .filter(Boolean).join(' '),
+      dims: line.dims || '',
+      qty: line.kind === 'lump' ? 1 : (Number(line.qty) || 1),
+      image: line.photo || '',
+      stage: 'pending',
+      quoteId: quote.id,
+      quoteLineId: line.id,
+    }));
+  }
+  return made;
+}
+
+export function acceptQuote(id, { jobCode = '', approvedTotal = null, excludeGst = false, deliveryDate = '', toProduction = true } = {}) {
   let q = getQuote(id);
   if (!q) return null;
   const t = quoteTotals(q);
@@ -804,6 +851,10 @@ export function acceptQuote(id, { jobCode = '', approvedTotal = null, excludeGst
     q.jobCode = code;
   }
   q.status = 'accepted';
+  // The floor's copy of the work, made before the record is written
+  // so that an accepted quotation is never sitting there approved
+  // with nothing to make.
+  if (toProduction) materialiseQuote(q, { deliveryDate });
   // Agreed work is tracked as a job from here on, so the quotation
   // files itself away rather than sitting in the working list.
   q.archivedAt = Date.now();

@@ -315,6 +315,7 @@ function rates(subId, lines, group, onDone) {
             qty: l.qty || 1,
             delivery: l.deliveryDate || '',
             rate,
+            trade,
           });
 
           // The production floor has always read who-has-what out of
@@ -323,6 +324,13 @@ function rates(subId, lines, group, onDone) {
           if (trade) {
             const vendors = { ...(l.vendors || {}), [trade]: s.name };
             orders.updateLine(l.id, { vendors });
+          }
+
+          // Work that has been given out is work in progress. A piece
+          // sitting at "pending" after somebody has been commissioned
+          // for it is just a stage nobody remembered to advance.
+          if (['pending', 'drawings', 'commission'].includes(l.stage)) {
+            orders.updateLine(l.id, { stage: 'production' });
           }
         });
 

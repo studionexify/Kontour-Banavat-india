@@ -31,6 +31,12 @@ import { seedingAllowed } from '../shopsync.js';
 import { openAssign } from './assignwork.js';
 import { openWorkOrder } from './workorder.js';
 import { wire } from './production.js';
+import { openItemBoard, stateChip } from './piecework.js';
+
+/* Which half of a person's board is showing. Kept per person rather
+   than globally, so opening Dinesh after Arif does not land you on
+   Arif's accounting tab. */
+const personTab = new Map();
 
 let query = '';
 let filter = 'all';   // all | owing | blacklisted | archived
@@ -134,7 +140,15 @@ function listFor() {
 function card({ s, bal }) {
   const trades = (s.trades || []).map((t) => subs.TRADE_LABELS[t] || t).join(' · ');
   const firm = s.firm && s.firm !== s.name ? s.firm : '';
-  const sub = [firm, trades].filter(Boolean).join(' · ');
+  // What they have in hand comes before what they are owed: this
+  // screen is opened to find somebody's work at least as often as
+  // to find their balance.
+  const open = subs.itemsInState(['working', 'improve', 'rejected'], { subId: s.id });
+  const back = open.filter((x) => x.state !== 'working').length;
+  const work = open.length
+    ? `${open.length} piece${open.length === 1 ? '' : 's'} in production${back ? ` · ${back} sent back` : ''}`
+    : '';
+  const sub = [work, firm, trades].filter(Boolean).join(' · ');
   return `
     <button class="vcard" data-sub="${esc(s.id)}">
       <span class="vcard-ini">${esc(initials(s.name))}</span>
@@ -170,6 +184,11 @@ export function openPerson(id, ctx) {
     const pays = subs.paymentsOf(id);
     const trades = (s.trades || []).map((t) => subs.TRADE_LABELS[t] || t);
 
+    const tab = personTab.get(id) || 'work';
+    const open = subs.itemsInState(['working', 'improve', 'rejected'], { subId: id });
+    const done = subs.itemsInState(['approved'], { subId: id });
+    const attention = open.filter((x) => x.state === 'improve' || x.state === 'rejected');
+
     sheet.querySelector('.sheet-body').innerHTML = `
       ${s.status === 'blacklisted' ? `
         <div class="notice bad">
@@ -192,6 +211,31 @@ export function openPerson(id, ctx) {
         ${trades.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}
       </div>
 
+      <div class="segbar" style="margin-bottom:18px">
+        <button class="seg-mini ${tab === 'work' ? 'on' : ''}" data-ptab="work">In production${open.length ? ` · ${open.length}` : ''}</button>
+        <button class="seg-mini ${tab === 'done' ? 'on' : ''}" data-ptab="done">Completed${done.length ? ` · ${done.length}` : ''}</button>
+        <button class="seg-mini ${tab === 'acct' ? 'on' : ''}" data-ptab="acct">Accounting</button>
+      </div>
+
+      ${tab === 'work' ? `
+        ${attention.length ? `
+          <div class="notice warn">
+            <strong>${attention.length} piece${attention.length === 1 ? '' : 's'} sent back</strong>
+            <p class="hint">Improve or reject — they stay with ${esc(s.name)} until approved, and show on QC too.</p>
+          </div>` : ''}
+        ${open.length ? `<div class="plist">${open.map(itemRow).join('')}</div>`
+          : '<p class="hint">Nothing with them right now.</p>'}
+        ${s.status === 'blacklisted'
+          ? '<p class="hint" style="margin-top:10px">Blacklisted — un-flag them under Accounting to commission new work.</p>'
+          : '<button class="btn sec sm" data-new-wo>Commission more work</button>'}
+      ` : ''}
+
+      ${tab === 'done' ? `
+        ${done.length ? `<div class="plist">${done.map(itemRow).join('')}</div>`
+          : '<p class="hint">Nothing approved yet. Approving a piece on the In production tab files it here.</p>'}
+      ` : ''}
+
+      ${tab === 'acct' ? `
       <div class="kpis three" style="margin-bottom:16px">
         <div class="kpi">
           <div class="kpi-l">WORK ORDERED</div>
@@ -219,6 +263,7 @@ export function openPerson(id, ctx) {
         </div>` : ''}
 
       <p class="tray-lbl">Work orders</p>
+      <p class="hint" style="margin-bottom:8px">What was quoted against each piece, work order by work order.</p>
       ${wos.length ? `
         <div class="plist">
           ${wos.map((w) => {
@@ -260,7 +305,7 @@ export function openPerson(id, ctx) {
       ${s.status === 'archived'
         ? `<button class="btn sec sm" data-unarchive>Restore from archive</button>`
         : `<button class="btn sec sm" data-archive>Archive</button>`}
-      <button class="btn danger sm" data-delete>Delete</button>`;
+      <button class="btn danger sm" data-delete>Delete</button>` : ''}`;
 
     bind(sheet, handle);
   };
@@ -268,6 +313,8 @@ export function openPerson(id, ctx) {
   const bind = (sheet, handle) => {
     const refresh = () => { draw(sheet, handle); if (ctx) ctx.refresh(); };
 
+    on(sheet, '[data-ptab]', (e, b) => { personTab.set(id, b.dataset.ptab); refresh(); });
+    on(sheet, '[data-item]', (e, b) => openItemBoard(b.dataset.item, refresh));
     on(sheet, '[data-wo]', (e, b) => openWorkOrder(b.dataset.wo, { onDone: refresh }));
     on(sheet, '[data-new-wo]', () => openAssign({ subId: id, onDone: refresh }));
     on(sheet, '[data-pay]', (e, b) => openPayment(subs.getPayment(b.dataset.pay), id, refresh));
@@ -528,4 +575,22 @@ export function openPayment(pay, subId, refresh) {
       });
     },
   });
+}
+
+
+/* One commissioned piece, as a row on the person's board. The rate
+   is on it because the only question anyone asks looking down this
+   list is what this piece is costing us. */
+function itemRow(it) {
+  return `
+    <button class="prow" data-item="${esc(it.id)}">
+      <span class="prow-txt">
+        <span class="prow-t">${esc(it.name || 'Untitled piece')}</span>
+        <span class="prow-s">${esc(it.mrNo)}${it.trade ? ` · ${esc(subs.TRADE_LABELS[it.trade] || it.trade)}` : ''}${it.delivery ? ` · due ${esc(dmy(it.delivery))}` : ''}</span>
+      </span>
+      <span class="prow-end">
+        ${stateChip(it)}
+        <span class="prow-qty num">${esc(inr(it.rate))}</span>
+      </span>
+    </button>`;
 }

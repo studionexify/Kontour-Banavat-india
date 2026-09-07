@@ -98,6 +98,18 @@ export function addLine(input = {}) {
     others: input.others || null,           // { type, finish }
     stage: STAGE_KEYS.includes(input.stage) ? input.stage : 'pending',
     vendors: input.vendors || {},           // { drawings, metal, wood, upholstery, marble, hardware, package }
+    /* The thread back to the quotation this piece was promised on.
+       Set when a quotation is accepted (see quotes.acceptQuote), and
+       what stops a second acceptance making a second copy of the
+       same piece. Empty on pieces added by hand and on the seeded
+       history, which predate their quotations being in Kontour. */
+    quoteId: input.quoteId || '',
+    quoteLineId: input.quoteLineId || '',
+    /* How the finished order leaves — see DESPATCH_MODES. Held on
+       every line of the MR so a group reads it off whichever line
+       comes first; setDespatch() is the only thing that writes it,
+       and it writes all of them together. */
+    despatch: input.despatch || null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -145,6 +157,7 @@ export function orderGroups({ q = '' } = {}) {
       deliveryDate: group.reduce((max, l) => (l.deliveryDate > max ? l.deliveryDate : max), head.deliveryDate || ''),
       lines: group.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)),
       stage: overallStage(group),
+      despatch: (group.find((l) => l.despatch) || {}).despatch || null,
     });
   }
   return out.sort((a, b) => (b.deliveryDate || '').localeCompare(a.deliveryDate || ''));
@@ -194,6 +207,30 @@ export const STATION_LABEL = {
   shipping: 'Shipping',
   archive: 'Archive',
 };
+
+/* ── How an order leaves ───────────────────────────────────────
+   Not everything is couriered. Some clients collect from the
+   office, some jobs are dropped locally on a Porter, some are
+   installed on site by our own people — and each of those wants a
+   different second field, which is why the mode is picked first. */
+
+export const DESPATCH_MODES = {
+  courier:    { label: 'Courier / transport', detail: 'Docket or LR number' },
+  pickup:     { label: 'Client pickup from office', detail: 'Who collected it' },
+  local:      { label: 'Local delivery (Porter / tempo)', detail: 'Vehicle or trip reference' },
+  install:    { label: 'Site installation by us', detail: 'Who went' },
+};
+
+export function despatchOf(mrNo) {
+  const group = linesByMr(mrNo);
+  return (group.find((l) => l.despatch) || {}).despatch || null;
+}
+
+/** Writes one despatch record across every piece of an MR number. */
+export function setDespatch(mrNo, despatch) {
+  for (const l of linesByMr(mrNo)) updateLine(l.id, { despatch });
+  return despatch;
+}
 
 export function stationOf(stage) {
   for (const [name, stages] of Object.entries(STATION)) {

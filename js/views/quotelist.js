@@ -424,12 +424,22 @@ async function openAccept(id, ctx) {
   if (!q) return;
   const t = totals(q);
   let includeGst = true;
+  const pieces = (q.lines || []).length;
+  // The date the whole job is promised for, offered from the lead
+  // time the quotation itself quoted, so the usual case is one tap.
+  const due = (() => {
+    const days = Number(q.leadTimeDays) || 0;
+    if (!days) return '';
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  })();
 
   const h = openSheet({
     title: 'Quotation approved',
     body: `
       <div class="sheet-body">
-      <p class="sheet-lede">This opens the job in Phynance and moves the quotation to the archive.</p>
+      <p class="sheet-lede">This opens the job in Phynance, puts ${pieces} piece${pieces === 1 ? '' : 's'} on the production floor, and moves the quotation to the archive.</p>
 
       ${field('Job code',
         `<input class="control" data-code value="${esc(q.jobCode || baseNo(q.mrNo) || '')}" autocapitalize="characters">`)}
@@ -437,6 +447,10 @@ async function openAccept(id, ctx) {
       ${field('Approved amount',
         `<input class="control num" data-amount type="number" inputmode="decimal" value="${t.total}">`,
         'Leave as quoted, or change it to what the client actually agreed — that writes a sub-quotation carrying this figure rather than editing the one you sent.')}
+
+      ${field('Delivery date',
+        `<input class="control" data-due type="date" value="${esc(due)}">`,
+        'Promised for the whole order. Each piece can be moved on its own later.')}
 
       <label class="switchrow" data-gst-row>
         <div><div class="sw-t">Count GST in the job value</div>
@@ -459,10 +473,11 @@ async function openAccept(id, ctx) {
       sheet.querySelector('[data-go]').onclick = () => {
         const code = sheet.querySelector('[data-code]').value.trim().toUpperCase();
         const approvedTotal = Number(amountEl.value) || 0;
-        const result = acceptQuote(id, { jobCode: code, approvedTotal, excludeGst: !includeGst });
+        const deliveryDate = sheet.querySelector('[data-due]').value || '';
+        const result = acceptQuote(id, { jobCode: code, approvedTotal, excludeGst: !includeGst, deliveryDate });
         const differed = result && result.approvedTotal != null;
         toast(code
-          ? `Approved${differed ? ` at ${inr(approvedTotal)}` : ''} · job ${code} open`
+          ? `Approved${differed ? ` at ${inr(approvedTotal)}` : ''} · job ${code} open · ${pieces} piece${pieces === 1 ? '' : 's'} in production`
           : 'Approved');
         hdl.close();
         ctx.refresh();

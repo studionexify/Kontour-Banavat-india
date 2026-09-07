@@ -3304,3 +3304,65 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
   .sheet.full.wide .sheet-body,
   .sheet.wide .sheet-body { padding-left:22px; padding-right:22px; }
 }
+
+/* ── The floor: one piece, and what has been said about it ──────
+   The piece board (views/piecework.js) is the same shape wherever
+   it opens from — the sub-contractor's tab or QC's rework list —
+   so it is styled once here rather than twice there. */
+
+.piece-head { display:flex; gap:14px; align-items:flex-start; }
+.piece-img {
+  width:96px; height:96px; flex:none; border-radius:14px; overflow:hidden;
+  object-fit:cover; background:var(--tea-soft);
+  display:flex; align-items:center; justify-content:center; color:var(--ink-3);
+}
+.piece-meta { flex:1; min-width:0; }
+.piece-t { font-size:16px; font-weight:700; color:var(--ink); }
+.piece-s { font-size:12.5px; color:var(--ink-3); margin-top:3px; }
+
+/* Four verdicts, always in the same order and always all four
+   visible: the one that is missing is the one nobody records. */
+.verdicts { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
+@media (min-width:560px) { .verdicts { grid-template-columns:repeat(4, 1fr); } }
+.verdicts .btn { margin:0; }
+
+.logfeed { display:flex; flex-direction:column; gap:10px; }
+.logrow {
+  border:1px solid var(--line-soft); border-radius:14px; padding:11px 13px;
+  background:var(--card, #fff);
+}
+.logrow-h { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.logrow-t { font-size:13px; font-weight:700; color:var(--ink); }
+.logrow-s { font-size:11.5px; color:var(--ink-3); }
+.logrow-x { margin:6px 0 0; font-size:13px; color:var(--ink-2); }
+.logshots, .shotstrip { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
+.logshot {
+  width:74px; height:74px; border-radius:10px; object-fit:cover;
+  border:1px solid var(--line-soft);
+}
+
+/* A row that carries a state and a figure at its end. */
+.prow-end { display:flex; align-items:center; gap:9px; flex:none; }
+
+/* ── QC's photograph library, project by project ──────────────── */
+
+.galgroup { margin-bottom:18px; }
+.galhead {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin-bottom:8px;
+}
+.galhead-txt { min-width:0; }
+.galhead-t { display:block; font-size:14px; font-weight:700; color:var(--ink); }
+.galhead-s { display:block; font-size:12px; color:var(--ink-3); margin-top:1px; }
+.galgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:8px; }
+.galgrid:empty { display:none; }
+.galshot {
+  width:100%; aspect-ratio:1; border-radius:12px; object-fit:cover;
+  border:1px solid var(--line-soft);
+}
+
+/* ── Shipping: the two things you do to an order that is out ──── */
+
+.shipcard { display:flex; flex-direction:column; }
+.shipcard .ocard { flex:1; }
+.shipacts { display:flex; gap:8px; padding:8px 4px 0; }

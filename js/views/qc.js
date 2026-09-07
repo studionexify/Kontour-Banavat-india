@@ -20,32 +20,47 @@ import { inr, dmy } from '../format.js';
 import { pageHead, statCards, searchBar, nothingHere, sectionHead, comingUp } from './chrome.js';
 import { openOrder } from './orderdetail.js';
 import { openDesignSheet } from './library.js';
+import * as subs from '../subs.js';
+import { openItemBoard, stateChip } from './piecework.js';
+import { photos, blobURL } from '../db.js';
+import { pickImage, shrink } from '../photos.js';
+import { uid } from '../store.js';
+import { orderGroups } from '../orders.js';
 
-let tab = 'qc';        // 'qc' | 'catalog'
+let tab = 'qc';        // 'qc' | 'photos' | 'catalog'
 let query = '';
 let cat = 'All';
 
 export function render(root, ctx) {
   const queue = linesAt('qc');
   const all = designs();
+  // Anything a sub-contractor was told to improve or remake. It is
+  // not in the check queue — it has not come back yet — but it is
+  // exactly what falls through the cracks, so it is listed here.
+  const rework = subs.itemsInState(['improve', 'rejected']);
 
   root.innerHTML = `
     <div class="floor">
       ${pageHead({
         title: 'QC + Catalog',
         sub: tab === 'qc'
-          ? `${queue.length} piece${queue.length === 1 ? '' : 's'} waiting to be checked`
-          : `${all.length} design${all.length === 1 ? '' : 's'} on file`,
+          ? `${queue.length} piece${queue.length === 1 ? '' : 's'} waiting to be checked${rework.length ? ` · ${rework.length} in rework` : ''}`
+          : tab === 'photos'
+            ? 'Every photograph taken on the floor, project by project'
+            : `${all.length} design${all.length === 1 ? '' : 's'} on file`,
         actions: tab === 'catalog'
           ? `<button class="pill-btn" data-adddesign>${icon('plus', 16)} Add design</button>` : '',
       })}
 
       <div class="segbar" style="margin-bottom:20px">
         <button class="seg-mini ${tab === 'qc' ? 'on' : ''}" data-tab="qc">Quality check</button>
+        <button class="seg-mini ${tab === 'photos' ? 'on' : ''}" data-tab="photos">Photographs</button>
         <button class="seg-mini ${tab === 'catalog' ? 'on' : ''}" data-tab="catalog">Catalog</button>
       </div>
 
-      ${tab === 'qc' ? qcHTML(queue) : catalogHTML(all)}
+      ${tab === 'qc' ? qcHTML(queue, rework)
+        : tab === 'photos' ? photosHTML()
+        : catalogHTML(all)}
     </div>`;
 
   on(root, '[data-tab]', (e, b) => { tab = b.dataset.tab; query = ''; ctx.refresh(); });
@@ -58,6 +73,12 @@ export function render(root, ctx) {
     if (e.target.closest('button')) return;
     openOrder(b.dataset.open, ctx.refresh);
   });
+  on(root, '[data-item]', (e, b) => openItemBoard(b.dataset.item, ctx.refresh));
+  on(root, '[data-shoot-mr]', async (e, b) => {
+    const added = await shootForProject(b.dataset.shootMr);
+    if (added) { toast(`${added} photograph${added === 1 ? '' : 's'} filed under ${b.dataset.shootMr}`); ctx.refresh(); }
+  });
+  if (tab === 'photos') paintGallery(root);
   on(root, '[data-adddesign]', () => openDesignSheet({ onSaved: ctx.refresh }));
   on(root, '[data-editdesign]', (e, b) => openDesignSheet({ code: b.dataset.editdesign, onSaved: ctx.refresh }));
   on(root, '[data-cat]', (e, b) => { cat = b.dataset.cat; ctx.refresh(); });
@@ -95,7 +116,7 @@ export function render(root, ctx) {
 
 /* ── The check queue ───────────────────────────────────────── */
 
-function qcHTML(queue) {
+function qcHTML(queue, rework) {
   const needle = query.trim().toLowerCase();
   const list = needle
     ? queue.filter((l) => `${l.name} ${l.mrNo} ${l.client}`.toLowerCase().includes(needle))
@@ -109,9 +130,15 @@ function qcHTML(queue) {
     ])}
 
     ${comingUp([
-      'The checklist itself is still being specified.',
-      'Today a piece reaching assembly lands in this queue. Passing it sends it straight to Shipping; sending it back returns it to production. Once you decide what is actually checked — finish, dimensions, hardware, packing — those become the fields on each row.',
+      'A piece lands here once every sub-contractor commissioned on it has approved their part. Passing it sends it to Shipping; sending it back returns it to production.',
+      'The checklist itself is still being specified — tell me what is actually checked (finish, dimensions, hardware, packing) and those become fields on each row.',
     ])}
+
+    ${rework.length ? `
+      ${sectionHead('Sent back for rework')}
+      <p class="hint" style="margin-bottom:10px">Told to improve or remake, still with the sub-contractor. Open one to see the notes and photographs.</p>
+      <div class="plist" style="margin-bottom:22px">${rework.map(reworkRow).join('')}</div>
+    ` : ''}
 
     ${searchBar(query, 'Search piece, client, MR number')}
 
@@ -133,6 +160,92 @@ function qcRow(l) {
         <button class="mini ok" data-pass="${esc(l.id)}">${icon('check', 13)} Pass</button>
       </span>
     </article>`;
+}
+
+function reworkRow(it) {
+  const person = subs.subOfItem(it);
+  return `
+    <article class="prow" data-item="${esc(it.id)}" tabindex="0" role="button">
+      <span class="prow-txt">
+        <span class="prow-t">${esc(it.name || 'Untitled piece')}</span>
+        <span class="prow-s">${esc(it.mrNo)}${person ? ` · ${esc(person.name)}` : ''}${it.trade ? ` · ${esc(subs.TRADE_LABELS[it.trade] || it.trade)}` : ''}</span>
+      </span>
+      ${stateChip(it)}
+    </article>`;
+}
+
+/* ── The photograph library ────────────────────────────────────
+   Every picture shot on the floor, filed under the project it
+   belongs to — which is the MR number, the same code the quotation,
+   the job and the work orders all use. Pictures live in IndexedDB;
+   this only lays out the frames and fills them in once they are read
+   back, so the screen never waits on the disk.
+
+   Projects with no pictures are still listed. An empty project with
+   a camera button on it is how pictures get taken. */
+
+function photosHTML() {
+  const groups = orderGroups({ q: query });
+  return `
+    ${searchBar(query, 'Search project, client')}
+
+    ${sectionHead('By project')}
+    ${groups.length ? groups.map((g) => `
+      <div class="galgroup" data-gal="${esc(g.mrNo)}">
+        <div class="galhead">
+          <span class="galhead-txt">
+            <span class="galhead-t">${esc(g.mrNo)}${g.client ? ` · ${esc(g.client)}` : ''}</span>
+            <span class="galhead-s" data-count="${esc(g.mrNo)}">—</span>
+          </span>
+          <button class="mini" data-shoot-mr="${esc(g.mrNo)}">${icon('camera', 13)} Add</button>
+        </div>
+        <div class="galgrid" data-grid="${esc(g.mrNo)}"></div>
+      </div>`).join('')
+      : nothingHere('camera', query ? 'No project matches' : 'No projects yet',
+          query ? 'Try another search' : 'Photographs are filed under the project they belong to')}`;
+}
+
+async function paintGallery(root) {
+  let all = [];
+  try { all = await photos.all(); } catch (e) { return; }
+  const shots = all.filter((p) => p.status === 'shot');
+  for (const host of root.querySelectorAll('[data-grid]')) {
+    const mrNo = host.dataset.grid;
+    const mine = shots
+      .filter((p) => (p.mrNo || '').toUpperCase() === mrNo.toUpperCase())
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const count = root.querySelector(`[data-count="${CSS.escape(mrNo)}"]`);
+    if (count) {
+      count.textContent = mine.length
+        ? `${mine.length} photograph${mine.length === 1 ? '' : 's'}`
+        : 'No photographs yet';
+    }
+    host.innerHTML = mine.map((p) => `<img class="galshot" src="${esc(blobURL(p))}" alt="">`).join('');
+  }
+}
+
+/** Photographs filed straight against a project, with no piece in
+    the middle — a site shot, a packed crate, a delivery. */
+async function shootForProject(mrNo) {
+  const files = await pickImage({ camera: true, multiple: true });
+  if (!files.length) return 0;
+  for (const f of files) {
+    const { blob, w, h } = await shrink(f);
+    await photos.put({
+      id: uid('p'),
+      entryId: `project:${mrNo}`,
+      mrNo,
+      blob,
+      mime: 'image/jpeg',
+      name: f.name || 'project.jpg',
+      w, h,
+      bytes: blob.size,
+      status: 'shot',
+      driveId: '', driveLink: '', extracted: null, error: '',
+      createdAt: Date.now(),
+    });
+  }
+  return files.length;
 }
 
 /* ── The catalog ───────────────────────────────────────────────

@@ -43,6 +43,7 @@
  */
 
 import { round2, todayISO } from './format.js';
+import { getLine, updateLine as updateOrderLine } from './orders.js';
 
 const KEY = 'kontour.subs.v1';
 
@@ -74,6 +75,25 @@ export const STATUS = {
 };
 
 export const PAY_MODES = ['Cash', 'UPI', 'Bank Transfer', 'Cheque'];
+
+/* Where a commissioned piece stands with the person making it. This
+   is the shop-floor check — one person looking at one piece and
+   saying whether it can move on — and it is deliberately not the
+   same thing as QC. A piece is approved here, by whoever is
+   watching that sub-contractor, and checked again at QC before it
+   is packed; the two catch different mistakes.
+
+   Improve and reject both leave the piece with the sub-contractor.
+   The difference is what is being said: improve is "finish it
+   properly", reject is "this one is not usable, make it again". Both
+   surface on the QC screen, because a piece stuck in rework is
+   exactly what nobody remembers to go and look at. */
+export const ITEM_STATES = {
+  working:  { label: 'Working',  tone: 'mut',  hint: 'With them, nothing said yet' },
+  improve:  { label: 'Improve',  tone: 'warn', hint: 'Sent back for finishing' },
+  rejected: { label: 'Rejected', tone: 'bad',  hint: 'Remake it' },
+  approved: { label: 'Approved', tone: 'ok',   hint: 'Their part is done' },
+};
 
 function uid(prefix = 's') {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
@@ -388,6 +408,17 @@ export function addItem(input = {}) {
     // the line above it.
     rate: round2(Number(input.rate) || 0),
     remark: input.remark || '',
+    // Which trade this person was commissioned for on this piece. The
+    // same piece can carry items from three sub-contractors — metal,
+    // upholstery, packing — each with its own rate and its own state.
+    trade: input.trade || '',
+    // See ITEM_STATES. Approving here is what sends the piece on to
+    // assembly, and so to QC.
+    state: ITEM_STATES[input.state] ? input.state : 'working',
+    // Every verdict, note and photograph against this piece, oldest
+    // first. Nothing is ever edited out of it — the point of the log
+    // is that it is what was actually said at the time.
+    log: Array.isArray(input.log) ? input.log : [],
     // A photo taken specifically for this commissioning. Normally
     // empty: the piece is shown by the photo already on file for its
     // MR No, so there is one photo per piece rather than two.
@@ -420,6 +451,92 @@ export function deleteItem(id) {
 /** qty × rate, the same arithmetic the Drive sheets do in their Total
     column. Never stored, so a rate corrected after the fact cannot
     leave a stale total sitting beside it. */
+/* ── The shop-floor log ────────────────────────────────────────
+   One append-only trail per commissioned piece: verdicts, notes and
+   the photographs that go with them. Photographs live in IndexedDB
+   like every other picture in Kontour (see js/db.js) — only their
+   ids are kept here, so the record stays small enough to sync. */
+
+export function addItemLog(itemId, entry = {}) {
+  const it = getItem(itemId);
+  if (!it) return null;
+  const row = {
+    id: uid('lg'),
+    at: Date.now(),
+    kind: entry.kind || 'note',        // 'note' | 'verdict'
+    state: entry.state || '',
+    text: String(entry.text || '').trim(),
+    photoIds: Array.isArray(entry.photoIds) ? entry.photoIds : [],
+    by: entry.by || '',
+  };
+  it.log = [...(it.log || []), row];
+  it.updatedAt = Date.now();
+  write(); emit();
+  return row;
+}
+
+/** A verdict is a state change and a log line, always together. */
+export function setItemState(itemId, state, { text = '', photoIds = [] } = {}) {
+  if (!ITEM_STATES[state]) return null;
+  const it = getItem(itemId);
+  if (!it) return null;
+  it.state = state;
+  it.updatedAt = Date.now();
+  write();
+  addItemLog(itemId, { kind: 'verdict', state, text, photoIds });
+  syncLineStage(it.orderLineId);
+  return it;
+}
+
+/* A piece is only ready to be checked when everyone commissioned on
+   it has finished with it — the upholsterer approving their part of
+   a sofa the carpenter is still rebuilding does not send it to QC.
+   So the piece's own stage is derived from its commissionings rather
+   than set by hand:
+
+     every commissioning approved  → assembly, and so onto QC
+     anything else                 → production
+
+   A piece already past QC is left alone. Once it is packed or gone,
+   a late verdict on a work order is a record, not a recall. */
+export function syncLineStage(orderLineId) {
+  if (!orderLineId) return null;
+  const line = getLine(orderLineId);
+  if (!line) return null;
+  if (line.stage === 'shipped' || line.stage === 'delivered') return line;
+
+  const its = itemsForOrderLine(orderLineId);
+  if (!its.length) return line;
+
+  const allApproved = its.every((x) => (x.state || 'working') === 'approved');
+  const want = allApproved ? 'assembly' : 'production';
+  if (line.stage === want) return line;
+  return updateOrderLine(orderLineId, { stage: want });
+}
+
+/** Every photograph ever logged against one commissioned piece. */
+export function itemPhotoIds(itemId) {
+  const it = getItem(itemId);
+  if (!it) return [];
+  return (it.log || []).flatMap((r) => r.photoIds || []);
+}
+
+/** Items standing in one or more states, newest commissioning first. */
+export function itemsInState(states, { subId = '' } = {}) {
+  const want = Array.isArray(states) ? states : [states];
+  return state.items
+    .filter((it) => !it.deletedAt
+      && want.includes(it.state || 'working')
+      && (!subId || (getWorkOrder(it.woId) || {}).subId === subId))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+/** Which sub-contractor a commissioned piece belongs to. */
+export function subOfItem(it) {
+  const w = it && it.woId ? getWorkOrder(it.woId) : null;
+  return w ? getSub(w.subId) : null;
+}
+
 export function itemAmount(it) {
   return round2((Number(it.qty) || 0) * (Number(it.rate) || 0));
 }

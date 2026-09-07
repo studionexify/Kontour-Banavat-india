@@ -18,6 +18,7 @@ import {
 } from '../orders.js';
 import { dmy, todayISO, inr } from '../format.js';
 import * as subs from '../subs.js';
+import { openItemBoard, stateChip } from './piecework.js';
 
 const TRADES = ['drawings', 'metal', 'wood', 'upholstery', 'marble', 'hardware', 'package'];
 
@@ -99,6 +100,12 @@ export function openOrder(mrNo, onChanged = () => {}) {
         const { openWorkOrder } = await import('./workorder.js');
         openWorkOrder(b.dataset.openwo, { onDone: repaint });
       });
+
+      /* A commissioning opens the piece board rather than the work
+         order: the question asked standing in front of a piece is
+         how it is going, not what the paperwork says. The work
+         order is one tap away on the sub-contractor's own screen. */
+      on(root, '[data-openitem]', (e, b) => openItemBoard(b.dataset.openitem, repaint));
 
       on(root, '[data-addpiece]', () => {
         openPieceSheet({
@@ -195,9 +202,9 @@ function commissionedHTML(l) {
         const s = wo && subs.getSub(wo.subId);
         if (!wo || !s) return '';
         return `
-          <button class="qpair as-row" data-openwo="${esc(wo.id)}">
-            <span class="qpair-l">${esc(s.name)}</span>
-            <span class="qpair-v">${esc(wo.no)} · ${it.rate > 0 ? esc(inr(subs.itemAmount(it))) : 'no rate'}</span>
+          <button class="qpair as-row" data-openitem="${esc(it.id)}">
+            <span class="qpair-l">${esc(s.name)}${it.trade ? ` · ${esc(subs.TRADE_LABELS[it.trade] || it.trade)}` : ''}</span>
+            <span class="qpair-v">${stateChip(it)} ${esc(wo.no)} · ${it.rate > 0 ? esc(inr(subs.itemAmount(it))) : 'no rate'}</span>
           </button>`;
       }).join('')}
     </div>`;
