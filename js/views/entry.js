@@ -29,7 +29,7 @@ export function openEntrySheet({ entry = null, prefill = null, onSaved } = {}) {
   const f = {
     type: (entry && entry.type) || (prefill && prefill.type) || 'out',
     amount: entry ? String(entry.entered) : (prefill && prefill.entered ? String(prefill.entered) : ''),
-    accountId: (entry && entry.accountId) || (prefill && prefill.accountId) || raw().meta.lastAccountId || 'cash',
+    accountId: (entry && entry.accountId) || (prefill && prefill.accountId) || raw().meta.lastAccountId || 'bank',
     toAccountId: (entry && entry.toAccountId) || (prefill && prefill.toAccountId) || '',
     categoryId: (entry && entry.categoryId) || (prefill && prefill.categoryId) || '',
     date: (entry && entry.date) || (prefill && prefill.date) || todayISO(),

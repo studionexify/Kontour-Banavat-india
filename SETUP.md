@@ -12,9 +12,19 @@ Work through it in order. Each part depends on the one above it.
 
 1. Create a project at [supabase.com](https://supabase.com). Any region
    close to India (Mumbai, `ap-south-1`) keeps the app responsive.
-2. Open **SQL Editor**, paste the whole of
-   `supabase/migrations/0001_init.sql`, and run it. It creates the
-   tables, the roles, the invite wiring and the sync function.
+2. Open **SQL Editor** and run every file in `supabase/migrations/`
+   in order, one at a time: `0001_init.sql` creates the tables, the
+   roles, the invite wiring and the sync function; `0002` and `0003`
+   add the quotations; `0004_shop_kinds.sql` adds the production line
+   and the commission book. Run them separately rather than pasting
+   them together — Postgres will not let a newly added type value be
+   used in the transaction that added it.
+
+   If the books are already running and only `0004` is new, running
+   that one file is enough. Until it has been run, the production line
+   and the commission book stay on the device they were logged on; the
+   ledger and the quotations are unaffected, and Settings → Sync says
+   so.
 3. Open **Project Settings → API** and copy two values:
    - **Project URL**
    - **anon / public** key

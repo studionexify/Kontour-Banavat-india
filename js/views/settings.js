@@ -24,6 +24,7 @@ import {
   members, invite, pendingInvites, revokeInvite, setRole, removeMember,
 } from '../auth.js';
 import { sync, pendingCount, lastSyncError } from '../cloud.js';
+import { syncShop, lastSyncError as shopError, needsMigration } from '../shopsync.js';
 
 export function openSettings(ctx) {
   const sheet = openSheet({
@@ -84,6 +85,15 @@ export function openSettings(ctx) {
                                  : 'Bring in the quotations from the sheet', 'history')}
           </div>
 
+          <p class="tray-lbl sp">Quotations</p>
+          <div class="list">
+            ${navRow('note', 'Company & banking', `${esc(qSettings().company.name)} · shown on every quotation`, 'qcompany')}
+            ${navRow('note', 'Payment terms', 'The bullets under each quote’s items', 'qpayment')}
+            ${navRow('note', 'Terms & Conditions', `${(qSettings().terms || '').split('\n').filter(Boolean).length} bullets`, 'qterms')}
+            ${navRow('note', 'Note Please', `${(qSettings().note || '').split(/\n{2,}/).filter(Boolean).length} paragraphs`, 'qnote')}
+            ${navRow('gear', 'Quote defaults', `${qSettings().gstRate}% GST · ${qSettings().leadTimeDays || 15}-day lead time`, 'qdefaults')}
+          </div>
+
         `;
       }
 
@@ -94,6 +104,8 @@ export function openSettings(ctx) {
           gst: gstSheet, drive: driveSheet, ai: aiSheet, pending: pendingSheet,
           pin: pinSheet, backup: backupSheet, about: aboutSheet, logo: logoSheet, history: historySheet, qsync: qsyncSheet,
           people: peopleSheet, sync: syncSheet, account: accountSheet,
+          qcompany: qCompanySheet, qpayment: qPaymentSheet,
+          qterms: qTermsSheet, qnote: qNoteSheet, qdefaults: qDefaultsSheet,
         };
         await map[where](ctx, paint);
       });
@@ -156,7 +168,7 @@ function accountsSheet(ctx, back) {
           </div>
           <button class="btn sm" data-add>${icon('plus', 15)} Add account</button>
           <div class="hint" style="margin-top:10px">
-            An account is also the payment mode — Cash, Bank and UPI are how your sheets already record it.
+            An account is also the payment mode — Bank and UPI are how your sheets already record it.
             Set the opening balance once and the running total stays true.
           </div>`;
       }
@@ -170,7 +182,7 @@ function accountsSheet(ctx, back) {
 
 function editAccount(id, done) {
   const a = id ? accounts(true).find((x) => x.id === id) : null;
-  const icons = ['cash', 'bank', 'phone', 'wallet', 'user', 'box'];
+  const icons = ['bank', 'phone', 'wallet', 'user', 'box'];
   const sheet = openSheet({
     title: a ? a.name : 'New account',
     body: `
@@ -1155,7 +1167,7 @@ function syncSheet(ctx, back) {
 
       function paint() {
         const waiting = pendingCount();
-        const err = lastSyncError();
+        const err = lastSyncError() || qsError() || shopError();
         body.innerHTML = `
           <div class="list" style="padding:2px 14px">
             <div class="kv"><span>Waiting to upload</span><b>${waiting || 'nothing'}</b></div>
@@ -1163,11 +1175,19 @@ function syncSheet(ctx, back) {
             ${err ? `<div class="kv"><span>Last attempt</span><b style="color:var(--out)">Failed</b></div>` : ''}
           </div>
           ${err ? `<div class="hint warn">${esc(err)}</div>` : ''}
+          ${needsMigration() ? `<div class="hint warn">
+            The production line and the commission book cannot sync until
+            supabase/migrations/0004_shop_kinds.sql has been run on the
+            Supabase project. The ledger and the quotations are unaffected.
+          </div>` : ''}
           <button class="btn sm" data-now>Sync now</button>
           <div class="hint">
-            Entries save on this device first and go up on their own — when
-            the connection returns, when you come back to the app, and every
-            few minutes. Nothing here has to be done by hand.
+            Everything saves on this device first and goes up on its own —
+            when the connection returns, when you come back to the app, and
+            every few minutes. The ledger, the quotations, the production
+            line and the commission book all ride the same books, so a
+            piece moved on the workshop phone is moved on every other
+            device too. Nothing here has to be done by hand.
           </div>`;
       }
 
@@ -1175,12 +1195,26 @@ function syncSheet(ctx, back) {
         const b = root.querySelector('[data-now]');
         b.disabled = true;
         b.textContent = 'Syncing…';
-        const r = await sync({ settingsToo: true });
+
+        // All four stores, because "Sync now" should mean the whole app
+        // and not only the ledger — the screen this button is on is
+        // where someone goes when a device looks out of date.
+        const rs = await Promise.all([
+          sync({ settingsToo: true }), syncQuotes({ settingsToo: true }), syncShop(),
+        ]);
+
         b.disabled = false;
         b.textContent = 'Sync now';
-        if (r.error) toast(r.error, 'err');
-        else if (r.skipped) toast(`Not synced — ${r.skipped}`, 'warn');
-        else toast(`${r.pushed || 0} up, ${r.pulled || 0} down`);
+
+        const failed = rs.find((r) => r && r.error);
+        const skipped = rs.find((r) => r && r.skipped);
+        if (failed) toast(failed.error, 'err');
+        else if (skipped) toast(`Not synced — ${skipped.skipped}`, 'warn');
+        else {
+          const up = rs.reduce((n, r) => n + (r.pushed || 0), 0);
+          const down = rs.reduce((n, r) => n + (r.pulled || 0), 0);
+          toast(`${up} up, ${down} down`);
+        }
         paint();
         ctx.refresh();
       });
@@ -1218,24 +1252,46 @@ function accountSheet(ctx, back) {
         });
         if (!ok) return;
 
-        // One last push, so work done on a bad connection is not stranded
-        // on a device that is about to forget it.
-        if (waiting) {
-          const r = await sync();
-          if (r.error || pendingCount()) {
-            const anyway = await confirmSheet({
-              title: 'Still not uploaded',
-              message: 'Those changes could not be sent. Signing out now loses them. Staying signed in keeps them until the connection is better.',
-              confirmLabel: 'Sign out and lose them',
-              danger: true,
-            });
-            if (!anyway) return;
-          }
+        // One last push of everything, so work done on a bad connection
+        // is not stranded on a device that is about to forget it. All
+        // three stores, because sign-out now clears all three: pushing
+        // only the ledger and wiping the rest would lose the
+        // quotations and the production line outright.
+        const { syncShop } = await import('../shopsync.js');
+        const results = await Promise.all([sync(), syncQuotes(), syncShop()]);
+        if (results.some((r) => r && r.error) || pendingCount()) {
+          const anyway = await confirmSheet({
+            title: 'Still not uploaded',
+            message: 'Some changes could not be sent. Signing out now loses them. Staying signed in keeps them until the connection is better.',
+            confirmLabel: 'Sign out and lose them',
+            danger: true,
+          });
+          if (!anyway) return;
         }
 
-        const { wipe } = await import('../store.js');
+        // Every store, not just the ledger. Leaving the quotations,
+        // the production line and the commission book behind — with
+        // their pull cursors still pointing at the last sync — is what
+        // made the next sign-in show a half-empty app: the cursor said
+        // there was nothing new, and the rows it had already skipped
+        // never came down again.
+        const [store, quotesStore, ordersStore, commissionsStore] = await Promise.all([
+          import('../store.js'), import('../quotes.js'),
+          import('../orders.js'), import('../commissions.js'),
+        ]);
+        const { resetSyncState } = await import('../cloud.js');
+        const { resetQuoteSync } = await import('../quotesync.js');
+        const { resetShopSync } = await import('../shopsync.js');
+
         await signOut();
-        wipe();
+        store.wipe();
+        quotesStore.wipe();
+        ordersStore.wipe();
+        commissionsStore.wipe();
+        resetSyncState();
+        resetQuoteSync();
+        resetShopSync();
+        try { localStorage.removeItem('kontour.adopted'); } catch {}
         location.reload();
       });
     },
@@ -1243,6 +1299,182 @@ function accountSheet(ctx, back) {
   });
 }
 
+
+/* ── Quotation settings ──────────────────────────────────────────
+   The boilerplate every quotation prints, editable instead of baked
+   into the code — see js/quotes.js's SHARED_QUOTE_SETTINGS for the
+   full list of what a change here carries to every device on the
+   same books. */
+
+function qCompanySheet(ctx, back) {
+  const s = qSettings();
+  const c = s.company, b = s.bank;
+  const h = openSheet({
+    title: 'Company & banking',
+    body: `
+      <div class="sheet-body">
+        <p class="tray-lbl">Shown in every quotation's letterhead and contact block</p>
+        <div class="field"><label>Company name</label><input class="control" data-name value="${esc(c.name)}"></div>
+        <div class="field"><label>GSTIN</label><input class="control" data-gstin value="${esc(c.gstin)}"></div>
+        <div class="field"><label>Address</label><input class="control" data-address value="${esc(c.address)}"></div>
+        <div class="field-2">
+          <div class="field"><label>Email</label><input class="control" data-email value="${esc(c.email)}"></div>
+          <div class="field"><label>Phone</label><input class="control" data-phone value="${esc(c.phone)}"></div>
+        </div>
+        <div class="field"><label>Website</label><input class="control" data-website value="${esc(c.website)}"></div>
+
+        <p class="tray-lbl sp">Banking details</p>
+        <div class="field"><label>Bank</label><input class="control" data-bank value="${esc(b.bank)}"></div>
+        <div class="field-2">
+          <div class="field"><label>A/C name</label><input class="control" data-bname value="${esc(b.name)}"></div>
+          <div class="field"><label>A/C number</label><input class="control" data-bacc value="${esc(b.account)}"></div>
+        </div>
+        <div class="field-2">
+          <div class="field"><label>IFSC</label><input class="control" data-bifsc value="${esc(b.ifsc)}"></div>
+          <div class="field"><label>Branch</label><input class="control" data-bbranch value="${esc(b.branch)}"></div>
+        </div>
+        <button class="btn" data-save>Save</button>
+      </div>`,
+    onMount(root) {
+      on(root, '[data-save]', () => {
+        updateQSettings({
+          company: {
+            name: root.querySelector('[data-name]').value,
+            gstin: root.querySelector('[data-gstin]').value,
+            address: root.querySelector('[data-address]').value,
+            email: root.querySelector('[data-email]').value,
+            phone: root.querySelector('[data-phone]').value,
+            website: root.querySelector('[data-website]').value,
+          },
+          bank: {
+            bank: root.querySelector('[data-bank]').value,
+            name: root.querySelector('[data-bname]').value,
+            account: root.querySelector('[data-bacc]').value,
+            ifsc: root.querySelector('[data-bifsc]').value,
+            branch: root.querySelector('[data-bbranch]').value,
+          },
+        });
+        toast('Saved');
+        h.close();
+        back();
+      });
+    },
+  });
+  return h;
+}
+
+function qPaymentSheet(ctx, back) {
+  const s = qSettings();
+  const h = openSheet({
+    title: 'Payment terms',
+    body: `
+      <div class="sheet-body">
+        <div class="field">
+          <label>One line per bullet</label>
+          <textarea class="control" data-terms rows="6">${esc(s.paymentTerms || '')}</textarea>
+          <div class="hint">Printed under Payment Terms on every quotation — only the default a new one starts from; each quotation can still edit its own.</div>
+        </div>
+        <button class="btn" data-save>Save</button>
+      </div>`,
+    onMount(root) {
+      on(root, '[data-save]', () => {
+        updateQSettings({ paymentTerms: root.querySelector('[data-terms]').value });
+        toast('Saved');
+        h.close();
+        back();
+      });
+    },
+  });
+  return h;
+}
+
+function qTermsSheet(ctx, back) {
+  const s = qSettings();
+  const h = openSheet({
+    title: 'Terms & Conditions',
+    body: `
+      <div class="sheet-body">
+        <div class="field">
+          <label>One line per bullet</label>
+          <textarea class="control" data-terms rows="10">${esc(s.terms || '')}</textarea>
+          <div class="hint">{{leadTime}} and {{fabricRate}} are filled in from each quotation's own figures when it prints.</div>
+        </div>
+        <button class="btn" data-save>Save</button>
+      </div>`,
+    onMount(root) {
+      on(root, '[data-save]', () => {
+        updateQSettings({ terms: root.querySelector('[data-terms]').value });
+        toast('Saved');
+        h.close();
+        back();
+      });
+    },
+  });
+  return h;
+}
+
+function qNoteSheet(ctx, back) {
+  const s = qSettings();
+  const h = openSheet({
+    title: 'Note Please',
+    body: `
+      <div class="sheet-body">
+        <div class="field">
+          <label>Paragraphs, one blank line between each</label>
+          <textarea class="control" data-note rows="10">${esc(s.note || '')}</textarea>
+          <div class="hint">Printed under "Note Please", right after Terms & Conditions.</div>
+        </div>
+        <button class="btn" data-save>Save</button>
+      </div>`,
+    onMount(root) {
+      on(root, '[data-save]', () => {
+        updateQSettings({ note: root.querySelector('[data-note]').value });
+        toast('Saved');
+        h.close();
+        back();
+      });
+    },
+  });
+  return h;
+}
+
+function qDefaultsSheet(ctx, back) {
+  const s = qSettings();
+  const h = openSheet({
+    title: 'Quote defaults',
+    body: `
+      <div class="sheet-body">
+        <div class="field">
+          <label>Default GST rate %</label>
+          <input class="control num" data-gstrate type="number" min="0" max="28" value="${s.gstRate}">
+        </div>
+        <div class="field">
+          <label>Default lead time (days)</label>
+          <input class="control num" data-leaddays type="number" min="0" inputmode="numeric" value="${s.leadTimeDays || 15}">
+        </div>
+        <div class="field">
+          <label>Default delivery city</label>
+          <input class="control" data-city value="${esc(s.defaultCity || '')}">
+        </div>
+        <button class="btn" data-save>Save</button>
+      </div>`,
+    onMount(root) {
+      on(root, '[data-save]', () => {
+        const days = Number(root.querySelector('[data-leaddays]').value) || 15;
+        updateQSettings({
+          gstRate: Number(root.querySelector('[data-gstrate]').value) || 0,
+          leadTimeDays: days,
+          leadTime: `${days}–${days + 5} business days`,
+          defaultCity: root.querySelector('[data-city]').value,
+        });
+        toast('Saved');
+        h.close();
+        back();
+      });
+    },
+  });
+  return h;
+}
 
 /* ── Brand ─────────────────────────────────────────────────────
    One image, used by the quotation document, the rail wordmark and
@@ -1278,8 +1510,8 @@ async function logoSheet(ctx, back) {
         on(host, '[data-pick]', async () => {
           const files = await pickImage({ camera: false });
           if (!files || !files[0]) return;
-          const blob = await shrink(files[0]);
-          updateQSettings({ logo: await toBase64(blob) });
+          const { blob } = await shrink(files[0]);
+          updateQSettings({ logo: `data:image/jpeg;base64,${await toBase64(blob)}` });
           toast('Logo saved');
           paint();
           if (back) back();

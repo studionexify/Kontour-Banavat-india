@@ -12,13 +12,13 @@ const P = {
   close:     '<path d="M18 6 6 18M6 6l12 12"/>',
   chevR:     '<path d="M9 18l6-6-6-6"/>',
   chevD:     '<path d="M6 9l6 6 6-6"/>',
+  chevU:     '<path d="M6 15l6-6 6 6"/>',
   arrowIn:   '<path d="M12 5v14"/><path d="m5 12 7 7 7-7"/>',
   arrowOut:  '<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>',
   swap:      '<path d="M7 4v13"/><path d="m4 14 3 3 3-3"/><path d="M17 20V7"/><path d="m14 10 3-3 3 3"/>',
   wallet:    '<path d="M3 8.5A2.5 2.5 0 0 1 5.5 6H19a2 2 0 0 1 2 2v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17z"/><path d="M3 8.5V7a2 2 0 0 1 2-2h11"/><circle cx="17" cy="12.5" r="1.2"/>',
   bank:      '<path d="M3 10h18"/><path d="m12 3 9 5H3z"/><path d="M6 10v7M10 10v7M14 10v7M18 10v7"/><path d="M3 20h18"/>',
   phone:     '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.5h3"/>',
-  cash:      '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/>',
   camera:    '<path d="M4 8.5h3l1.5-2.2h7L17 8.5h3a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5z"/><circle cx="12" cy="13.5" r="3.4"/>',
   cloud:     '<path d="M17.5 18.5H7a4.5 4.5 0 0 1-.6-8.96 6 6 0 0 1 11.5 1.7 3.63 3.63 0 0 1-.4 7.26z"/>',
   cloudOff:  '<path d="M17.5 18.5H7a4.5 4.5 0 0 1-.6-8.96 6 6 0 0 1 8.4-2.9"/><path d="m3 3 18 18"/>',
@@ -43,6 +43,16 @@ const P = {
   chart:     '<path d="M21 21H3V3"/><path d="m7 15 4-4 3 3 5-6"/>',
   box:       '<path d="m12 2.5 8.5 4.7v9.6L12 21.5 3.5 16.8V7.2z"/><path d="M3.5 7.2 12 12l8.5-4.8M12 12v9.5"/>',
   inbox:     '<path d="M3.5 13.5h4l1.5 3h6l1.5-3h4"/><path d="M5.4 4.5h13.2l3.4 9V18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4.5z"/>',
+  percent:   '<circle cx="7" cy="7" r="2.6"/><circle cx="17" cy="17" r="2.6"/><path d="M19 5 5 19"/>',
+  /* The production line, left to right: a bench to make it on, the
+     hands it is farmed out to, the clipboard it is checked against,
+     the lorry it leaves on, and the crate it ends up in. */
+  anvil:     '<path d="M3.5 8.5h11l3 3h3"/><path d="M3.5 8.5v3a4 4 0 0 0 4 4h3l-1.5 3.5h7L14.5 15.5"/><path d="M6 19h12"/>',
+  hands:     '<circle cx="9" cy="7.5" r="3"/><path d="M2.5 20v-1.2A5.3 5.3 0 0 1 7.8 13.5h2.4"/><circle cx="17" cy="10.5" r="2.4"/><path d="M12.5 20v-.8a4.5 4.5 0 0 1 4.5-4.5 4.5 4.5 0 0 1 4.5 4.5v.8"/>',
+  clipboard: '<path d="M9 4.5H7A1.5 1.5 0 0 0 5.5 6v13A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V6A1.5 1.5 0 0 0 17 4.5h-2"/><rect x="9" y="2.5" width="6" height="4" rx="1.3"/><path d="m9.5 13 2 2 3.5-4"/>',
+  truck:     '<path d="M2.5 6.5h11v10h-11z"/><path d="M13.5 10h4l4 3.5v3h-8z"/><circle cx="7" cy="18.5" r="1.8"/><circle cx="17" cy="18.5" r="1.8"/>',
+  archive:   '<rect x="2.5" y="3.5" width="19" height="4.5" rx="1.3"/><path d="M4.5 8v11a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V8"/><path d="M9.5 12h5"/>',
+  menu:      '<path d="M3.5 6.5h17M3.5 12h17M3.5 17.5h17"/>',
 };
 
 /** icon('home', 22) -> svg string */

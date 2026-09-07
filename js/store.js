@@ -4,7 +4,7 @@
    when Kontour goes online, only the read()/write() pair below changes,
    and no view has to be touched. */
 
-import { round2, todayISO, monthKey, isoOf } from './format.js';
+import { round2, todayISO, monthKey, isoOf, fyRange } from './format.js';
 import { KINDS, snapshot, diff, enqueue, clearQueue, setCursor } from './outbox.js';
 import './legacy.js';   // moves pre-rename storage across; must load first
 
@@ -14,8 +14,11 @@ export const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /* ── Defaults ──────────────────────────────────────────────── */
 
+// No Cash account: Banavat India's CA has asked for cash transactions
+// to be kept out of the books entirely, not just discouraged. See
+// purgeCashData() below for what happens to a device that already has
+// one on file.
 const DEFAULT_ACCOUNTS = [
-  { id: 'cash', name: 'Cash', icon: 'cash', opening: 0, archived: false },
   { id: 'bank', name: 'Bank', icon: 'bank', opening: 0, archived: false },
   { id: 'upi', name: 'UPI', icon: 'phone', opening: 0, archived: false },
 ];
@@ -65,7 +68,7 @@ function blank() {
     entries: [],
     recurring: [],
     settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),
-    meta: { lastAccountId: 'cash', lastCategoryIn: 'c_adv', lastCategoryOut: 'c_mat', createdAt: Date.now() },
+    meta: { lastAccountId: 'bank', lastCategoryIn: 'c_adv', lastCategoryOut: 'c_mat', createdAt: Date.now() },
   };
 }
 
@@ -277,7 +280,7 @@ export function addEntry(input) {
     entered: round2(input.entered),
     gst,
     ...amounts,
-    accountId: input.accountId || s.meta.lastAccountId || 'cash',
+    accountId: input.accountId || s.meta.lastAccountId || 'bank',
     toAccountId: input.type === 'transfer' ? (input.toAccountId || '') : '',
     categoryId: input.type === 'transfer' ? '' : (input.categoryId || ''),
     jobCode: (input.jobCode || '').trim().toUpperCase(),
@@ -388,6 +391,28 @@ export function deleteAccount(id) {
   return null;
 }
 
+/* Banavat India's CA has asked for cash transactions to be kept out
+   of the books entirely. A device that already had the Cash account
+   — or an entry logged against it before this ran — has that record
+   deleted outright rather than hidden, on the explicit call that a
+   ledger the CA is relying on should not still be carrying it archived
+   in the background. Runs once per load, through the same commit()
+   every other edit goes through, so a synced org has the deletion
+   pushed to every other device too, not just cleared locally. */
+export function purgeCashData() {
+  const s = load();
+  const before = s.entries.length;
+  s.entries = s.entries.filter((e) => e.accountId !== 'cash' && e.toAccountId !== 'cash');
+  const hadAccount = s.accounts.some((a) => a.id === 'cash');
+  s.accounts = s.accounts.filter((a) => a.id !== 'cash');
+  const fixedDefault = s.meta.lastAccountId === 'cash';
+  if (fixedDefault) s.meta.lastAccountId = (s.accounts[0] && s.accounts[0].id) || 'bank';
+
+  const changed = before !== s.entries.length || hadAccount || fixedDefault;
+  if (changed) commit();
+  return { entriesRemoved: before - s.entries.length, accountRemoved: hadAccount };
+}
+
 /** Opening balance + everything that has moved through it. */
 export function balance(accountId, upto = null) {
   const s = load();
@@ -473,7 +498,7 @@ export function ensureJob(code, { silent = false, title = '', client = '' } = {}
   const s = load();
   let j = s.jobs.find((x) => x.code === c);
   if (!j) {
-    j = { code: c, title, client, orderValue: 0, archived: false, createdAt: Date.now(), lastUsed: Date.now() };
+    j = { code: c, title, client, orderValue: 0, archived: false, stage: 'production', createdAt: Date.now(), lastUsed: Date.now() };
     s.jobs.push(j);
   } else {
     j.lastUsed = Date.now();
@@ -585,6 +610,20 @@ export function dayTotals(iso) {
 
 export function monthTotals(key) {
   return totals(entries().filter((e) => monthKey(e.date) === key));
+}
+
+/* The three figures the Phynance topbar wants: what the market still
+   owes across every job, what Banavat India still owes its own
+   vendors (not tracked yet — always null until that ledger exists),
+   and money in for the current financial year as the turnover
+   figure. */
+export function phynanceStats() {
+  const outstanding = jobs()
+    .map((j) => jobSummary(j.code))
+    .reduce((t, s) => t + (s.outstanding > 0 ? s.outstanding : 0), 0);
+  const { from, to } = fyRange(todayISO());
+  const turnover = totals(inRange(from, to)).in;
+  return { outstanding: round2(outstanding), vendorPayment: null, turnover: round2(turnover) };
 }
 
 export function byCategory(list, type) {

@@ -215,7 +215,10 @@ export function bindHeroScroll(scroller, topbar) {
     const p = Math.max(0, Math.min(1, y / FADE));
     if (hero) hero.style.setProperty('--p', p.toFixed(3));
 
-    const on = y > FADE * 0.72;
+    // The glass bar exists to take over from a hero that has scrolled
+    // away. A screen with no hero has nothing to hand over, so the bar
+    // stays down rather than sliding in empty.
+    const on = Boolean(hero) && y > FADE * 0.72;
     if (on !== (last === 1)) {
       topbar.classList.toggle('on', on);
       last = on ? 1 : 0;

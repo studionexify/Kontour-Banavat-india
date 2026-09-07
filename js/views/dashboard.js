@@ -1,160 +1,106 @@
-/* views/dashboard.js — Kontour's own screen.
+/* views/dashboard.js — the whole floor on one screen.
  *
- * Not a fifth copy of the money log. The Dashboard answers one
- * question — what needs me today — and every block on it is a
- * snippet that belongs somewhere else, with a way through to the
- * screen that owns it. Nothing here can be edited in place; that
- * is the point. You look, you decide where to go.
+ * Not a fifth copy of anything. The Dashboard answers one question —
+ * what needs me today — by carrying each station's own headline
+ * figure and nothing else, with a way through to the screen that
+ * owns it. Every number here is computed by the module it belongs
+ * to, never re-derived, so the Dashboard cannot disagree with the
+ * screen it links to.
+ *
+ * What needs attention comes first and what is merely true comes
+ * after: an overdue order is a different kind of fact from a
+ * turnover figure, and putting them in one undifferentiated grid
+ * makes both easier to miss.
  */
 
 import { icon } from '../icons.js';
-import { on, esc, emptyState } from '../ui.js';
-import { jobs, jobSummary, sortedEntries, accountName, categoryName } from '../store.js';
-import { openQuotes, pipelineValue, recentQuotes, quoteTotals, STATUS } from '../quotes.js';
-import { inr, inrShort, todayISO, dmy, fyOf, ago } from '../format.js';
-import { openEntryDetail } from './entry.js';
+import { on, esc } from '../ui.js';
+import { phynanceStats } from '../store.js';
+import { quotationStats } from '../quotes.js';
+import { totalSummary, seedKnownPartners } from '../commissions.js';
+import {
+  stationCounts, groupsAt, orderGroups, isOverdue, stageLabel, seedOrders,
+} from '../orders.js';
+import { todayISO, fyOf, dmy } from '../format.js';
+import { pageHead, statCards, sectionHead, orderCard, nothingHere } from './chrome.js';
+import { openOrder } from './orderdetail.js';
+import { seedingAllowed } from '../shopsync.js';
 
-export async function render(root, ctx) {
+export function render(root, ctx) {
+  // The history this build ships with is seeded only where it is this
+  // device's own copy. On shared books it waits for the first pull, or
+  // a phone opening the dashboard mid-sign-in would seed a second copy
+  // of a history the books already hold. See shopsync.seedingAllowed().
+  if (seedingAllowed()) {
+    seedOrders();
+    seedKnownPartners();
+  }
+
   const today = todayISO();
-  const open = openQuotes();
-  const pipeline = pipelineValue();
+  const st = stationCounts();
+  const q = quotationStats();
+  const p = phynanceStats();
+  const c = totalSummary();
 
-  // Only jobs with an order value can be outstanding — a job with no
-  // target has nothing to be short of. Biggest gap first.
-  const live = jobs()
-    .map((j) => ({ job: j, sum: jobSummary(j.code) }))
-    .filter((x) => x.sum.outstanding != null && x.sum.outstanding > 0)
-    .sort((a, b) => b.sum.outstanding - a.sum.outstanding);
-
-  const outstanding = live.reduce((t, x) => t + x.sum.outstanding, 0);
+  const overdue = orderGroups({}).filter(isOverdue)
+    .sort((a, b) => (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
+  const dueSoon = groupsAt('inproduction', {})
+    .filter((g) => !isOverdue(g) && g.deliveryDate)
+    .sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate))
+    .slice(0, 4);
 
   root.innerHTML = `
-    <header class="hero with-panel">
-      <div class="hero-bar">
-        <div class="hero-title">
-          Dashboard
-          <small>Banavat India · ${esc(fyOf(today))}</small>
-        </div>
-        <button class="icon-btn" data-settings aria-label="Settings">${icon('gear', 21)}</button>
-      </div>
+    <div class="floor">
+      ${pageHead({
+        title: 'Banavat India',
+        sub: `The floor today · ${esc(fyOf(today))}`,
+        actions: `<button class="pill-btn" data-go="quotes">${icon('plus', 16)} New quotation</button>`,
+      })}
 
-      <div class="stat-row">
-        <div class="stat">
-          <span class="stat-ico">${icon('note', 17)}</span>
-          <div class="stat-val num" ${pipeline ? `data-count="${pipeline}" data-fmt="short"` : ''}>${pipeline ? '' : '—'}</div>
-          <div class="stat-lbl">QUOTED, OPEN</div>
-        </div>
-        <div class="stat">
-          <span class="stat-ico">${icon('jobs', 17)}</span>
-          <div class="stat-val num" ${outstanding ? `data-count="${outstanding}" data-fmt="short"` : ''}>${outstanding ? '' : '—'}</div>
-          <div class="stat-lbl">TO COLLECT</div>
-        </div>
-      </div>
-    </header>
+      ${sectionHead('The line')}
+      ${statCards([
+        { label: 'Open quotations', value: q.openCount, tone: 'quote', go: 'quotes', hint: 'awaiting a decision' },
+        { label: 'In production', value: st.inproduction, tone: 'prod', go: 'inproduction', hint: 'on the floor' },
+        { label: 'Awaiting QC', value: st.qc, tone: 'qc', go: 'qc', hint: 'at assembly' },
+        { label: 'Shipping', value: st.shipping, tone: 'ship', go: 'shipping', hint: 'out for delivery' },
+      ])}
 
-    <div class="panel">
-      ${snippet('Open quotations', 'quotes', open.length ? quotesHTML(open) : none('note', 'No quotation is waiting on a client'))}
-      ${snippet('Jobs outstanding', 'jobs', live.length ? jobsHTML(live) : none('jobs', 'Nothing outstanding'))}
-      ${snippet('Recent activity', 'ledger', activityHTML())}
-    </div>
-  `;
+      ${statCards([
+        { label: 'Active orders', value: q.activeCount, go: 'quotes', hint: 'confirmed' },
+        { label: 'Active order value', value: q.activeValue || '', money: Boolean(q.activeValue), go: 'quotes' },
+        { label: 'Overdue', value: st.overdue, tone: st.overdue ? 'sub' : '', go: 'inproduction', hint: st.overdue ? 'past delivery date' : 'nothing late' },
+        { label: 'Completed', value: st.archive, tone: 'done', go: 'archive', hint: 'in the archive' },
+      ])}
 
-  on(root, '[data-settings]', () => ctx.openSettings());
-  on(root, '[data-more]', (e, b) => ctx.go(b.dataset.more));
-  on(root, '[data-quote]', (e, b) => ctx.go('quotes', { id: b.dataset.quote }));
-  on(root, '[data-job]', (e, b) => ctx.go('jobs', { code: b.dataset.job }));
-  on(root, '[data-entry]', (e, b) => openEntryDetail(b.dataset.entry, ctx));
+      ${sectionHead('Money')}
+      ${statCards([
+        { label: 'Outstanding', value: p.outstanding || '', money: Boolean(p.outstanding), go: 'home', hint: 'to collect' },
+        { label: 'Vendor payment', value: p.vendorPayment || '', money: Boolean(p.vendorPayment), go: 'home', hint: 'not tracked yet' },
+        { label: 'Turn over', value: p.turnover || '', money: Boolean(p.turnover), go: 'home', hint: esc(fyOf(today)) },
+        { label: 'Commission owed', value: c.remaining || '', money: Boolean(c.remaining), go: 'commission', hint: `${c.paid ? 'paid ₹' + Math.round(c.paid).toLocaleString('en-IN') : 'nothing paid yet'}` },
+      ])}
+
+      ${overdue.length ? `
+        ${sectionHead('Running late', `<button class="sec-link" data-go="inproduction">Open ${icon('chevR', 13)}</button>`)}
+        <div class="olist">${overdue.slice(0, 4).map((g) => row(g, true)).join('')}</div>
+      ` : ''}
+
+      ${sectionHead('Due next', `<button class="sec-link" data-go="inproduction">Open ${icon('chevR', 13)}</button>`)}
+      ${dueSoon.length ? `<div class="olist">${dueSoon.map((g) => row(g, false)).join('')}</div>`
+        : nothingHere('anvil', 'Nothing scheduled', 'Approved quotations arrive in production')}
+    </div>`;
+
+  on(root, '[data-go]', (e, b) => ctx.go(b.dataset.go));
+  on(root, '[data-open]', (e, b) => openOrder(b.dataset.open, ctx.refresh));
 }
 
-/* Every block is the same shape: a heading, a way through to the
-   screen that owns the data, and at most a handful of rows. The
-   cap is the whole idea — a snippet that grows into a list is
-   just the other screen, badly. */
-function snippet(title, go, inner) {
-  return `
-    <section class="snip reveal">
-      <div class="snip-head">
-        <h2 class="snip-t">${esc(title)}</h2>
-        <button class="snip-go" data-more="${go}">Open ${icon('chevR', 15)}</button>
-      </div>
-      ${inner}
-    </section>
-  `;
-}
-
-function none(ico, text) {
-  return `<div class="snip-none">${icon(ico, 20)}<span>${esc(text)}</span></div>`;
-}
-
-function quotesHTML(list) {
-  return `<div class="snip-rows">${list.slice(0, 4).map((q) => {
-    const t = quoteTotals(q);
-    const st = STATUS[q.status];
-    return `
-      <button class="qrow" data-quote="${esc(q.id)}">
-        <div class="qrow-main">
-          <div class="qrow-t">${esc(q.client.name || 'Unnamed client')}</div>
-          <div class="qrow-s">MR # ${esc(q.mrNo)}${q.validUntil ? ` · valid to ${esc(dmy(q.validUntil))}` : ''}</div>
-        </div>
-        <div class="qrow-side">
-          <span class="qrow-amt num">${inr(t.total)}</span>
-          <span class="pill ${st.tone}">${esc(st.label)}</span>
-        </div>
-      </button>`;
-  }).join('')}</div>`;
-}
-
-function jobsHTML(list) {
-  return `<div class="snip-rows">${list.slice(0, 4).map(({ job, sum }) => `
-    <button class="qrow" data-job="${esc(job.code)}">
-      <div class="qrow-main">
-        <div class="qrow-t">${esc(job.code)}${job.title ? ` · ${esc(job.title)}` : ''}</div>
-        <div class="qrow-s">${inr(sum.received)} received of ${inr(sum.orderValue)}</div>
-      </div>
-      <div class="qrow-side">
-        <span class="qrow-amt num out">${inrShort(sum.outstanding)}</span>
-        <span class="qrow-cap">to collect</span>
-      </div>
-    </button>
-  `).join('')}</div>`;
-}
-
-/* One combined stream — the last few things that happened anywhere
-   in Kontour, so the Dashboard shows movement rather than a
-   snapshot. Ledger entries and quotations interleave by time. */
-function activityHTML() {
-  const items = [
-    ...sortedEntries().slice(0, 6).map((e) => ({
-      at: e.createdAt || 0,
-      html: `
-        <button class="qrow" data-entry="${esc(e.id)}">
-          <div class="qrow-main">
-            <div class="qrow-t">${esc(e.particulars || categoryName(e.categoryId) || 'Entry')}</div>
-            <div class="qrow-s">${esc(accountName(e.accountId))} · ${esc(dmy(e.date))}</div>
-          </div>
-          <div class="qrow-side">
-            <span class="qrow-amt num ${e.type === 'in' ? 'in' : e.type === 'out' ? 'out' : ''}">${
-              e.type === 'in' ? '+' : e.type === 'out' ? '−' : ''}${inrShort(e.amount)}</span>
-            <span class="qrow-cap">${e.createdAt ? esc(ago(e.createdAt)) : ''}</span>
-          </div>
-        </button>`,
-    })),
-    ...recentQuotes(6).map((q) => ({
-      at: q.updatedAt || 0,
-      html: `
-        <button class="qrow" data-quote="${esc(q.id)}">
-          <div class="qrow-main">
-            <div class="qrow-t">MR # ${esc(q.mrNo)}</div>
-            <div class="qrow-s">${esc(q.client.name || 'Unnamed client')} · quotation</div>
-          </div>
-          <div class="qrow-side">
-            <span class="qrow-amt num">${inrShort(quoteTotals(q).total)}</span>
-            <span class="qrow-cap">${q.updatedAt ? esc(ago(q.updatedAt)) : ''}</span>
-          </div>
-        </button>`,
-    })),
-  ].sort((a, b) => b.at - a.at).slice(0, 5);
-
-  if (!items.length) return none('inbox', 'Nothing has happened yet');
-  return `<div class="snip-rows">${items.map((i) => i.html).join('')}</div>`;
+function row(g, late) {
+  const meta = [`${g.lines.length} piece${g.lines.length === 1 ? '' : 's'}`];
+  if (g.deliveryDate) meta.push(`${late ? 'was due' : 'due'} ${dmy(g.deliveryDate)}`);
+  return orderCard({
+    id: g.mrNo, mrNo: g.mrNo, client: g.client, meta,
+    tint: late ? 'sub' : 'prod',
+    pill: late ? 'Overdue' : stageLabel(g.stage),
+    pillTone: late ? 'out' : 'warn',
+  });
 }

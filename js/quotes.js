@@ -35,6 +35,7 @@
 
 import { uid, ensureJob, updateJob } from './store.js';
 import { todayISO, round2, fyStartYear } from './format.js';
+import { DEFAULT_LOGO } from './default-logo.js';
 
 const KEY = 'kontour.quotes.v2';
 
@@ -54,6 +55,40 @@ export const STATUS = {
    C129, C129-1, C129-2 are one job quoted three times. */
 export function baseNo(mrNo) {
   return String(mrNo || '').split('-')[0];
+}
+
+/* The name a quotation goes by everywhere it is listed: the number
+   that identifies the document, and the client it was written for.
+   The base document reads "C101 Rahi Construction" — no separator
+   between the number and the name, the way the business already
+   says it out loud. A revision's own suffix gets its dash back
+   *before* the client, so the number that changed stays legible:
+   "C101 - 1 Rahi Construction" is revision 1 of that same job. */
+export function quoteName(q) {
+  if (!q) return '';
+  const client = (q.client && q.client.name || '').trim() || 'Unnamed client';
+  const mrNo = String(q.mrNo || '');
+  const dash = mrNo.indexOf('-');
+  if (dash === -1) return `${mrNo} ${client}`;
+  return `${mrNo.slice(0, dash)} - ${mrNo.slice(dash + 1)} ${client}`;
+}
+
+/* Two ways of printing the same tax. "Total" foots the whole
+   quotation once, the way a builder normally quotes. "Line item"
+   carries the rate down onto every row instead, for the client who
+   is comparing pieces and wants to see what each one costs including
+   tax before the figures are added up. Neither one changes what is
+   owed — quoteTotals() is the same call either way. */
+export const GST_MODES = {
+  total:    { label: 'Total',     hint: 'One GST line under the sub-total' },
+  lineitem: { label: 'Line item', hint: 'GST shown against every item' },
+};
+
+/** What one line owes in GST, on its own — only meaningful once the
+    quotation is taxed at all. */
+export function lineGst(line, quote) {
+  if (!quote || quote.gstApplicable === false) return 0;
+  return round2(lineAmount(line) * (Number(quote.gstRate) || 0) / 100);
 }
 
 export const CATEGORIES = [
@@ -134,6 +169,12 @@ function blank() {
       // from.
       fabricRate: 800,
       leadTime: '25–30 business days',
+      // The number side of leadTime — a builder types "15" and the
+      // document prints the same 5-day range every quotation has used.
+      // leadTime itself stays the source of truth for printing (it
+      // survives a quote where the days were typed over by hand), this
+      // is only what a new quotation starts from.
+      leadTimeDays: 15,
       paymentTerms: PAYMENT_TERMS,
       terms: TERMS,
       note: NOTE,
@@ -142,8 +183,10 @@ function blank() {
       // shipped as a repo asset so it travels in a backup, works with
       // no network, and can be changed without a deploy. Everything
       // that shows the brand — the document, the rail, the lock
-      // screen — reads this one value.
-      logo: '',
+      // screen — reads this one value. Defaults to the Banavat India
+      // logo so it appears out of the box; uploading a different logo
+      // in Settings overrides this default.
+      logo: DEFAULT_LOGO,
       bank: { ...BANK },
       seq: 0,
     },
@@ -179,6 +222,28 @@ function read() {
       if (!Array.isArray(out[k])) out[k] = [];
     }
     out.orgId = typeof s.orgId === 'string' ? s.orgId : '';
+
+    /* Quotations decided before the archive existed have no stamp, so
+       they would sit in the working list forever. Backdating to the
+       last edit puts them where they belong without inventing a date:
+       the decision is when the record last moved. Deliberately not
+       written back here — read() is also how a sync-pulled state is
+       normalised, and a save on every read would touch every record.
+
+       A quotation pulled back out of the archive stores a 0 rather
+       than losing the field, so this only ever fires on records
+       written before the archive existed — never on a restore. */
+    for (const q of out.quotes) {
+      if (q.archivedAt === undefined && (q.status === 'accepted' || q.status === 'declined')) {
+        q.archivedAt = q.updatedAt || q.createdAt || Date.now();
+      }
+      // Records written before these existed get the values addQuote
+      // would have given them, so every caller can read them without
+      // an `|| default` at every use.
+      if (!GST_MODES[q.gstMode]) q.gstMode = 'total';
+      if (q.approvedTotal === undefined) q.approvedTotal = null;
+      if (q.jobExcludesGst === undefined) q.jobExcludesGst = false;
+    }
     return out;
   } catch (e) {
     console.error('[kontour] could not read quotations', e);
@@ -195,6 +260,69 @@ function write() {
 }
 
 export function load() { state = read(); return state; }
+
+/* A handful of quotations came in through importHistory() before the
+   clash-suffix moved off "#" onto "(2)" — see addLine's own note by
+   the generator. Rewriting mrNo alone, without a fresh updatedAt,
+   would never leave this device: quotesync's push() only sends a
+   record whose updatedAt has actually moved, so a silent field edit
+   here would fix the number locally and nowhere else. Runs once per
+   boot; a no-op once no live quote still carries the old mark. */
+export function fixHashtagNumbers() {
+  let changed = 0;
+  for (const q of state.quotes) {
+    if (!q.mrNo || !q.mrNo.includes('#')) continue;
+    q.mrNo = q.mrNo.replace(/#(\d+)/, ' ($1)');
+    q.updatedAt = Date.now();
+    changed++;
+  }
+  if (changed) { write(); emit(); }
+  return { changed };
+}
+
+/* One-time import: photos scanned out of the original PDF quotations
+   (data/imported-photos.json, built from the client's shared Drive
+   folder) get attached to the matching live line item by row position.
+   Only fills a blank photo, so a photo re-shot or replaced by hand is
+   never clobbered on a later boot. Fire-and-forget from app start —
+   the fetch is lazy so a client with nothing left to fill pays only a
+   304, and write()/emit() happen the same way any other edit does so
+   the update reaches quotesync's outbox. */
+export async function attachImportedPhotos() {
+  let byMrNo;
+  try {
+    const res = await fetch('/data/imported-photos.json');
+    if (!res.ok) return { changed: 0 };
+    byMrNo = await res.json();
+  } catch (e) {
+    return { changed: 0 };
+  }
+
+  let changed = 0;
+  for (const q of state.quotes) {
+    const entries = byMrNo[baseNo(q.mrNo)];
+    if (!entries || !entries.length) continue;
+    let entry = entries[0];
+    if (entries.length > 1) {
+      const client = ((q.client && q.client.name) || '').trim().toLowerCase();
+      entry = entries.find((e) => e.hint && client.includes(e.hint.toLowerCase()))
+        || entries.find((e) => e.hint && e.hint.toLowerCase().includes(client))
+        || entry;
+    }
+    let touched = false;
+    (q.lines || []).forEach((line, i) => {
+      if (line.photo) return;
+      const photo = entry.rows[String(i + 1)];
+      if (!photo) return;
+      line.photo = photo;
+      touched = true;
+    });
+    if (touched) { q.updatedAt = Date.now(); changed++; }
+  }
+  if (changed) { write(); emit(); }
+  return { changed };
+}
+
 export function raw() { return state; }
 export function settings() { return state.settings; }
 
@@ -202,6 +330,14 @@ export function updateSettings(changes) {
   state.settings = { ...state.settings, ...changes };
   write(); emit();
   return state.settings;
+}
+
+/** "15" -> "15–20 business days" — the range every quotation on file
+    actually uses, a fixed 5 days on from whatever number was typed. */
+export function leadTimeRangeText(days, span = 5) {
+  const n = Number(days);
+  if (!n) return '';
+  return `${n}–${n + span} business days`;
 }
 
 /* Fills {{fabricRate}} and {{leadTime}} in the standing terms from
@@ -345,6 +481,51 @@ export function getQuote(id) {
   return state.quotes.find((x) => x.id === id && !x.deletedAt) || null;
 }
 
+/* ── Client history ────────────────────────────────────────────
+   Not a separate list to keep in step — every quotation already
+   carries a full client, so the address book is just the newest
+   entry for each name, read out of the quotations themselves. */
+
+export function clientBook() {
+  const seen = new Map();
+  for (const q of state.quotes) {
+    if (q.deletedAt) continue;
+    const name = ((q.client || {}).name || '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const at = q.updatedAt || q.createdAt || 0;
+    const prev = seen.get(key);
+    if (!prev || at > prev.at) {
+      seen.set(key, {
+        name, phone: q.client.phone || '', shippingAddress: q.client.shippingAddress || '', at,
+      });
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) => b.at - a.at);
+}
+
+export function findClient(name) {
+  const q = (name || '').trim().toLowerCase();
+  if (!q) return null;
+  return clientBook().find((c) => c.name.toLowerCase() === q) || null;
+}
+
+/** Up to 8 names starting with, or containing, what's been typed. */
+export function clientSuggestions(query) {
+  const q = (query || '').trim().toLowerCase();
+  const book = clientBook();
+  if (!q) return book.slice(0, 8);
+  const starts = [];
+  const contains = [];
+  for (const c of book) {
+    const name = c.name.toLowerCase();
+    if (name === q) continue;
+    if (name.startsWith(q)) starts.push(c);
+    else if (name.includes(q)) contains.push(c);
+  }
+  return [...starts, ...contains].slice(0, 8);
+}
+
 /* Every revision of one job, newest first. */
 export function familyOf(mrNo) {
   const base = baseNo(mrNo);
@@ -357,7 +538,7 @@ export function familyOf(mrNo) {
    stays as long as the job count rather than the revision count.
    "Current" is the one that was decided if any was, otherwise the
    most recent — which is what you would hand a client today. */
-export function quoteFamilies({ status = null, q = '' } = {}) {
+export function quoteFamilies({ status = null, q = '', archived = false } = {}) {
   const seen = new Set();
   const out = [];
   for (const quote of quotes({ q })) {
@@ -368,6 +549,9 @@ export function quoteFamilies({ status = null, q = '' } = {}) {
     const head = family.find((x) => x.status === 'accepted')
       || family.find((x) => x.status !== 'superseded')
       || family[0];
+    // A job is filed away when its live revision is — the earlier
+    // rounds fold under it either way, so they do not get a say.
+    if (archived !== null && isArchived(head) !== Boolean(archived)) continue;
     if (status && status !== 'all' && head.status !== status) continue;
     out.push({ base, head, family, revisions: family.length });
   }
@@ -420,17 +604,23 @@ export function newShipping(input = {}) {
 }
 
 /* The totals ladder, exactly as the document prints it: goods are
-   taxed, shipping is added after tax, and the two subtotals are
-   summed. Shipping is deliberately outside the GST base — that is
-   how these quotations have always been written. */
+   discounted, then taxed, and shipping is added after tax — the two
+   subtotals are summed. Shipping is deliberately outside the GST
+   base — that is how these quotations have always been written.
+   A discount comes off before GST, because GST is owed on what the
+   client actually pays: it is a flag alongside an amount, the same
+   shape as gstApplicable, so "no discount" and "a ₹0 discount" are
+   not the same document. */
 export function quoteTotals(quote) {
-  if (!quote) return { sub: 0, gst: 0, subA: 0, subB: 0, total: 0, taxed: false };
+  if (!quote) return { sub: 0, discount: 0, afterDiscount: 0, gst: 0, subA: 0, subB: 0, total: 0, taxed: false };
   const sub = round2((quote.lines || []).reduce((t, l) => t + lineAmount(l), 0));
+  const discount = quote.discountEnabled ? round2(Number(quote.discountAmount) || 0) : 0;
+  const afterDiscount = round2(sub - discount);
   const taxed = quote.gstApplicable !== false;
-  const gst = taxed ? round2(sub * (Number(quote.gstRate) || 0) / 100) : 0;
-  const subA = round2(sub + gst);
+  const gst = taxed ? round2(afterDiscount * (Number(quote.gstRate) || 0) / 100) : 0;
+  const subA = round2(afterDiscount + gst);
   const subB = round2((quote.shipping || []).reduce((t, s) => t + (Number(s.amount) || 0), 0));
-  return { sub, gst, subA, subB, total: round2(subA + subB), taxed };
+  return { sub, discount, afterDiscount, gst, subA, subB, total: round2(subA + subB), taxed };
 }
 
 export function addQuote(input = {}) {
@@ -459,12 +649,23 @@ export function addQuote(input = {}) {
     // 18% of nothing, so it is a flag rather than a zero rate — and the
     // document drops the row entirely rather than printing a ₹0.
     gstApplicable: input.gstApplicable == null ? true : Boolean(input.gstApplicable),
+    // How the same tax is printed — see GST_MODES. Purely a document
+    // choice; it never changes what quoteTotals() comes to.
+    gstMode: GST_MODES[input.gstMode] ? input.gstMode : 'total',
     paymentTerms: input.paymentTerms == null ? s.paymentTerms : input.paymentTerms,
     fabricRate: input.fabricRate == null ? s.fabricRate : Number(input.fabricRate),
     leadTime: input.leadTime == null ? s.leadTime : input.leadTime,
+    leadTimeDays: input.leadTimeDays == null ? s.leadTimeDays : Number(input.leadTimeDays),
+    // A flat amount off the goods total, before GST — see quoteTotals().
+    discountEnabled: Boolean(input.discountEnabled),
+    discountAmount: Number(input.discountAmount) || 0,
     notes: input.notes || '',
     status: 'draft',
     jobCode: '',
+    // Set only by acceptQuote, when the figure sent to Phynance is not
+    // simply this document's own total — see acceptQuote's own note.
+    approvedTotal: null,
+    jobExcludesGst: false,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -519,9 +720,13 @@ export function duplicateQuote(id) {
     shipping: (old.shipping || []).map((x) => ({ ...x, id: uid('s') })),
     gstRate: old.gstRate,
     gstApplicable: old.gstApplicable,
+    gstMode: old.gstMode,
     paymentTerms: old.paymentTerms,
     fabricRate: old.fabricRate,
     leadTime: old.leadTime,
+    leadTimeDays: old.leadTimeDays,
+    discountEnabled: old.discountEnabled,
+    discountAmount: old.discountAmount,
   });
 }
 
@@ -543,21 +748,65 @@ export function reviseQuote(id) {
    The MR number is already the job code — the ledger has filed
    entries under B121 and C123 since before this module existed. So
    accepting does not invent a code, it simply opens the job that
-   the quotation has been named after all along and sets its order
-   value to the quoted total. */
-export function acceptQuote(id, jobCode = '') {
-  const q = getQuote(id);
+   the quotation has been named after all along.
+
+   The figure that job opens with is not always this document's own
+   total, in three ways staff actually approve a quotation:
+
+     - as quoted — the job takes quoteTotals(q).total, same as before.
+     - at a different figure — a client negotiates the number down
+       (or up) from what was quoted. That agreed figure is not this
+       document any more, so a sub-quotation is written under the
+       next revision number carrying it, and *that* is what gets
+       accepted and opened — the original stays exactly what was
+       sent, superseded rather than silently rewritten.
+     - excluding GST — some jobs are booked on the pre-tax figure,
+       with the tax collected and accounted separately. The document
+       is unchanged; only what Phynance is told to expect is smaller,
+       and the quotation carries a flag so that is visible wherever
+       it is shown, not just in the job. */
+
+/** What the job should be opened at, given how this quote was approved. */
+export function jobValueFor(quote) {
+  const t = quoteTotals(quote);
+  if (quote.approvedTotal != null) return quote.approvedTotal;
+  return quote.jobExcludesGst ? t.sub : t.total;
+}
+
+export function acceptQuote(id, { jobCode = '', approvedTotal = null, excludeGst = false } = {}) {
+  let q = getQuote(id);
   if (!q) return null;
+  const t = quoteTotals(q);
+
+  // A figure that is not (within rounding of) the document's own
+  // total is a different quotation, not an edit to this one.
+  const differs = approvedTotal != null && Math.abs(approvedTotal - t.total) > 0.5;
+  if (differs) {
+    q = addQuote({
+      ...q,
+      revisionOf: q.mrNo,
+      mrNo: '',
+      lines: (q.lines || []).map((l) => ({ ...l, id: uid('l') })),
+      shipping: (q.shipping || []).map((s) => ({ ...s, id: uid('s') })),
+      status: 'draft',
+    });
+  }
+
   // The revision suffix belongs to the quotation, not the job — all
   // three rounds of C129 are quoting the same job, so the ledger must
   // not end up with C129, C129-1 and C129-2 as separate jobs.
   const code = (jobCode || q.jobCode || baseNo(q.mrNo) || '').trim().toUpperCase();
+  q.approvedTotal = differs ? approvedTotal : null;
+  q.jobExcludesGst = Boolean(excludeGst);
   if (code) {
     ensureJob(code, { silent: true, title: q.title, client: q.client.name });
-    updateJob(code, { orderValue: quoteTotals(q).total });
+    updateJob(code, { orderValue: jobValueFor(q), orderExcludesGst: q.jobExcludesGst });
     q.jobCode = code;
   }
   q.status = 'accepted';
+  // Agreed work is tracked as a job from here on, so the quotation
+  // files itself away rather than sitting in the working list.
+  q.archivedAt = Date.now();
   q.updatedAt = Date.now();
   // Finalising one revision closes every other revision of the same
   // job, whichever direction it sits in — an older C129 and a newer
@@ -575,7 +824,29 @@ export function acceptQuote(id, jobCode = '') {
 export function setStatus(id, status) {
   if (!STATUS[status]) return null;
   if (status === 'accepted') return acceptQuote(id);
+  // Declining is the end of the conversation, so it files itself away
+  // for the same reason accepting does — the working list is what is
+  // still in play, and neither of these is.
+  if (status === 'declined') return updateQuote(id, { status, archivedAt: Date.now() });
   return updateQuote(id, { status });
+}
+
+/* ── Archive ──────────────────────────────────────────────────
+   Decided quotations leave the working list without leaving the
+   books. Nothing here changes a status: an accepted quotation that
+   is un-archived is still accepted, and the job it opened is
+   untouched either way. */
+
+export function archiveQuote(id) {
+  return updateQuote(id, { archivedAt: Date.now() });
+}
+
+export function unarchiveQuote(id) {
+  return updateQuote(id, { archivedAt: 0 });
+}
+
+export function isArchived(quote) {
+  return Boolean(quote && quote.archivedAt);
 }
 
 /* ── Importing the history ────────────────────────────────────
@@ -652,7 +923,7 @@ export async function importHistory(rows) {
      record again under a fresh suffix. */
   const worth = (ls) => (ls || []).reduce((t, l) => t + (l.unitPrice || 0) * (l.qty || 0), 0);
   const identity = (q) => [
-    String(q.mrNo || '').toUpperCase().split('#')[0],
+    String(q.mrNo || '').toUpperCase().replace(/\s*\(\d+\)$/, ''),
     q.date || '',
     String((q.client || {}).name || '').trim().toLowerCase(),
     // The sheet holds two different C131s for one client on one day.
@@ -678,10 +949,20 @@ export async function importHistory(rows) {
     let useNo = mrNo;
     if (numbers.has(useNo)) {
       let n = 2;
-      while (numbers.has(`${mrNo}#${n}`)) n += 1;
-      useNo = `${mrNo}#${n}`;
+      while (numbers.has(`${mrNo} (${n})`)) n += 1;
+      useNo = `${mrNo} (${n})`;
     }
 
+    // Everything in the sheet went out to a client; what came back of
+    // it usually is not recorded there, so a row arrives awaiting a
+    // reply by default. A caller that cross-referenced its own record
+    // of what was actually ordered — a production sheet, a payments
+    // ledger — can say otherwise: status/jobCode/archivedAt carry that
+    // decision across exactly the way accepting a quotation by hand
+    // would leave it, without this file needing to know where the
+    // caller's evidence came from.
+    const status = ['draft', 'sent', 'accepted', 'declined', 'superseded'].includes(row.status)
+      ? row.status : 'sent';
     state.quotes.push({
       id: uid('q'),
       mrNo: useNo,
@@ -693,16 +974,21 @@ export async function importHistory(rows) {
       shipping: (row.shipping || []).map((x) => newShipping(x)),
       gstRate: state.settings.gstRate,
       gstApplicable: row.gstApplicable !== false,
+      gstMode: GST_MODES[row.gstMode] ? row.gstMode : 'total',
       paymentTerms: row.paymentTerms || state.settings.paymentTerms,
       fabricRate: state.settings.fabricRate,
       leadTime: state.settings.leadTime,
       notes: '',
-      // Everything in the sheet went out to a client; what came back is
-      // not recorded there, so they arrive awaiting a reply.
-      status: 'sent',
-      jobCode: '',
+      status,
+      jobCode: status === 'accepted' ? (row.jobCode || baseNo(useNo)).toUpperCase() : (row.jobCode || ''),
+      approvedTotal: row.approvedTotal == null ? null : Number(row.approvedTotal),
+      jobExcludesGst: Boolean(row.jobExcludesGst),
       imported: true,
       numberClash: Boolean(row.numberClash) && useNo !== mrNo,
+      // A row the caller has already marked decided is filed away like
+      // any other decided quotation, so it does not sit in the working
+      // list next to the ones genuinely still awaiting a reply.
+      archivedAt: (status === 'accepted' || status === 'declined') ? Date.now() : 0,
       createdAt: Date.parse(`${row.date}T00:00:00`) || Date.now(),
       updatedAt: Date.now(),
     });
@@ -725,6 +1011,25 @@ export function pipelineValue() {
 
 export function recentQuotes(limit = 5) {
   return state.quotes.filter((x) => !x.deletedAt).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
+}
+
+/* The three figures the Quotations topbar and the Dashboard both
+   want: confirmed jobs still in hand, what they are worth, and how
+   many are still waiting on a client's word. One pass over every
+   family, live or archived, since an accepted job is archived the
+   moment it is decided. */
+export function quotationStats() {
+  const families = quoteFamilies({ archived: null });
+  let activeCount = 0, activeValue = 0, openCount = 0;
+  for (const { head } of families) {
+    if (head.status === 'accepted') {
+      activeCount++;
+      activeValue += jobValueFor(head);
+    } else if (head.status === 'draft' || head.status === 'sent') {
+      openCount++;
+    }
+  }
+  return { activeCount, activeValue: round2(activeValue), openCount };
 }
 
 
@@ -803,7 +1108,7 @@ export function applyRemote(rows) {
     prints. The logo is included: it belongs to the business, not to
     the device that happened to upload it. */
 export const SHARED_QUOTE_SETTINGS = [
-  'mrPrefix', 'gstRate', 'defaultCity', 'fabricRate', 'leadTime',
+  'mrPrefix', 'gstRate', 'defaultCity', 'fabricRate', 'leadTime', 'leadTimeDays',
   'paymentTerms', 'terms', 'note', 'company', 'bank', 'logo',
 ];
 
@@ -843,3 +1148,11 @@ export function claimFor(orgId) {
 }
 
 export function ownerOrg() { return state.orgId; }
+
+/** Everything this device holds, cleared along with its org claim.
+    Used on sign-out: nothing is deleted on the books, and signing back
+    in fetches them again from the beginning. */
+export function wipe() {
+  state = blank();
+  write(); emit();
+}

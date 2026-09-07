@@ -57,17 +57,17 @@ Everything else is behind **More details**, collapsed until you want it:
 | GST | Off by default. Turn on → pick a rate → say whether the amount you typed is *before GST* or *GST inside* |
 | Bill photo | Camera or gallery. Also reachable from the camera icon in the header |
 
-**Accounts are also the payment mode.** Cash, Bank and UPI — exactly how the
-existing sheets record it — so choosing where the money came from is the same
-action as recording how it was paid. Add more accounts in Settings.
+**Accounts are also the payment mode.** Bank and UPI — no Cash account, on the
+CA's instruction to keep cash transactions out of the books entirely — so
+choosing where the money came from is the same action as recording how it was
+paid. Add more accounts in Settings.
 
 ---
 
 ## What it tracks
 
 **Live balances.** Opening balance plus everything that has moved. Transfers
-between your own accounts move money without counting as income or expense — so
-a ₹50,000 cash withdrawal doesn't inflate either figure.
+between your own accounts move money without counting as income or expense.
 
 **GST both ways.** Collected on sales and paid on purchases, kept separate, with
 a net figure at the bottom of Reports. That is data for your CA to file from —

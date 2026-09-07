@@ -33,6 +33,13 @@ export function round2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
+/** "₹1,88,630" or "1,88,630.50" back to 188630 — whatever a money
+    input displays when it isn't focused, read back as a number. */
+export function parseNum(str) {
+  const cleaned = String(str == null ? '' : str).replace(/[^\d.]/g, '');
+  return Number(cleaned) || 0;
+}
+
 /* ── Dates ─────────────────────────────────────────────────── */
 
 export function todayISO() {

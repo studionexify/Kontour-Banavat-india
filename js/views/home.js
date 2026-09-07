@@ -4,9 +4,9 @@
 import { icon } from '../icons.js';
 import { on, esc, emptyState, toast } from '../ui.js';
 import {
-  accounts, balance, totalOnHand, dayTotals, monthTotals, entries,
+  accounts, balance, monthTotals, entries,
   sortedEntries, categoryName, accountName, jobs, jobSummary,
-  dueRecurring, markRecurringDone,
+  dueRecurring, markRecurringDone, phynanceStats,
 } from '../store.js';
 import { inr, inrShort, num, todayISO, thisMonthKey, monthLabel, dayHeading, fyOf } from '../format.js';
 import { openEntrySheet, openEntryDetail } from './entry.js';
@@ -16,8 +16,8 @@ let tab = 'accounts';
 
 export async function render(root, ctx) {
   const today = todayISO();
-  const t = dayTotals(today);
   const m = monthTotals(thisMonthKey());
+  const p = phynanceStats();
   const sync = await status();
   const due = dueRecurring(today);
   const todays = sortedEntries().filter((e) => e.date === today);
@@ -36,18 +36,18 @@ export async function render(root, ctx) {
       <div class="stat-row">
         <div class="stat">
           <span class="stat-ico">${icon('arrowIn', 17)}</span>
-          <div class="stat-val pos num" ${t.in ? `data-count="${t.in}" data-fmt="short"` : ''}>${t.in ? '' : '—'}</div>
-          <div class="stat-lbl">IN TODAY</div>
+          <div class="stat-val num" ${p.outstanding ? `data-count="${p.outstanding}" data-fmt="short"` : ''}>${p.outstanding ? '' : '—'}</div>
+          <div class="stat-lbl">OUTSTANDING</div>
         </div>
         <div class="stat">
           <span class="stat-ico">${icon('arrowOut', 17)}</span>
-          <div class="stat-val neg num" ${t.out ? `data-count="${t.out}" data-fmt="short"` : ''}>${t.out ? '' : '—'}</div>
-          <div class="stat-lbl">OUT TODAY</div>
+          <div class="stat-val num" ${p.vendorPayment ? `data-count="${p.vendorPayment}" data-fmt="short"` : ''}>${p.vendorPayment ? '' : '—'}</div>
+          <div class="stat-lbl">VENDOR PAYMENT</div>
         </div>
         <div class="stat">
           <span class="stat-ico">${icon('wallet', 17)}</span>
-          <div class="stat-val num" data-count="${totalOnHand()}" data-fmt="short"></div>
-          <div class="stat-lbl">IN HAND</div>
+          <div class="stat-val num" ${p.turnover ? `data-count="${p.turnover}" data-fmt="short"` : ''}>${p.turnover ? '' : '—'}</div>
+          <div class="stat-lbl">TURN OVER</div>
         </div>
       </div>
     </header>
@@ -93,7 +93,7 @@ export async function render(root, ctx) {
       </button>
     </section>`;
 
-  ctx.setTopbar('Kontour', shortStat(totalOnHand()), 'IN HAND');
+  ctx.setTopbar('Phynance', shortStat(p.outstanding), 'OUTSTANDING');
 
   /* ── events ─────────────────────────────────────────────── */
   on(root, '[data-tab]', (e, b) => { tab = b.dataset.tab; ctx.refresh(); });

@@ -10,13 +10,21 @@ import { openEntryDetail, openEntrySheet } from './entry.js';
 import { rowHTML } from './home.js';
 
 let sort = 'outstanding';
+let stage = 'all';
 
 export function render(root, ctx) {
-  const list = jobs().map((j) => ({ j, s: jobSummary(j.code) }));
+  const all = jobs().map((j) => ({ j, s: jobSummary(j.code) }));
+  const stageOf = (j) => j.stage === 'completed' ? 'completed' : 'production';
+  const list = stage === 'all' ? all : all.filter((x) => stageOf(x.j) === stage);
   const withTarget = list.filter((x) => x.s.outstanding !== null);
   const owed = withTarget.reduce((sum, x) => sum + Math.max(0, x.s.outstanding), 0);
   const received = list.reduce((sum, x) => sum + x.s.received, 0);
   const spent = list.reduce((sum, x) => sum + x.s.spent, 0);
+  const stageCounts = {
+    all: all.length,
+    production: all.filter((x) => stageOf(x.j) === 'production').length,
+    completed: all.filter((x) => stageOf(x.j) === 'completed').length,
+  };
 
   const ordered = list.slice().sort((a, b) => {
     if (sort === 'outstanding') {
@@ -56,6 +64,11 @@ export function render(root, ctx) {
 
     <section class="sec" style="padding-top:16px">
       <div class="chipbar">
+        ${stageChip('all', 'All')}
+        ${stageChip('production', 'In production')}
+        ${stageChip('completed', 'Completed')}
+      </div>
+      <div class="chipbar" style="margin-top:8px">
         ${sortChip('outstanding', 'To collect')}
         ${sortChip('received', 'Received')}
         ${sortChip('recent', 'Recent')}
@@ -64,7 +77,9 @@ export function render(root, ctx) {
 
     <section class="sec" style="padding-top:12px">
       ${ordered.length ? `<div class="list">${ordered.map(jobRow).join('')}</div>`
-        : emptyState('jobs', 'No jobs yet', 'Put a job code like B109 on an entry and it shows up here')}
+        : emptyState('jobs',
+            stage === 'all' ? 'No jobs yet' : stage === 'production' ? 'Nothing in production' : 'Nothing completed yet',
+            stage === 'all' ? 'Put a job code like B109 on an entry and it shows up here' : 'Try another tab')}
     </section>
 
     ${withTarget.length < list.length ? `
@@ -78,11 +93,15 @@ export function render(root, ctx) {
   ctx.setTopbar('Jobs', `<span class="cur">₹</span>${num(owed)}`, 'TO COLLECT');
 
   on(root, '[data-sort]', (e, b) => { sort = b.dataset.sort; ctx.refresh(); });
+  on(root, '[data-stage]', (e, b) => { stage = b.dataset.stage; ctx.refresh(); });
   on(root, '[data-jobopen]', (e, b) => openJob(b.dataset.jobopen, ctx));
   on(root, '[data-addjob]', () => openNewJob(ctx));
 
   function sortChip(key, label) {
     return `<button class="chip ${sort === key ? 'on' : ''}" data-sort="${key}">${label}</button>`;
+  }
+  function stageChip(key, label) {
+    return `<button class="chip ${stage === key ? 'on' : ''}" data-stage="${key}">${label} <small>${stageCounts[key]}</small></button>`;
   }
 }
 
@@ -108,7 +127,7 @@ function jobRow({ j, s }) {
     <button class="row" data-jobopen="${esc(j.code)}">
       <span class="row-ico">${icon('jobs', 18)}</span>
       <span class="row-txt">
-        <span class="row-t">${esc(j.code)}</span>
+        <span class="row-t">${esc(j.code)} ${j.stage === 'completed' ? '<span class="pill mut sm">Completed</span>' : ''}</span>
         <span class="row-s">${esc(sub)}</span>
       </span>
       ${right}
@@ -139,13 +158,22 @@ export function openJob(code, ctx) {
         </div>
 
         <div class="list" style="padding:2px 14px;margin-bottom:14px">
-          <div class="kv"><span>Order value</span><b class="num">${j.orderValue ? inr(j.orderValue) : 'not set'}</b></div>
+          <div class="kv">
+            <span>Order value${j.orderExcludesGst ? ' <span class="pill mut sm">excl. GST</span>' : ''}</span>
+            <b class="num">${j.orderValue ? inr(j.orderValue) : 'not set'}</b>
+          </div>
           ${s.outstanding !== null
             ? `<div class="kv"><span>Still to collect</span><b class="num" style="color:${s.outstanding > 0 ? 'var(--out)' : 'var(--in)'}">${inr(Math.max(0, s.outstanding))}</b></div>`
             : ''}
           <div class="kv"><span>Money in minus out</span><b class="num">${inr(s.margin)}</b></div>
           <div class="kv"><span>Entries</span><b>${s.count}</b></div>
         </div>
+
+        <label class="switchrow" data-stage-row>
+          <div><div class="sw-t">Completed</div>
+            <div class="sw-s">Off keeps it in the In production list.</div></div>
+          <div class="switch ${j.stage === 'completed' ? 'on' : ''}" data-stage-switch></div>
+        </label>
 
         <p class="tray-lbl">Details</p>
         <div class="field">
@@ -173,6 +201,16 @@ export function openJob(code, ctx) {
       </div>`,
     onMount(root) {
       on(root, '[data-entry]', (e, b) => openEntryDetail(b.dataset.entry, () => { sheet.close(); ctx.refresh(); }));
+
+      on(root, '[data-stage-row]', () => {
+        ensureJob(code, { silent: true });
+        const next = j.stage === 'completed' ? 'production' : 'completed';
+        j.stage = next;
+        updateJob(code, { stage: next });
+        root.querySelector('[data-stage-switch]').classList.toggle('on', next === 'completed');
+        toast(next === 'completed' ? 'Marked completed' : 'Back in production');
+        ctx.refresh();
+      });
 
       on(root, '[data-savejob]', () => {
         const get = (k) => root.querySelector(`[data-j="${k}"]`).value;

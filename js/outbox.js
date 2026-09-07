@@ -142,6 +142,32 @@ export function resolve(sent) {
   writeQueue(q);
 }
 
+/**
+ * Drops queued changes the server has already answered with something
+ * newer. A record only ends up here after applyRemote replaced the
+ * local copy with a later one from the books: the queued version lost,
+ * so re-sending it every sync forever would push a stale row the
+ * database is right to keep refusing, and leave "waiting to upload"
+ * showing a number that never falls. A queued change that is still the
+ * newest thing this device has is left exactly where it is.
+ */
+export function prune(state) {
+  const q = readQueue();
+  let dropped = 0;
+
+  for (const { kind, arr, key } of KINDS) {
+    const byId = new Map((state[arr] || []).map((r) => [String(r[key]), r]));
+    for (const [id, rec] of byId) {
+      const k = keyOf(kind, id);
+      const c = q[k];
+      if (c && !c.deletedAt && (rec.updatedAt || 0) > c.updatedAt) { delete q[k]; dropped++; }
+    }
+  }
+
+  if (dropped) writeQueue(q);
+  return dropped;
+}
+
 export function clearQueue() {
   writeQueue({});
 }

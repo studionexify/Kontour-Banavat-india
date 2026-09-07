@@ -72,11 +72,23 @@
   --tea:var(--k-100);
   --tea-soft:var(--k-075);
 
-  /* Canvas */
-  --page:#F4F4F6;
+  /* Canvas. Warm, not grey: a workshop's paperwork sits on cream,
+     and against cream a white card actually reads as a card. */
+  --page:#FAF6EF;
   --paper:#FFFFFF;
-  --line:#E4E4E8;
-  --line-soft:#EFEFF2;
+  --line:#E7E1D6;
+  --line-soft:#F0EBE1;
+
+  /* ── The line's own colours ────────────────────────────────
+     One soft tint per station, so a piece's place on the floor is
+     legible before a word of it is read. Text always rides on the
+     -ink pair, never on the tint itself. */
+  --st-quote:#EDE4FA;    --st-quote-ink:#5B3FA6;
+  --st-prod:#FBE7A6;     --st-prod-ink:#7A5B08;
+  --st-sub:#FBDCE7;      --st-sub-ink:#9C3A62;
+  --st-qc:#D8E7FB;       --st-qc-ink:#245287;
+  --st-ship:#D5EEDF;     --st-ship-ink:#1C6B4A;
+  --st-done:#E7E4DE;     --st-done-ink:#55555E;
 
   --ink:#0B0B0D;
   --ink-2:#55555E;
@@ -145,8 +157,9 @@
   --ink-rgb:11,11,13;
   --shade-rgb:5,5,6;
 
-  --tabbar-h:78px;
+  --tabbar-h:60px;
   --topbar-h:58px;
+  --brandbar-h:calc(env(safe-area-inset-top, 0px) + 40px);
   --safe-b:env(safe-area-inset-bottom, 0px);
   --safe-t:env(safe-area-inset-top, 0px);
 }
@@ -234,7 +247,15 @@
 
 html, body {
   margin:0; padding:0;
-  height:100%;
+  /* Plain 100% until dvh is known to be supported (below) or, on a
+     browser that lacks it, until app.js measures the real visible
+     height into --app-h. Never the other way around: a JS height
+     that overrides a dvh-capable browser is what caused the dead
+     strip under the tab bar on iOS Safari — its dvh already tracks
+     the safe area and the disappearing toolbar correctly, and the
+     one time this measured it independently it measured shorter than
+     the real screen and pinned that undersized height permanently. */
+  height:var(--app-h, 100%);
   color:var(--ink);
   font-family:"Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size:16px;
@@ -428,27 +449,44 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 }
 
 /* ── App shell ────────────────────────────────────────────── */
-.app { height:100%; position:relative; overflow:hidden; }
+.app { height:var(--app-h, 100%); position:relative; overflow:hidden; }
 .screen {
   position:absolute; inset:0;
   overflow-y:auto; overflow-x:hidden;
   -webkit-overflow-scrolling:touch;
-  padding-bottom:calc(var(--tabbar-h) + var(--safe-b) + 26px);
-}
-.screen::-webkit-scrollbar { width:0; height:0; }
-/* Phynance floats the entry button over its bottom-right corner, so
-   its screens end far enough up that the last row is never under it. */
-[data-section="phynance"] .screen {
+  padding-top:var(--brandbar-h);
+  /* Every screen with a primary action floats it over this corner, so
+     each one has to end far enough up that its last row can still be
+     scrolled out from under the button. Phynance always reserved
+     this; the stations did not, and their last order sat under the
+     button with nowhere left to scroll. */
   padding-bottom:calc(var(--tabbar-h) + var(--safe-b) + 92px);
 }
+
+/* ── Sticky brand header ──────────────────────────────────────
+   The one piece of Kontour that never scrolls, is never a screen's
+   own hero, and never changes: the mark and the name of the app
+   itself. On a phone, where the rail's own wordmark has no home,
+   this is that home instead. */
+.brandbar {
+  position:fixed; top:0; left:0; right:0; z-index:30;
+  display:flex; align-items:center; gap:9px;
+  height:var(--brandbar-h);
+  padding:var(--safe-t) 16px 0;
+  background:var(--pine-800);
+  border-bottom:1px solid rgba(var(--accent-rgb), .14);
+}
+.brandbar-logo { width:22px; height:22px; border-radius:6px; flex:none; object-fit:cover; }
+.brandbar-word { font-size:14.5px; font-weight:800; letter-spacing:.6px; color:var(--beige); }
+.screen::-webkit-scrollbar { width:0; height:0; }
 
 /* ── Floating glass top bar ───────────────────────────────────
    Appears only once the hero has scrolled away, so the screen
    title and its headline figure are never lost. Because it passes
    over content, it is the right place for glass. */
 .topbar {
-  position:absolute; top:0; left:0; right:0; z-index:20;
-  padding:calc(var(--safe-t) + 10px) 16px 11px;
+  position:absolute; top:var(--brandbar-h); left:0; right:0; z-index:20;
+  padding:10px 16px 11px;
   background:var(--glass-dark);
   -webkit-backdrop-filter:var(--blur);
   backdrop-filter:var(--blur);
@@ -481,7 +519,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
   background:var(--grad-pine);
   color:var(--beige);
   border-radius:0 0 32px 32px;
-  padding:calc(var(--safe-t) + 18px) 20px 26px;
+  padding:calc(var(--safe-t) + 8px) 20px 12px;
 }
 .hero::before {
   content:""; position:absolute; inset:-55% -25% auto -25%; height:170%;
@@ -493,7 +531,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
   background:radial-gradient(closest-side, rgba(var(--hero-glow-rgb), .5), transparent 72%);
   pointer-events:none;
 }
-.hero.with-panel { border-radius:0; padding-bottom:38px; }
+.hero.with-panel { border-radius:0; padding-bottom:16px; }
 .hero > * { position:relative; z-index:1; }
 
 /* Hero content lifts and fades as the glass bar takes over — one
@@ -503,14 +541,14 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
   opacity:calc(1 - var(--p) * .92);
 }
 
-.hero-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; }
-.hero-title { font-size:17.5px; font-weight:600; letter-spacing:.2px; }
+.hero-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.hero-title { font-size:16px; font-weight:600; letter-spacing:.2px; }
 .hero-title small {
-  display:block; font-size:11.5px; font-weight:400;
+  display:block; font-size:10.5px; font-weight:400;
   color:var(--pine-200); letter-spacing:.3px; margin-top:1px;
 }
 .icon-btn {
-  width:40px; height:40px; border-radius:14px;
+  width:34px; height:34px; border-radius:12px;
   display:grid; place-items:center; color:var(--beige);
   background:rgba(var(--paper-rgb), .07);
   border:1px solid rgba(var(--paper-rgb), .09);
@@ -518,6 +556,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 }
 .icon-btn:active { background:rgba(var(--accent-rgb), .2); transform:scale(.92); }
 .icon-btn.plain { color:var(--ink-2); background:var(--tea-soft); border-color:transparent; }
+/* A sheet header offering more than one action — the document view's
+   print and edit buttons — needs the same row layout .sheet-head
+   itself already uses for its three slots. */
+.sheet-head-acts { display:flex; align-items:center; gap:8px; }
 
 /* three-up stat row */
 .stat-row { display:flex; align-items:flex-start; }
@@ -526,14 +568,14 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
   content:""; position:absolute; left:0; top:6px; bottom:6px;
   width:1px; background:linear-gradient(180deg, transparent, rgba(var(--accent-rgb), .26), transparent);
 }
-.stat-ico { color:var(--pine-200); margin-bottom:3px; display:block; }
-.stat-val { font-size:23px; font-weight:700; letter-spacing:-.5px; }
-.stat-val .cur { font-size:13px; font-weight:500; opacity:.72; margin-right:1px; }
+.stat-ico { color:var(--pine-200); margin-bottom:2px; display:block; }
+.stat-val { font-size:18px; font-weight:700; letter-spacing:-.5px; }
+.stat-val .cur { font-size:11px; font-weight:500; opacity:.72; margin-right:1px; }
 .stat-val.pos { color:var(--lime); text-shadow:0 0 22px var(--accent-glow-soft); }
 .stat-val.neg { color:var(--clay-lit); }
 .stat-lbl {
-  font-size:10px; color:var(--pine-300);
-  letter-spacing:.9px; margin-top:2px; font-weight:600;
+  font-size:9px; color:var(--pine-300);
+  letter-spacing:.8px; margin-top:1px; font-weight:600;
 }
 
 /* ── Panel ────────────────────────────────────────────────────
@@ -566,6 +608,11 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 }
 
 .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.grid3 .card { padding:13px 10px; }
+.grid3 .card-ico { width:32px; height:32px; margin-bottom:9px; border-radius:11px; }
+.grid3 .card-name { font-size:11.5px; }
+.grid3 .card-val { font-size:16px; margin-top:6px; }
 
 /* ── Cards ────────────────────────────────────────────────── */
 .card {
@@ -680,8 +727,13 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
   box-shadow:inset 0 1px 0 rgba(255,255,255,.30), inset 0 -1px 0 rgba(0,0,0,.16), 0 3px 8px -2px rgba(8,71,52,.42);
 }
 .row-ico.in svg, .row-ico.out svg, .row-ico.tr svg { filter:drop-shadow(0 1px 1px rgba(0,0,0,.22)); }
-.row-txt { flex:1; min-width:0; }
+/* Both lines are spans, and an inline box cannot show an ellipsis —
+   it just runs on until it hits the amount, or the edge of the phone.
+   The column makes them blocks, which is what lets the truncation
+   below actually happen. */
+.row-txt { flex:1; min-width:0; display:flex; flex-direction:column; }
 .row-t {
+  display:block;
   font-size:15px; font-weight:600; letter-spacing:-.1px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
@@ -689,10 +741,16 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
    detail most often squinted at. Raised from 11.5px to 12.5px and
    from the faintest ink to the mid tone. */
 .row-s {
+  display:block;
   font-size:12.5px; color:var(--ink-2); margin-top:2px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.row-amt { font-size:16px; font-weight:700; flex:none; letter-spacing:-.3px; }
+/* The figure is the one thing that must never be shortened, so it
+   keeps its width and the text beside it gives way instead. */
+.row-amt {
+  font-size:15px; font-weight:700; flex:none; letter-spacing:-.3px;
+  white-space:nowrap; text-align:right;
+}
 .row-amt.in { color:var(--in); }
 .row-amt.out { color:var(--out); }
 .row-amt.tr { color:var(--ink-2); }
@@ -759,20 +817,17 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 }
 
 /* ── Tab bar + FAB ────────────────────────────────────────────
-   Frosted and floating, so content passes under it and the screen
-   reads as taller than it is. */
+   Solid, not frosted. The sticky bars that share the glass token
+   pass over content for a moment; this one is always there, and a
+   row of the list showing through the two labels that carry the
+   whole app does not read as glass, it reads as a bug. */
 .tabbar {
   position:absolute; bottom:0; left:0; right:0; z-index:15;
   height:calc(var(--tabbar-h) + var(--safe-b));
   padding-bottom:var(--safe-b);
-  background:var(--glass-light);
-  -webkit-backdrop-filter:var(--blur);
-  backdrop-filter:var(--blur);
+  background:var(--page);
   border-top:1px solid var(--glass-edge);
   display:flex; align-items:center; justify-content:space-around;
-}
-@supports not ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))) {
-  .tabbar { background:var(--page); }
 }
 .tab {
   flex:1; height:100%;
@@ -1046,6 +1101,11 @@ select.control { padding-right:34px; background-position:right 13px center; back
   box-shadow:inset 0 1px 0 rgba(255,255,255,.8);
 }
 .btn.danger { background:var(--out-soft); color:var(--out); box-shadow:none; }
+.btn.ghost {
+  background:transparent; color:var(--pine-700); box-shadow:none;
+  border:1.5px solid var(--line);
+}
+.btn.ok { background:#0b6b45; color:#fff; box-shadow:0 6px 20px -6px rgba(11,107,69,.5); }
 .btn.sm { padding:12px; font-size:14px; margin-top:10px; }
 
 /* photo */
@@ -1112,6 +1172,7 @@ select.control { padding-right:34px; background-position:right 13px center; back
 .pill.out { background:var(--out-soft); color:var(--out); }
 .pill.warn { background:var(--warn-soft); color:var(--warn); }
 .pill.mut { background:var(--tea-soft); color:var(--pine-700); }
+.pill.sm { padding:2px 8px; font-size:9.5px; letter-spacing:.2px; vertical-align:1px; }
 
 .kv {
   display:flex; justify-content:space-between; gap:14px;
@@ -1207,47 +1268,17 @@ select.control { padding-right:34px; background-position:right 13px center; back
 
 :root { --content-w:100%; --rail-w:0px; }
 
-/* The shell tracks the *dynamic* viewport, so a mobile browser
-   collapsing its toolbar cannot leave the tab bar stranded. */
+/* dvh tracks the *dynamic* viewport on its own — a mobile browser
+   collapsing its toolbar, or the safe area around a home indicator,
+   is exactly what it was built to account for — so a dvh-capable
+   browser gets it unconditionally here, later in the cascade than
+   the var() above and at the same specificity, so it always wins
+   where it applies. app.js's own measurement is left to the browsers
+   this rule does not match. */
 @supports (height:100dvh) {
   html, body, .app { height:100dvh; }
 }
 
-/* ── Compact phones (small iPhone SE, older Androids) ───────── */
-@media (max-width:360px) {
-  :root { --tabbar-h:70px; --r-lg:22px; --r-md:17px; }
-
-  .sec { padding:20px 13px 0; }
-  .panel { padding:19px 12px 4px; border-radius:26px 26px 0 0; }
-  .hero { padding-left:15px; padding-right:15px; }
-
-  .stat-val { font-size:20px; }
-  .stat-val .cur { font-size:12px; }
-  .stat-lbl { font-size:9px; letter-spacing:.6px; }
-
-  .grid2 { gap:9px; }
-  .card { padding:13px 11px; border-radius:19px; }
-  .card-ico { width:38px; height:38px; margin-bottom:10px; }
-  .card-val { font-size:19px; }
-
-  .row { padding:12px 11px; gap:11px; }
-  .row-ico { width:36px; height:36px; }
-  .row-amt { font-size:15px; }
-
-  .fab {
-    width:54px; height:54px; border-radius:19px;
-    right:13px; bottom:calc(var(--tabbar-h) + var(--safe-b) + 13px);
-  }
-  .tab span { font-size:9.5px; }
-
-  .numpad button { height:56px; font-size:21px; border-radius:18px; }
-  .numgrid button { height:49px; font-size:20px; }
-  .amount { font-size:42px; min-height:52px; }
-  .amount .cur { font-size:21px; }
-
-  .kpis, .field-2 { grid-template-columns:1fr; }
-  .sheet-body, .tray { padding-left:13px; padding-right:13px; }
-}
 
 /* ── Large phones and up: a centred column ──────────────────── */
 @media (min-width:600px) {
@@ -1303,7 +1334,7 @@ select.control { padding-right:34px; background-position:right 13px center; back
    Same markup, same buttons, same order — only the axis changes.
    The screen and the glass bar are inset by the rail's width. */
 @media (min-width:900px) {
-  :root { --content-w:720px; --rail-w:236px; --tabbar-h:0px; }
+  :root { --content-w:720px; --rail-w:266px; --tabbar-h:0px; }
 
   .app { max-width:none; box-shadow:none; }
 
@@ -1363,12 +1394,17 @@ select.control { padding-right:34px; background-position:right 13px center; back
      button in the rail carries its own weight. */
   .fab::before { display:none; }
 
+  /* The rail carries its own wordmark (see .tabbar::before below), so
+     the mobile-only brand bar steps aside and every offset it added
+     comes back out. */
+  .brandbar { display:none; }
   .screen,
   [data-section="phynance"] .screen {
     left:var(--rail-w);
+    padding-top:0;
     padding-bottom:56px;
   }
-  .topbar { left:var(--rail-w); }
+  .topbar { left:var(--rail-w); top:0; padding-top:calc(var(--safe-t) + 10px); }
   .toast-root,
   [data-section="phynance"] .toast-root { left:var(--rail-w); bottom:26px; }
 
@@ -1411,7 +1447,7 @@ select.control { padding-right:34px; background-position:right 13px center; back
    Height, not width, is what has run out. Everything vertical
    gives ground, and the PIN gate is allowed to scroll. */
 @media (max-height:560px) and (orientation:landscape) {
-  :root { --tabbar-h:60px; }
+  :root { }
 
   .gate { align-items:flex-start; overflow-y:auto; padding:18px 24px; }
   .gate-mark { width:48px; height:48px; border-radius:17px; font-size:23px; margin-bottom:10px; }
@@ -1720,7 +1756,7 @@ select.control { padding-right:34px; background-position:right 13px center; back
   display:flex; flex-direction:column; gap:9px;
   padding:16px; border-radius:var(--r-lg);
   background:var(--grad-card); border:1px solid var(--line-soft);
-  box-shadow:var(--e1); text-align:left; width:100%;
+  box-shadow:var(--e1); text-align:left; width:100%; min-width:0;
   cursor:pointer;
   transition:transform .14s var(--ease), box-shadow var(--t-fast);
 }
@@ -1729,20 +1765,105 @@ select.control { padding-right:34px; background-position:right 13px center; back
 @media (hover:hover) and (pointer:fine) {
   .qcard:hover { box-shadow:var(--e2); transform:translateY(-1px); }
 }
-.qcard-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
-.qcard-num { font-size:12px; font-weight:600; color:var(--ink-3); letter-spacing:.3px; }
-.qcard-client { font-size:16px; font-weight:700; color:var(--ink); margin-top:2px; }
+/* One cluster of facts: who, then the identifiers under it, with the
+   figure and its status opposite. Four separate rows of label-and-
+   value took a whole phone screen per card; this takes a third of it
+   and answers the same questions. */
+.qcard-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.qcard-id { min-width:0; }
+.qcard-client {
+  font-size:16.5px; font-weight:700; color:var(--ink); letter-spacing:-.2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.qcard-line {
+  display:flex; align-items:center; flex-wrap:wrap; gap:5px;
+  margin-top:3px; font-size:12px; color:var(--ink-3);
+}
+.qcard-line .qcard-mr { font-weight:700; color:var(--ink-2); letter-spacing:.2px; }
+.qcard-dot {
+  width:3px; height:3px; border-radius:50%; background:var(--ink-3);
+  opacity:.55; flex:none;
+}
+.qcard-money { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:none; }
 .qcard-title {
   margin:0; font-size:13.5px; color:var(--ink-2); line-height:1.45;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
-.qcard-foot {
-  display:flex; align-items:flex-end; justify-content:space-between; gap:10px;
-  padding-top:9px; border-top:1px solid var(--line-soft);
-}
-.qcard-meta { font-size:11.5px; color:var(--ink-3); }
 .qcard-amt { font-size:19px; font-weight:700; color:var(--ink); letter-spacing:-.4px; }
-.qcard-acts { display:flex; flex-wrap:wrap; gap:6px; }
+
+/* The actions a quotation is actually used for, as a row of equal
+   targets across the foot of the card. Everything rarer is one tap
+   further in, behind the last one. */
+.qcard-acts {
+  display:flex; align-items:stretch; flex-wrap:wrap; gap:7px; width:100%;
+  padding-top:11px; border-top:1px solid var(--line-soft);
+}
+.act {
+  /* min-width:0 is load-bearing: a flex item's default min-width is
+     the width of its own content, so without this a row that is a
+     little too narrow does not compress the buttons — it overflows
+     the card, and everything past the screen edge is simply gone,
+     with no scrollbar or visual sign anything is missing. That is
+     the bug this once was; flex-wrap above is the second line of
+     defence, so a row that still cannot fit drops to two rows,
+     visibly, rather than losing a button off the edge again. */
+  flex:1 1 72px; min-width:0; display:flex; align-items:center; justify-content:center; gap:6px;
+  min-height:40px; padding:8px 8px; border-radius:13px;
+  background:var(--tea-soft); color:var(--ink-2);
+  font-size:12.5px; font-weight:600;
+  transition:background var(--t-fast), color var(--t-fast), transform .12s var(--ease);
+}
+.act span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.act:active { transform:scale(.96); }
+.act.ghost { flex:none; width:44px; background:transparent; border:1px solid var(--line); }
+.act.grow { flex:2 1 120px; }
+.act:focus-visible { outline:2px solid var(--pine-700); outline-offset:2px; }
+@media (hover:hover) and (pointer:fine) {
+  .act:hover { background:var(--tea); color:var(--ink); }
+}
+@media (max-width:400px) {
+  .act span { display:none; }
+  .act { gap:0; flex-basis:44px; }
+}
+
+/* ── The action sheet ──────────────────────────────────────────
+   Row targets, not a menu: 52px of tappable height each, the icon
+   carrying the meaning and the sub-line saying what it costs. */
+.actlist { display:flex; flex-direction:column; gap:2px; margin:2px 0 6px; }
+.actrow {
+  display:flex; align-items:center; gap:12px; width:100%;
+  padding:12px 6px; border-radius:14px; text-align:left;
+  color:var(--ink); transition:background var(--t-fast);
+}
+.actrow-ico {
+  flex:none; width:36px; height:36px; border-radius:12px;
+  display:grid; place-items:center;
+  background:var(--tea-soft); color:var(--ink-2);
+}
+.actrow-t { flex:1; min-width:0; font-size:14.5px; font-weight:600; }
+.actrow-t small {
+  display:block; font-size:12px; font-weight:400; color:var(--ink-3);
+  margin-top:1px; line-height:1.35;
+}
+.actrow svg:last-child { color:var(--ink-3); flex:none; }
+.actrow.danger { color:var(--out); }
+.actrow.danger .actrow-ico { background:var(--out-soft); color:var(--out); }
+.actrow:active { background:var(--tea-soft); }
+@media (hover:hover) and (pointer:fine) {
+  .actrow:hover { background:var(--tea-soft); }
+}
+
+/* A search field reads as one the moment it carries the glyph. */
+.searchbar { position:relative; }
+.searchbar-ico {
+  position:absolute; left:13px; top:50%; transform:translateY(-50%);
+  color:var(--ink-3); pointer-events:none; display:flex;
+}
+.searchbar .control { padding-left:38px; }
+.chipbar-sep {
+  flex:none; width:1px; align-self:stretch; margin:4px 3px;
+  background:var(--line);
+}
 
 .mini {
   display:inline-flex; align-items:center; gap:5px;
@@ -1786,6 +1907,77 @@ select.control { padding-right:34px; background-position:right 13px center; back
 .qb-grid { display:grid; grid-template-columns:1fr; gap:0 12px; }
 @media (min-width:520px) { .qb-grid { grid-template-columns:1fr 1fr; } }
 
+.qb-count {
+  display:inline-grid; place-items:center; min-width:19px; height:19px;
+  padding:0 5px; margin-left:5px; border-radius:999px;
+  background:var(--tea); color:var(--ink-2);
+  font-size:11px; font-weight:700; letter-spacing:0;
+}
+
+/* ── Clusters ──────────────────────────────────────────────────
+   A label above every input turns six facts into six blocks and a
+   screen and a half of scrolling. Paired on one line inside a single
+   card, the same six read as one thing — which is what they are:
+   the header of the document. */
+.control.lead {
+  font-size:17px; font-weight:700; letter-spacing:-.2px;
+  padding-top:13px; padding-bottom:13px;
+}
+.qcluster {
+  margin-top:10px; border-radius:var(--r-md);
+  background:var(--paper); border:1px solid var(--line-soft);
+  box-shadow:var(--e1); overflow:hidden;
+}
+.qpair {
+  display:flex; align-items:center; gap:10px;
+  padding:2px 12px 2px 14px; min-height:46px;
+}
+.qpair + .qpair { border-top:1px solid var(--line-soft); }
+.qpair-l {
+  flex:none; width:82px; font-size:12.5px; font-weight:600; color:var(--ink-3);
+}
+.qpair .control { flex:1; min-width:0; text-align:right; padding-right:2px; }
+.qpair .control:focus { text-align:left; }
+.qpair input[type="date"] { text-align:right; }
+
+/* ── Disclosure ────────────────────────────────────────────────
+   Everything with a default that is usually right: shut, with the
+   current value on the summary so a closed panel still answers the
+   question it is hiding. */
+.qdisc { margin-top:10px; }
+.qdisc > summary {
+  display:flex; align-items:center; gap:8px;
+  padding:11px 12px; border-radius:13px; cursor:pointer;
+  font-size:13px; font-weight:600; color:var(--ink-2);
+  background:var(--tea-soft);
+  list-style:none;
+}
+.qdisc > summary::-webkit-details-marker { display:none; }
+.qdisc > summary svg { flex:none; color:var(--ink-3); transition:transform var(--t-fast); }
+.qdisc[open] > summary svg { transform:rotate(90deg); }
+.qdisc[open] > summary { border-radius:13px 13px 0 0; }
+.qdisc-t { flex:1; }
+.qdisc-v { font-size:12.5px; font-weight:600; color:var(--ink-3); }
+.qdisc-peek {
+  flex:1; min-width:0; font-weight:500; color:var(--ink-3); font-size:12.5px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.qdisc.panel-disc > div,
+.qdisc > .fin-row:first-of-type { margin-top:8px; }
+.qdisc.tight > summary { background:transparent; padding:9px 2px; }
+.qdisc.tight[open] > summary { border-bottom:1px solid var(--line-soft); border-radius:0; }
+.mini.wide {
+  width:100%; justify-content:center; margin-top:9px; padding:10px 12px;
+}
+.qmoney { display:flex; align-items:center; gap:7px; }
+.qmoney span { font-size:11.5px; font-weight:600; color:var(--ink-3); }
+
+/* The builder's own action row, on the same shape as the card's. */
+.qb-acts { display:flex; align-items:stretch; flex-wrap:wrap; gap:8px; margin-top:11px; }
+.qb-acts .act { min-height:46px; }
+.qb-acts .btn.sm.grow { flex:2 1 140px; min-width:0; margin:0; }
+.qb-acts .btn.sm.ghost { flex:1 1 90px; min-width:0; margin:0; }
+
 .qb-none {
   text-align:center; padding:26px 18px; color:var(--ink-3);
   border:1px dashed var(--line); border-radius:var(--r-md);
@@ -1817,6 +2009,13 @@ select.control { padding-right:34px; background-position:right 13px center; back
 .control.flush:focus { border-color:var(--pine-500); background:var(--paper); }
 
 .qline-kind { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
+/* A row of seg-mini pills. Deliberately not named with "seg" — sharing
+   that class with the underline tab-switcher above let its rules (the
+   glowing underline, the 14.5px font, the 150px max-width) bleed onto
+   these pill buttons, since both are plain <button> elements inside a
+   same-named ancestor. */
+.segbar { display:flex; gap:6px; margin-top:2px; }
+.segbar .seg-mini { flex:1; text-align:center; }
 .seg-mini {
   padding:6px 13px; border-radius:999px;
   font-size:12px; font-weight:600;
@@ -1837,18 +2036,35 @@ select.control { padding-right:34px; background-position:right 13px center; back
 }
 .qline-dims label.grow, .qline-money label.grow { flex:1; min-width:130px; }
 .mini-in { width:88px; padding:8px 10px; font-size:13.5px; }
+
+/* A rupee amount field: the ₹ overlays the input's own left padding,
+   so it reads as money at a glance — distinct from a plain qty or
+   rate-% field next to it — without doubling up the control's own
+   border and background inside a second box. */
+.money-in { position:relative; display:inline-flex; }
+.money-in .cur {
+  position:absolute; left:9px; top:50%; transform:translateY(-50%);
+  font-size:12.5px; font-weight:600; color:var(--ink-3); pointer-events:none;
+}
+.money-in .control { padding-left:20px; }
 .qline-dims label.grow .mini-in,
 .qline-money label.grow .mini-in { width:100%; }
 
 .qline-spec { margin-top:10px; font-size:13px; }
 
+/* Rate, quantity and what the line is charged as — the three things
+   that move the total — on one row under the name. The kind toggle
+   pushes to the right so the two numbers stay side by side, which is
+   how they are checked. */
 .qline-money {
   display:flex; align-items:center; gap:10px; flex-wrap:wrap;
   margin-top:11px; padding-top:11px; border-top:1px solid var(--line-soft);
 }
+.qline-money .qline-kind { margin:0 0 0 auto; }
 .qline-amt {
-  margin-left:auto; font-size:16px; font-weight:700; color:var(--ink);
+  flex:none; font-size:16px; font-weight:700; color:var(--ink); letter-spacing:-.3px;
 }
+.qline-money .mini-in { width:82px; }
 
 /* ── The foot that stays put ───────────────────────────────── */
 .qb-foot {
@@ -1963,12 +2179,22 @@ select.control { padding-right:34px; background-position:right 13px center; back
    own theme deliberately stops at its edge.
    ════════════════════════════════════════════════════════════ */
 
-.doc-scroll { background:var(--k-100); padding:16px; }
+/* Deliberately not responsive: this is a preview of the exported
+   file, not a screen of its own, so it holds one true size — roughly
+   A4 at 96dpi, the same proportions the PDF and the print output
+   already use — on every device. A phone gets it exactly as small as
+   a phone screen makes an A4 page look, scrolling and pinch-zooming
+   to read it, rather than a reflowed layout that never matches what
+   actually gets downloaded or shared. */
+.doc-scroll {
+  background:var(--k-100); padding:16px;
+  overflow:auto; -webkit-overflow-scrolling:touch;
+}
 
 .doc {
   background:#FFFFFF;
   color:#111113;
-  max-width:900px;
+  width:794px;
   margin:0 auto;
   padding:34px 32px 40px;
   border-radius:6px;
@@ -1984,10 +2210,9 @@ select.control { padding-right:34px; background-position:right 13px center; back
 }
 
 .doc-meta {
-  display:grid; grid-template-columns:1fr; gap:2px 40px;
+  display:grid; grid-template-columns:1fr 1fr; gap:2px 40px;
   margin-bottom:20px;
 }
-@media (min-width:640px) { .doc-meta { grid-template-columns:1fr 1fr; } }
 .doc-meta dl { margin:0; display:flex; flex-direction:column; gap:3px; }
 .doc-meta div { display:flex; gap:8px; }
 .doc-meta dt { margin:0; font-weight:700; flex:none; min-width:118px; }
@@ -2011,8 +2236,22 @@ select.control { padding-right:34px; background-position:right 13px center; back
   white-space:nowrap;
 }
 .doc-table .c-sr { width:46px; text-align:center; }
-.doc-table .c-img { width:78px; }
-.doc-table .c-img img { width:100%; border-radius:3px; display:block; }
+/* The photograph is what a furniture quotation is actually looked at
+   for, so its column is sized to show the piece, not to fit a table:
+   wider than the rest, and square rather than however tall the
+   original happened to be, so a row of different photos still reads
+   as one grid down the column. */
+.doc-table .c-img { width:104px; padding:6px; }
+.doc-img-btn {
+  display:block; width:100%; aspect-ratio:1; padding:0; border:0;
+  border-radius:6px; overflow:hidden; cursor:zoom-in; background:#F1F1F3;
+}
+.doc-img-btn img { width:100%; height:100%; object-fit:cover; display:block; }
+.doc-img-ph {
+  display:flex; align-items:center; justify-content:center;
+  aspect-ratio:1; border-radius:6px; color:#B7B7BE;
+  background:#F7F7F8; border:1px dashed #D8D8DC;
+}
 .doc-table .c-name { min-width:130px; font-weight:600; }
 .doc-table .c-desc { min-width:210px; }
 .doc-table .c-dim { min-width:130px; white-space:nowrap; }
@@ -2088,13 +2327,6 @@ select.control { padding-right:34px; background-position:right 13px center; back
 
 /* ── Revision families, brand mark, GST switch ───────────────── */
 
-.qcard-pills { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:none; }
-.qcard-rev {
-  display:inline-block; margin-left:7px;
-  font-size:10.5px; font-weight:600; letter-spacing:.2px;
-  color:var(--ink-3);
-}
-
 .qcard-hist { margin-top:2px; }
 .qcard-hist summary {
   cursor:pointer; list-style:none;
@@ -2123,25 +2355,30 @@ select.control { padding-right:34px; background-position:right 13px center; back
 /* The mark, wherever it appears. */
 .brand-mark { object-fit:contain; border-radius:6px; display:block; }
 
+/* Mark + company name in blue on the left, QUOTATION big on the
+   right, one row, a rule underneath — how the business's own
+   quotations actually print, not the boxed-mockup version. */
 .doc-head {
-  display:flex; align-items:center; gap:16px;
-  padding-bottom:18px; margin-bottom:18px;
-  border-bottom:1px solid #C9C9CF;
+  display:flex; align-items:center; gap:10px;
+  padding-bottom:14px; margin-bottom:18px;
+  border-bottom:2px solid #333;
 }
 .doc-logo { flex:none; object-fit:contain; }
-.doc-logo.ph {
-  font-size:13px; font-weight:700; letter-spacing:.4px;
-  color:#111113; white-space:nowrap;
-}
-.doc-head-t { flex:1; text-align:right; }
-.doc-head .doc-title { margin:0; text-align:right; }
-.doc-head-sub { margin:3px 0 0; font-size:11.5px; color:#55555E; }
+.doc-brand { flex:1; font-size:18px; font-weight:800; color:#1f3f8f; letter-spacing:.3px; }
+.doc-head .doc-title { flex:none; margin:0; text-align:right; }
 
 .doc-stamp {
   margin:0 0 16px; padding:8px 12px;
   border:1px solid #C9C9CF; border-left:3px solid #111113;
   background:#F7F7F8; font-size:11.5px; font-weight:600;
 }
+.doc-stamp.ok { border-left-color:#0B6B45; background:#EFF7F2; color:#0B6B45; }
+
+/* A photograph, life-size in the room it opens in — everything else
+   on the document is fine at a glance, this is the one thing worth a
+   second look. */
+.lightbox { display:flex; align-items:center; justify-content:center; padding:4px 16px 20px; }
+.lightbox img { max-width:100%; max-height:72vh; border-radius:10px; display:block; }
 
 /* The rail wears the mark beside the name. */
 .tabbar .rail-brand {
@@ -2231,44 +2468,746 @@ button.qline-img img { width:100%; height:100%; object-fit:cover; }
   .qb-tot { flex:1; }
 }
 
-/* The MR number names the document, so it opens it. */
-.qcard-mr {
-  font: inherit; color:var(--ink-3); padding:0;
-  border-bottom:1px dashed var(--line);
-  transition:color var(--t-fast), border-color var(--t-fast);
-}
-@media (hover:hover) and (pointer:fine) {
-  .qcard-mr:hover { color:var(--ink); border-color:var(--ink-3); }
-}
-.qcard-mr:focus-visible { outline:2px solid var(--pine-700); outline-offset:2px; }
+/* The card's long tail of actions moved into a sheet — see .actlist.
+   A dropdown anchored to a card in a scrolling list had to be closed
+   as carefully as it was opened, and on a phone it opened under the
+   thumb that had just tapped it. */
 
-/* ── The card's secondary actions ────────────────────────────
-   The decision — accepted, declined — stays on the face of the
-   card. Revise, duplicate, edit and delete fold behind one mark,
-   because across seventy cards six buttons apiece is not a list
-   any more, it is a wall. */
-.qmore { position:relative; }
-.qmore > summary {
-  list-style:none; cursor:pointer;
-  padding:6px 12px; letter-spacing:1px; line-height:1;
-}
-.qmore > summary::-webkit-details-marker { display:none; }
-.qmore[open] > summary { background:var(--tea); color:var(--ink); }
+/* ═══════════════════════════════════════════════════════════════
+   THE SIDEBAR SHELL
+   ═══════════════════════════════════════════════════════════════
+   Kontour is a production unit before it is an app, and a
+   production unit has one order to it. The sidebar is that order,
+   written down once: quotation, production, sub-contractor, QC,
+   shipping, archive, top to bottom, in the sequence work actually
+   moves. Nothing about the screen you are on rearranges it.
 
-.qmore-menu {
-  position:absolute; right:0; bottom:calc(100% + 6px); z-index:12;
-  display:flex; flex-direction:column; min-width:150px;
-  padding:5px; border-radius:14px;
-  background:var(--paper); border:1px solid var(--line);
-  box-shadow:var(--e3);
+   It is a real column on a desktop and a drawer on a phone —
+   the same markup either way, because a second navigation is a
+   second thing to keep true. */
+
+.sidebar {
+  position:fixed; top:0; bottom:0; left:0; z-index:60;
+  width:266px; max-width:86vw;
+  display:flex; flex-direction:column;
+  padding:calc(var(--safe-t) + 18px) 14px calc(var(--safe-b) + 16px);
+  background:var(--grad-pine-deep);
+  color:var(--beige);
+  border-radius:0 26px 26px 0;
+  /* Off-canvas until asked for. A phone gets the work, not the map. */
+  transform:translate3d(-102%,0,0);
+  transition:transform var(--t-mid) var(--ease);
+  overflow-y:auto; overscroll-behavior:contain;
 }
-.qmore-item {
-  padding:9px 12px; border-radius:9px;
-  font-size:13px; font-weight:500; text-align:left; color:var(--ink-2);
+.sidebar::-webkit-scrollbar { width:0; }
+body.nav-open .sidebar { transform:none; }
+
+.nav-scrim {
+  position:fixed; inset:0; z-index:55;
+  background:rgba(var(--shade-rgb), .5);
+  -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
+  opacity:0; visibility:hidden; pointer-events:none;
+  transition:opacity var(--t-mid) var(--ease), visibility var(--t-mid);
+}
+body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
+
+/* ── Brand ──────────────────────────────────────────────────── */
+.side-brand {
+  display:flex; align-items:center; gap:10px;
+  padding:6px 10px 22px;
+}
+.side-mark { width:30px; height:30px; border-radius:9px; object-fit:cover; flex:none; }
+.side-word {
+  font-size:16px; font-weight:800; letter-spacing:1.4px;
+  color:var(--beige); flex:1; min-width:0;
+}
+.side-shut {
+  width:32px; height:32px; border-radius:11px; flex:none;
+  display:grid; place-items:center; color:var(--k-300);
+  background:rgba(var(--paper-rgb), .07);
+}
+.side-shut:active { transform:scale(.92); }
+
+/* ── The stations ───────────────────────────────────────────── */
+.side-nav { flex:1; display:flex; flex-direction:column; gap:2px; }
+.side-lbl {
+  margin:16px 0 7px; padding:0 12px;
+  font-size:10.5px; font-weight:600; letter-spacing:1.1px;
+  text-transform:uppercase; color:var(--k-500);
+}
+.side-lbl:first-child { margin-top:0; }
+
+.side-item {
+  display:flex; align-items:center; gap:13px;
+  width:100%; padding:11px 12px; border-radius:14px;
+  font-size:14.5px; font-weight:500; letter-spacing:.1px;
+  color:var(--k-300); text-align:left;
+  position:relative;
   transition:background var(--t-fast), color var(--t-fast);
 }
-.qmore-item.danger { color:var(--out); }
+.side-item svg { flex:none; }
+.side-item span { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.side-item:active { transform:scale(.985); }
+
+/* The live station: the one lit row, with the accent bar the
+   printed schedule would have put a tick against. */
+.side-item.on {
+  background:rgba(var(--paper-rgb), .10);
+  color:var(--beige); font-weight:600;
+}
+.side-item.on::before {
+  content:""; position:absolute; left:-14px; top:50%;
+  width:3px; height:20px; margin-top:-10px;
+  border-radius:0 3px 3px 0; background:var(--beige);
+}
+
+.side-foot {
+  padding-top:12px; margin-top:10px;
+  border-top:1px solid rgba(var(--paper-rgb), .08);
+}
+
 @media (hover:hover) and (pointer:fine) {
-  .qmore-item:hover { background:var(--tea-soft); color:var(--ink); }
-  .qmore-item.danger:hover { background:var(--out-soft); color:var(--out); }
+  .side-item:not(.on):hover { background:rgba(var(--paper-rgb), .06); color:var(--k-150); }
+}
+
+/* ── The phone's own header ─────────────────────────────────── */
+.brandbar-menu {
+  width:30px; height:30px; flex:none; margin-right:2px;
+  display:flex; flex-direction:column; justify-content:center; gap:4px;
+  padding:0 5px;
+}
+.brandbar-menu span {
+  display:block; height:1.6px; border-radius:2px;
+  background:var(--beige); opacity:.85;
+}
+.brandbar-menu span:last-child { width:65%; }
+.brandbar-menu:active { transform:scale(.9); }
+
+/* ── Desktop: the drawer stops being a drawer ───────────────── */
+@media (min-width:900px) {
+  .sidebar { transform:none; border-radius:0; width:var(--rail-w); max-width:none; }
+  .nav-scrim { display:none !important; }
+  .side-shut { display:none; }
+  .brandbar { display:none; }
+  .tabbar { display:none; }
+
+  /* Everything that was inset by the old rail is inset by this one
+     instead — same variable, so the numbers never drifted. */
+  .screen, [data-section="phynance"] .screen { left:var(--rail-w); padding-top:0; }
+  .topbar { left:var(--rail-w); }
+  .toast-root, [data-section="phynance"] .toast-root { left:var(--rail-w); }
+  .sheet { left:var(--rail-w); }
+}
+
+/* The floating button no longer has a rail to stand in, so it
+   floats on every size — and clears the toast, which shares the
+   corner. */
+.fab {
+  /* Clears the tab bar rather than landing on top of it — the phone
+     has both again, and the button is the thing that moves. */
+  right:18px; bottom:calc(var(--tabbar-h) + var(--safe-b) + 16px);
+  left:auto; width:58px; height:58px;
+  border-radius:20px; padding:0;
+  display:grid; place-items:center;
+}
+.fab-t { display:none; }
+@media (min-width:900px) {
+  .fab { right:26px; bottom:26px; width:60px; height:60px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   THE PRODUCTION FLOOR
+   ═══════════════════════════════════════════════════════════════
+   Phynance keeps the dark hero band — it is about money and wants
+   the weight. The floor is paperwork, and paperwork sits on cream
+   under a plain heading, the way the job sheet on the bench does.
+   See js/views/chrome.js for the pieces these dress. */
+
+.floor {
+  padding:22px 18px calc(var(--safe-b) + 96px);
+  max-width:var(--content-w); margin-inline:auto;
+}
+
+/* ── Page heading ───────────────────────────────────────────── */
+.pagehead {
+  display:flex; align-items:flex-start; justify-content:space-between;
+  gap:16px; margin-bottom:20px;
+}
+.pagehead-txt { min-width:0; }
+.pagehead h1 {
+  margin:0; font-size:30px; font-weight:700;
+  letter-spacing:-1px; line-height:1.08; color:var(--ink);
+}
+.pagehead p {
+  margin:6px 0 0; font-size:13.5px; color:var(--ink-3); font-weight:500;
+}
+.pagehead-acts { display:flex; align-items:center; gap:8px; flex:none; }
+
+/* The one black pill per screen — the reference's own rule, and a
+   good one: if everything is an action, nothing is. */
+.pill-btn {
+  display:inline-flex; align-items:center; gap:7px;
+  padding:11px 18px; border-radius:999px;
+  background:var(--k-900); color:#fff;
+  font-size:13.5px; font-weight:600; white-space:nowrap;
+  box-shadow:var(--e1);
+  transition:transform .12s var(--ease), opacity var(--t-fast);
+}
+.pill-btn:active { transform:scale(.96); }
+.pill-btn.ghost {
+  background:var(--paper); color:var(--ink);
+  border:1px solid var(--line);
+}
+
+/* ── The figures across the top ─────────────────────────────── */
+.statcards {
+  display:grid; gap:11px; margin-bottom:22px;
+  grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+}
+.statcard {
+  position:relative; text-align:left;
+  display:flex; flex-direction:column; gap:3px;
+  padding:15px 16px 16px; border-radius:20px;
+  background:var(--paper); border:1px solid var(--line-soft);
+  box-shadow:var(--e1);
+  transition:transform .14s var(--ease), box-shadow var(--t-fast);
+}
+.statcard.go { cursor:pointer; }
+.statcard.go:active { transform:scale(.985); }
+@media (hover:hover) and (pointer:fine) {
+  .statcard.go:hover { transform:translateY(-2px); box-shadow:var(--e2); }
+}
+.statcard-l {
+  font-size:10.5px; font-weight:600; letter-spacing:.9px;
+  text-transform:uppercase; color:var(--ink-3);
+}
+/* The chevron floats over the corner, so a long label (ACTIVE ORDER
+   VALUE) has to be told to stop short of it rather than run underneath. */
+.statcard.go .statcard-l { padding-right:16px; }
+.statcard-v {
+  font-size:27px; font-weight:700; letter-spacing:-1px; color:var(--ink);
+  line-height:1.1; margin-top:2px;
+}
+.statcard-v .cur { font-size:16px; font-weight:500; opacity:.5; margin-right:1px; }
+.statcard-h { font-size:11.5px; color:var(--ink-3); font-weight:500; }
+.statcard-go {
+  position:absolute; top:14px; right:13px; color:var(--ink-3); opacity:.5;
+}
+
+/* Each station's own tint, used for its figure and its cards alike,
+   so one colour means one place all the way down the line. */
+.t-quote { background:var(--st-quote); border-color:transparent; }
+.t-prod  { background:var(--st-prod);  border-color:transparent; }
+.t-sub   { background:var(--st-sub);   border-color:transparent; }
+.t-qc    { background:var(--st-qc);    border-color:transparent; }
+.t-ship  { background:var(--st-ship);  border-color:transparent; }
+.t-done  { background:var(--st-done);  border-color:transparent; }
+.t-quote .statcard-l, .t-quote .statcard-h { color:var(--st-quote-ink); opacity:.8; }
+.t-prod  .statcard-l, .t-prod  .statcard-h { color:var(--st-prod-ink);  opacity:.8; }
+.t-sub   .statcard-l, .t-sub   .statcard-h { color:var(--st-sub-ink);   opacity:.8; }
+.t-qc    .statcard-l, .t-qc    .statcard-h { color:var(--st-qc-ink);    opacity:.8; }
+.t-ship  .statcard-l, .t-ship  .statcard-h { color:var(--st-ship-ink);  opacity:.8; }
+.t-done  .statcard-l, .t-done  .statcard-h { color:var(--st-done-ink);  opacity:.8; }
+
+/* ── Section heading ────────────────────────────────────────── */
+.secthead {
+  display:flex; align-items:baseline; justify-content:space-between;
+  gap:12px; margin:26px 0 12px;
+}
+.secthead:first-child { margin-top:0; }
+.secthead h2 {
+  margin:0; font-size:15px; font-weight:700; letter-spacing:-.2px; color:var(--ink);
+}
+.secthead .sec-link { font-size:12.5px; font-weight:600; color:var(--ink-3); }
+
+/* ── One order, at whatever station it is standing in ───────── */
+.olist { display:grid; gap:10px; grid-template-columns:1fr; }
+@media (min-width:760px) {
+  .olist { grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); }
+}
+
+.ocard {
+  position:relative; overflow:hidden;
+  display:flex; align-items:center; gap:12px; width:100%; min-width:0;
+  padding:15px 15px 15px 20px; border-radius:19px;
+  background:var(--paper); border:1px solid var(--line-soft);
+  box-shadow:var(--e1); text-align:left; cursor:pointer;
+  transition:transform .14s var(--ease), box-shadow var(--t-fast);
+}
+/* The stripe is the station. It is the only thing that changes as a
+   card moves down the line, so the same order stays recognisable. */
+.ocard::before {
+  content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
+  background:var(--k-200);
+}
+.ocard.t-quote::before { background:var(--st-quote-ink); }
+.ocard.t-prod::before  { background:var(--st-prod-ink); }
+.ocard.t-sub::before   { background:var(--st-sub-ink); }
+.ocard.t-qc::before    { background:var(--st-qc-ink); }
+.ocard.t-ship::before  { background:var(--st-ship-ink); }
+.ocard.t-done::before  { background:var(--st-done-ink); }
+/* The tint classes double as card backgrounds elsewhere; on a card
+   the stripe carries the colour and the ground stays paper. */
+.ocard.t-quote, .ocard.t-prod, .ocard.t-sub,
+.ocard.t-qc, .ocard.t-ship, .ocard.t-done {
+  background:var(--paper); border-color:var(--line-soft);
+}
+.ocard:active { transform:scale(.99); }
+.ocard:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+@media (hover:hover) and (pointer:fine) {
+  .ocard:hover { box-shadow:var(--e2); transform:translateY(-1px); }
+}
+.ocard-main { flex:1; min-width:0; }
+.ocard-t {
+  font-size:15.5px; font-weight:700; letter-spacing:-.2px; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.ocard-m {
+  display:flex; align-items:center; flex-wrap:wrap; gap:5px;
+  margin-top:3px; font-size:12px; color:var(--ink-3);
+}
+.ocard-mr { font-weight:700; color:var(--ink-2); letter-spacing:.2px; }
+.ocard-dot {
+  width:3px; height:3px; border-radius:50%; background:var(--ink-3);
+  opacity:.55; flex:none;
+}
+.ocard-flag { margin-top:7px; display:flex; flex-wrap:wrap; gap:5px; }
+.ocard-side { display:flex; align-items:center; gap:9px; flex:none; }
+.ocard-go { color:var(--ink-3); opacity:.45; display:flex; }
+
+/* ── A station still being specified ────────────────────────── */
+.comingup {
+  padding:18px 19px; border-radius:19px;
+  background:var(--paper); border:1px dashed var(--line);
+  margin-bottom:20px;
+}
+.comingup p {
+  margin:0 0 7px; font-size:13.5px; line-height:1.55; color:var(--ink-2);
+}
+.comingup p:last-child { margin-bottom:0; }
+.comingup p:first-child { font-weight:600; color:var(--ink); }
+
+/* ── Sub-contractor ─────────────────────────────────────────── */
+.vgrid { display:grid; gap:10px; grid-template-columns:1fr; }
+@media (min-width:700px) {
+  .vgrid { grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); }
+}
+.vcard {
+  display:flex; align-items:center; gap:13px; width:100%; text-align:left;
+  padding:15px; border-radius:19px;
+  background:var(--paper); border:1px solid var(--line-soft);
+  box-shadow:var(--e1); cursor:pointer;
+  transition:transform .14s var(--ease), box-shadow var(--t-fast);
+}
+.vcard:active { transform:scale(.99); }
+@media (hover:hover) and (pointer:fine) {
+  .vcard:hover { box-shadow:var(--e2); transform:translateY(-1px); }
+}
+.vcard-ini {
+  width:42px; height:42px; flex:none; border-radius:14px;
+  display:grid; place-items:center;
+  background:var(--st-sub); color:var(--st-sub-ink);
+  font-size:14px; font-weight:700; letter-spacing:.4px;
+}
+.vcard-txt { flex:1; min-width:0; }
+.vcard-n {
+  font-size:15px; font-weight:700; color:var(--ink); letter-spacing:-.2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.vcard-s { font-size:12px; color:var(--ink-3); margin-top:2px; }
+.vcard-c { font-size:19px; font-weight:700; color:var(--ink); letter-spacing:-.5px; flex:none; }
+
+/* ── Trade tags ─────────────────────────────────────────────── */
+.tags { display:flex; flex-wrap:wrap; gap:5px; }
+.tag {
+  font-size:10.5px; font-weight:600; letter-spacing:.3px;
+  padding:4px 9px; border-radius:999px;
+  background:var(--tea-soft); color:var(--ink-2);
+  text-transform:capitalize;
+}
+
+/* A page of pieces rather than orders — QC and Shipping both work
+   at that grain, so they share the row. */
+.plist { display:grid; gap:9px; }
+.prow {
+  display:flex; align-items:center; gap:12px; width:100%; text-align:left;
+  padding:13px 15px; border-radius:17px;
+  background:var(--paper); border:1px solid var(--line-soft);
+  box-shadow:var(--e1); cursor:pointer;
+}
+.prow:active { transform:scale(.99); }
+.prow-txt { flex:1; min-width:0; }
+.prow-t {
+  font-size:14.5px; font-weight:600; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.prow-s { font-size:12px; color:var(--ink-3); margin-top:2px; }
+.prow-qty {
+  flex:none; font-size:12px; font-weight:600; color:var(--ink-2);
+  padding:4px 9px; border-radius:999px; background:var(--tea-soft);
+}
+
+/* ── One piece, inside an order ─────────────────────────────── */
+.odetail-head { margin-bottom:16px; }
+.odetail-dates {
+  display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;
+  padding:14px 16px; border-radius:17px;
+  background:var(--paper); border:1px solid var(--line-soft);
+}
+.odetail-dates dt {
+  font-size:10px; font-weight:600; letter-spacing:.8px;
+  text-transform:uppercase; color:var(--ink-3); margin-bottom:3px;
+}
+.odetail-dates dd { margin:0; font-size:13.5px; font-weight:600; color:var(--ink); }
+
+.piece {
+  position:relative; overflow:hidden;
+  padding:15px 16px 12px 18px; border-radius:19px; margin-bottom:11px;
+  background:var(--paper); border:1px solid var(--line-soft);
+  box-shadow:var(--e1);
+}
+.piece::before {
+  content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
+  background:var(--k-200);
+}
+.piece.t-prod::before { background:var(--st-prod-ink); }
+.piece.t-qc::before   { background:var(--st-qc-ink); }
+.piece.t-ship::before { background:var(--st-ship-ink); }
+.piece.t-done::before { background:var(--st-done-ink); }
+
+.piece-top { display:flex; align-items:flex-start; gap:10px; }
+.piece-id { flex:1; min-width:0; }
+.piece-n { font-size:15px; font-weight:700; letter-spacing:-.2px; color:var(--ink); }
+.piece-spec {
+  margin:4px 0 0; font-size:12.5px; line-height:1.5; color:var(--ink-3);
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+}
+
+.piece-stage {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin-top:11px; padding:9px 0 3px;
+  border-top:1px solid var(--line-soft);
+}
+.piece-stage > span {
+  font-size:11.5px; font-weight:600; letter-spacing:.4px;
+  text-transform:uppercase; color:var(--ink-3); flex:none;
+}
+.piece-stage select {
+  flex:1; max-width:190px; text-align:right;
+  font-size:14px; font-weight:600; color:var(--ink);
+}
+
+.piece-specs { margin:6px 0 2px; }
+.piece-specs > div {
+  display:flex; justify-content:space-between; gap:12px;
+  padding:7px 0; border-bottom:1px solid var(--line-soft);
+}
+.piece-specs > div:last-child { border-bottom:0; }
+.piece-specs dt { font-size:12.5px; color:var(--ink-3); flex:none; }
+.piece-specs dd {
+  margin:0; font-size:12.5px; font-weight:600; color:var(--ink-2);
+  text-align:right; min-width:0;
+}
+.piece-vendors { padding-top:4px; }
+
+.mini.ok { color:var(--in); }
+.mini.danger-txt { color:var(--out); margin-top:8px; }
+
+/* ── QC's own row: two decisions, one tap each ──────────────── */
+.qcrow { align-items:center; }
+.qcrow-acts { display:flex; align-items:center; gap:7px; flex:none; }
+@media (max-width:520px) {
+  .qcrow { flex-wrap:wrap; }
+  .qcrow-acts { width:100%; justify-content:flex-end; }
+}
+
+/* On cream, the chip row and the search field both need their own
+   ground back — they were drawn for a white panel. */
+.floor .searchbar {
+  background:var(--paper); border:1px solid var(--line-soft);
+  box-shadow:var(--e1); margin-bottom:14px;
+}
+.floor .chipbar { margin-bottom:4px; }
+.floor .dgrid { margin-top:4px; }
+.floor .empty {
+  background:var(--paper); border-radius:20px; border:1px solid var(--line-soft);
+}
+
+/* Both of these stack a title over a caption, and both are built
+   from spans so the whole row can be one button. Spans run inline
+   unless told otherwise, which put the caption alongside the title. */
+.vcard-txt, .prow-txt { display:flex; flex-direction:column; }
+.vcard-n, .vcard-s, .prow-t, .prow-s { display:block; }
+
+/* ── Quotation list: line items, not cards ──────────────────────
+   One row per job: who and what on the left, the total and the one
+   action a row earns on the right. Earlier rounds still fold under
+   it, the way they did as a card. */
+.qrows { display:flex; flex-direction:column; gap:8px; }
+.qrow2 {
+  display:flex; align-items:center; gap:12px; width:100%; min-width:0;
+  padding:13px 14px; border-radius:16px; text-align:left; cursor:pointer;
+  background:var(--paper); border:1px solid var(--line-soft);
+  box-shadow:var(--e1);
+  transition:transform .12s var(--ease), box-shadow var(--t-fast);
+}
+.qrow2:active { transform:scale(.99); }
+.qrow2:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+@media (hover:hover) and (pointer:fine) {
+  .qrow2:hover { box-shadow:var(--e2); }
+}
+.qrow2-main { flex:1; min-width:0; }
+.qrow2-top { display:flex; align-items:center; gap:8px; }
+.qrow2-client {
+  font-size:14.5px; font-weight:700; color:var(--ink); letter-spacing:-.1px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;
+}
+.qrow2-meta {
+  display:flex; align-items:center; flex-wrap:wrap; gap:5px;
+  margin-top:3px; font-size:12px; color:var(--ink-3);
+}
+.qrow2-side { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none; }
+.qrow2-amt { font-size:14.5px; font-weight:700; color:var(--ink); letter-spacing:-.2px; white-space:nowrap; }
+.qrow2-acts { display:flex; align-items:center; gap:6px; }
+.icon-btn.sm { width:32px; height:32px; border-radius:10px; }
+
+/* ── The sort control in the section's own headline ─────────── */
+.sortbar { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+.sortbtn {
+  display:inline-flex; align-items:center; gap:3px;
+  font-size:12px; font-weight:600; color:var(--ink-3);
+  padding:5px 9px; border-radius:999px;
+  transition:background var(--t-fast), color var(--t-fast);
+}
+.sortbtn.on { background:var(--tea-soft); color:var(--ink); }
+.sortbtn svg { flex:none; }
+
+/* ── Quotation list: the table, for a screen with columns ────────
+   The same list the cards below hold, laid out in columns whose
+   headings are the sorter. Cards and table are both in the page and
+   the width decides which one is on screen — one list, one sort, one
+   selection, drawn twice rather than reasoned about twice. */
+.qtable-wrap { display:none; }
+.qrows .ckbox, .olist .ckbox { display:flex; }
+
+@media (min-width:760px) {
+  .qtable-wrap {
+    display:block; overflow-x:auto;
+    background:var(--paper); border:1px solid var(--line-soft);
+    border-radius:18px; box-shadow:var(--e1);
+  }
+  /* The cards are the same list; only one of the two is ever on
+     screen. On the Archive the completed-orders tab keeps its own
+     .olist, which has no table beside it to hide it. */
+  .qrows, .qtable-wrap + .olist, .sortbar.only-narrow { display:none; }
+}
+
+.qtable { width:100%; border-collapse:collapse; font-size:13.5px; }
+.qtable th, .qtable td {
+  padding:12px 14px; text-align:left; vertical-align:middle;
+  border-bottom:1px solid var(--line-soft);
+}
+.qtable thead th { padding-top:14px; padding-bottom:10px; }
+.qtable tbody tr:last-child td { border-bottom:0; }
+
+/* The heading is the control. It reads as a label until it is the
+   one sorting, so the column in charge of the order is obvious
+   without a second row of chips saying so. */
+.qt-sort {
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:12px; font-weight:600; letter-spacing:.02em;
+  color:var(--ink-3); background:none; border:0; padding:0; cursor:pointer;
+  transition:color var(--t-fast);
+}
+.qt-sort:hover { color:var(--ink-2); }
+.qt-sort.on { color:var(--ink); }
+.qt-sortmark { display:inline-flex; opacity:.35; }
+.qt-sortmark.on { opacity:1; }
+
+.qt-row { cursor:pointer; transition:background var(--t-fast); }
+.qt-row:focus-visible { outline:2px solid var(--ink); outline-offset:-2px; }
+@media (hover:hover) and (pointer:fine) {
+  .qt-row:hover { background:var(--k-050); }
+}
+.qt-row.picked { background:var(--tea-soft); }
+
+.qt-no { font-weight:700; color:var(--ink); letter-spacing:-.1px; }
+.qt-sub { margin-top:2px; font-size:11.5px; color:var(--ink-3); }
+.qt-client { color:var(--ink-2); }
+.qt-date { color:var(--ink-3); white-space:nowrap; }
+.qtable td.qt-amt { font-weight:700; color:var(--ink); white-space:nowrap; text-align:right; }
+.qtable th.qt-amt { text-align:right; }
+.qtable th.qt-amt .qt-sort { flex-direction:row-reverse; }
+.qt-st { white-space:nowrap; }
+.qt-check { width:1%; padding-right:0; }
+.qt-acts { width:1%; white-space:nowrap; }
+.qt-acts .icon-btn { display:inline-flex; }
+
+/* ── The tick ────────────────────────────────────────────────── */
+.ckbox { display:inline-flex; align-items:center; flex:none; cursor:pointer; }
+.ckbox input { position:absolute; opacity:0; width:0; height:0; }
+.ckbox-box {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:18px; height:18px; border-radius:6px;
+  border:1.5px solid var(--line); background:var(--paper);
+  color:transparent; transition:background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+.ckbox-box svg { stroke-width:3; }
+.ckbox input:checked + .ckbox-box,
+.ckbox input:indeterminate + .ckbox-box {
+  background:var(--ink); border-color:var(--ink); color:var(--on-accent);
+}
+/* Some but not all: a tick would claim the whole list is selected,
+   so the partial state gets a bar of its own instead. */
+.ckbox input:indeterminate + .ckbox-box svg { display:none; }
+.ckbox input:indeterminate + .ckbox-box::after {
+  content:''; width:9px; height:2px; border-radius:1px; background:var(--on-accent);
+}
+.ckbox input:focus-visible + .ckbox-box { outline:2px solid var(--ink); outline-offset:2px; }
+.qrow2.picked, .ocard.picked { border-color:var(--ink); }
+
+/* ── The bulk bar ────────────────────────────────────────────────
+   In the page from the start and hidden while nothing is ticked, so
+   the first tick does not push the list down under the finger that
+   made it. */
+.bulkbar {
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  margin:0 0 10px; padding:9px 12px; border-radius:14px;
+  background:var(--ink); color:var(--k-050);
+  box-shadow:var(--e2);
+}
+.bulkbar[hidden] { display:none; }
+.bulkbar-n { font-size:12.5px; font-weight:700; letter-spacing:.01em; white-space:nowrap; }
+.bulkbar-acts { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-left:auto; }
+.bulkbtn {
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:12.5px; font-weight:600; color:var(--k-050);
+  padding:6px 10px; border-radius:999px; border:0; cursor:pointer;
+  background:rgba(255,255,255,.12);
+  transition:background var(--t-fast);
+}
+.bulkbtn:hover { background:rgba(255,255,255,.22); }
+.bulkbtn.danger { background:rgba(220,80,80,.30); }
+.bulkbtn.danger:hover { background:rgba(220,80,80,.45); }
+.bulkbtn.ghost { background:none; padding:6px; }
+@media (max-width:520px) {
+  .bulkbtn span { display:none; }
+  .bulkbtn { padding:8px; }
+  .bulkbtn.ghost { padding:8px; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   PHONES — the last word on size
+   ═══════════════════════════════════════════════════════════════
+   Last in the file on purpose. The stylesheet grew in layers and
+   the newer components (the station tiles, the page heads, the
+   rail) are defined further down than the old mobile block was,
+   so a phone rule written up there lost to them on equal
+   specificity and quietly did nothing. Everything that decides how
+   big this app is on a handset now sits here, widest breakpoint
+   first, so the narrower one is always the one that wins.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Phones ──────────────────────────────────────────────────
+   The base scale was drawn for the widest thing it has to serve, and
+   on an actual handset it reads as a demo: a 30px page title with a
+   black pill beside it, ₹ figures at 27px, cards that fit two facts
+   on a screenful. Everything here is one step down — enough to get
+   the whole line of a row, the figure beside it and the next card
+   into the same glance, and nothing taken below the size it stops
+   being comfortable to read at (12px on a label, 13.5px on anything
+   that is a sentence).
+
+   Sits before the ≤360px block on purpose: the smallest phones need
+   a tighter step still, and theirs has to be the one that wins. */
+@media (max-width:430px) {
+  /* The page's own head. The title was competing with its own
+     button for the width; both give a little. */
+  .pagehead { gap:11px; margin-bottom:16px; }
+  .pagehead h1 { font-size:23px; letter-spacing:-.7px; }
+  .pagehead p { font-size:12.5px; margin-top:4px; }
+  .pill-btn { padding:9px 14px; font-size:12.5px; gap:5px; }
+
+  /* Station tiles: two to a row, and the figure no longer the
+     loudest thing on the screen. */
+  .statcards { gap:9px; margin-bottom:18px; grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .statcard { padding:12px 13px 13px; border-radius:17px; gap:2px; }
+  .statcard-l { font-size:9.5px; letter-spacing:.7px; }
+  .statcard.go .statcard-l { padding-right:14px; }
+  .statcard-v { font-size:21px; letter-spacing:-.7px; margin-top:1px; }
+  .statcard-v .cur { font-size:13px; }
+  .statcard-h { font-size:11px; }
+  .statcard-go { top:11px; right:10px; }
+
+  /* Account and job cards on the Phynance overview. */
+  .grid2 { gap:10px; }
+  .card { padding:13px 12px; border-radius:19px; }
+  .card-ico { width:38px; height:38px; margin-bottom:9px; }
+  .card-name { font-size:13.5px; }
+  .card-sub { font-size:11.5px; }
+  .card-val { font-size:20px; }
+
+  /* Entry rows: the line most often read, so it gets the most
+     careful trim — the second line stays at 12px. */
+  .row { padding:12px 12px; gap:11px; }
+  .row-ico { width:36px; height:36px; border-radius:12px; }
+  .row-t { font-size:14.5px; }
+  .row-s { font-size:12px; }
+  .row-amt { font-size:14.5px; }
+
+  .sec { padding:20px 15px 0; }
+  .sec-head { margin-bottom:9px; }
+
+  .control { padding:11px 12px; font-size:14.5px; border-radius:14px; }
+  .searchbar .control { padding-left:36px; }
+  .chip { padding:7px 13px; font-size:12.5px; }
+
+  /* A heading with a sort row beside it has more than a phone's
+     width in it. The heading takes its own line, and the sorts
+     become one scrolling row rather than wrapping into a block of
+     buttons the title has to squeeze past. */
+  .secthead { flex-direction:column; align-items:stretch; gap:8px; margin:20px 0 10px; }
+  .secthead h2 { font-size:14.5px; }
+  .sortbar {
+    flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none;
+    margin:0 -15px; padding:1px 15px;
+  }
+  .sortbar::-webkit-scrollbar { display:none; }
+}
+
+/* ── Compact phones (small iPhone SE, older Androids) ───────── */
+@media (max-width:360px) {
+  :root { --r-lg:22px; --r-md:17px; }
+
+  .sec { padding:20px 13px 0; }
+  .panel { padding:19px 12px 4px; border-radius:26px 26px 0 0; }
+  .hero { padding-left:15px; padding-right:15px; }
+
+  .stat-val { font-size:20px; }
+  .stat-val .cur { font-size:12px; }
+  .stat-lbl { font-size:9px; letter-spacing:.6px; }
+
+  .grid2 { gap:9px; }
+  .card { padding:13px 11px; border-radius:19px; }
+  .card-ico { width:38px; height:38px; margin-bottom:10px; }
+  .card-val { font-size:19px; }
+
+  .row { padding:12px 11px; gap:11px; }
+  .row-ico { width:36px; height:36px; }
+  .row-amt { font-size:15px; }
+
+  .fab {
+    width:54px; height:54px; border-radius:19px;
+    right:13px; bottom:calc(var(--tabbar-h) + var(--safe-b) + 13px);
+  }
+  .tab span { font-size:9.5px; }
+
+  .numpad button { height:56px; font-size:21px; border-radius:18px; }
+  .numgrid button { height:49px; font-size:20px; }
+  .amount { font-size:42px; min-height:52px; }
+  .amount .cur { font-size:21px; }
+
+  .kpis, .field-2 { grid-template-columns:1fr; }
+  .sheet-body, .tray { padding-left:13px; padding-right:13px; }
 }

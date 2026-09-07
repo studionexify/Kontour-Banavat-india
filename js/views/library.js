@@ -179,9 +179,9 @@ export function openDesignSheet({ code = '', onSaved } = {}) {
         on(host, '[data-photo]', async () => {
           const files = await pickImage({ camera: true });
           if (!files || !files[0]) return;
-          const blob = await shrink(files[0]);
+          const { blob } = await shrink(files[0]);
           readForm();
-          draft.photo = await toBase64(blob);
+          draft.photo = `data:image/jpeg;base64,${await toBase64(blob)}`;
           paint();
         });
 
