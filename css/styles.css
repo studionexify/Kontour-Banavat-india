@@ -3366,3 +3366,19 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
 .shipcard { display:flex; flex-direction:column; }
 .shipcard .ocard { flex:1; }
 .shipacts { display:flex; gap:8px; padding:8px 4px 0; }
+
+/* The check list. One tap per thing looked at, in a column rather
+   than a wrapped row: it is read down while holding the piece, and
+   a wrapped grid makes it easy to skip a line. */
+.checklist { display:flex; flex-direction:column; gap:2px; margin-bottom:10px; }
+.checkrow {
+  display:flex; align-items:center; gap:11px; padding:9px 11px;
+  border-radius:11px; cursor:pointer; font-size:14px; color:var(--ink);
+}
+.checkrow:active { background:var(--tea-soft); }
+.checkrow .box, .tickrow .box {
+  flex:none; width:19px; height:19px; accent-color:var(--pine-500); cursor:pointer;
+}
+/* A row whose whole width is the label, so the tap target is the
+   row and not the box. */
+.tickrow { cursor:pointer; }

@@ -19,7 +19,7 @@ import { phynanceStats } from '../store.js';
 import { quotationStats } from '../quotes.js';
 import { totalSummary, seedKnownPartners } from '../commissions.js';
 import {
-  stationCounts, groupsAt, orderGroups, isOverdue, stageLabel, seedOrders,
+  stationCounts, groupsAt, orderGroups, isOverdue, stageLabel, seedOrders, linesAt,
 } from '../orders.js';
 import { todayISO, fyOf, dmy } from '../format.js';
 import { pageHead, statCards, sectionHead, orderCard, nothingHere } from './chrome.js';
@@ -38,6 +38,8 @@ export function render(root, ctx) {
 
   const today = todayISO();
   const st = stationCounts();
+  const qcPieces = linesAt('qc').length;
+  const shipPieces = linesAt('shipping').length;
   const q = quotationStats();
   const p = phynanceStats();
   const c = totalSummary();
@@ -61,8 +63,11 @@ export function render(root, ctx) {
       ${statCards([
         { label: 'Open quotations', value: q.openCount, tone: 'quote', go: 'quotes', hint: 'awaiting a decision' },
         { label: 'In production', value: st.inproduction, tone: 'prod', go: 'inproduction', hint: 'on the floor' },
-        { label: 'Awaiting QC', value: st.qc, tone: 'qc', go: 'qc', hint: 'at assembly' },
-        { label: 'Shipping', value: st.shipping, tone: 'ship', go: 'shipping', hint: 'out for delivery' },
+        { label: 'Awaiting QC', value: qcPieces, tone: 'qc', go: 'qc', hint: qcPieces === 1 ? 'piece at assembly' : 'pieces at assembly' },
+        // Pieces, not orders: a piece ships the day it is ready,
+        // whether or not the rest of its order is, so counting
+        // orders here would read zero with a van already loaded.
+        { label: 'Shipping', value: shipPieces, tone: 'ship', go: 'shipping', hint: shipPieces === 1 ? 'piece out for delivery' : 'pieces out for delivery' },
       ])}
 
       ${statCards([

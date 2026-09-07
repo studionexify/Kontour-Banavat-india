@@ -105,11 +105,16 @@ export function addLine(input = {}) {
        history, which predate their quotations being in Kontour. */
     quoteId: input.quoteId || '',
     quoteLineId: input.quoteLineId || '',
-    /* How the finished order leaves — see DESPATCH_MODES. Held on
-       every line of the MR so a group reads it off whichever line
-       comes first; setDespatch() is the only thing that writes it,
-       and it writes all of them together. */
+    /* How this piece leaves — see DESPATCH_MODES. On the piece and
+       not on the order, because a finished mirror goes out on
+       Tuesday whether or not the sofa under the same number is
+       ready. Several pieces leaving together share one record and
+       one ledger entry; see setDespatch(). */
     despatch: input.despatch || null,
+    /* The quality check this piece passed, or was sent back on —
+       see QC_CHECKS. Appended to, never rewritten: a piece that
+       fails twice has two rounds on file. */
+    qcLog: Array.isArray(input.qcLog) ? input.qcLog : [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -221,15 +226,68 @@ export const DESPATCH_MODES = {
   install:    { label: 'Site installation by us', detail: 'Who went' },
 };
 
-export function despatchOf(mrNo) {
-  const group = linesByMr(mrNo);
-  return (group.find((l) => l.despatch) || {}).despatch || null;
+export function despatchOf(lineId) {
+  const l = getLine(lineId);
+  return (l && l.despatch) || null;
 }
 
-/** Writes one despatch record across every piece of an MR number. */
-export function setDespatch(mrNo, despatch) {
-  for (const l of linesByMr(mrNo)) updateLine(l.id, { despatch });
+/** Writes one despatch record across the pieces it actually covers.
+    One Porter trip carrying three pieces is one record and one
+    ledger entry, so the ids are given rather than derived. */
+export function setDespatch(lineIds, despatch) {
+  const ids = Array.isArray(lineIds) ? lineIds : [lineIds];
+  for (const id of ids) updateLine(id, { despatch });
   return despatch;
+}
+
+/* ── The quality check ─────────────────────────────────────────
+   What is actually looked at before a piece is packed. The list is
+   held here rather than typed into the screen so that the same
+   words are used every time and the check can be read back later
+   as data — which round found the finish wrong, how often hardware
+   comes back faulty. It is a starting list, taken from what these
+   pieces actually get sent back for; it is meant to be edited from
+   Settings once you have used it for a few weeks. */
+
+export const QC_CHECKS = [
+  'Finish & polish',
+  'Dimensions as per drawing',
+  'Joinery & structure',
+  'Hardware & fittings',
+  'Upholstery & fabric',
+  'Moving parts & mechanism',
+  'Glass, mirror & stone',
+  'Cleaned',
+  'Packed & corners protected',
+];
+
+/* Why a piece went back. One reason, chosen — not typed — so the
+   same fault reads the same way every time it happens. */
+export const QC_REASONS = [
+  'Finish not acceptable',
+  'Wrong dimensions',
+  'Poor joinery or weak structure',
+  'Hardware faulty or missing',
+  'Wrong material, fabric or colour',
+  'Damaged in handling',
+  'Incomplete — work still to do',
+  'Something else',
+];
+
+/** Records a check round on a piece and moves it accordingly. */
+export function logQc(lineId, { result, checks = [], reason = '', note = '', photoIds = [] }) {
+  const l = getLine(lineId);
+  if (!l) return null;
+  const round = {
+    id: makeId('qc'),
+    at: Date.now(),
+    result,                      // 'pass' | 'back'
+    checks, reason, note, photoIds,
+  };
+  return updateLine(lineId, {
+    qcLog: [...(l.qcLog || []), round],
+    stage: result === 'pass' ? 'shipped' : 'production',
+  });
 }
 
 export function stationOf(stage) {
