@@ -3211,3 +3211,77 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
   .kpis, .field-2 { grid-template-columns:1fr; }
   .sheet-body, .tray { padding-left:13px; padding-right:13px; }
 }
+
+/* ── Sub-contractor ───────────────────────────────────────────
+   The work order screens. A piece is recognised by its photograph
+   here more than by its name, so the row carries a real thumbnail
+   rather than an icon, and the pick list is built around it. */
+
+.prow .thumb {
+  width:46px; height:46px; border-radius:11px;
+  flex:none; box-shadow:none; animation:none;
+  background:var(--pine-100);
+}
+.prow .thumb:empty::after {
+  content:''; display:block; width:100%; height:100%;
+  background:
+    linear-gradient(135deg, transparent 46%, rgba(var(--shade-rgb),.13) 46%, rgba(var(--shade-rgb),.13) 54%, transparent 54%);
+}
+
+/* What is still owed, on the person's card. Nothing owed shows an
+   em dash rather than a zero — a settled account should read as
+   settled, not as a number to check. */
+.vcard-c.due { color:var(--out); }
+
+/* Ticking pieces to send out. The whole row is the target, because
+   a checkbox on a phone in a workshop is a missed tap. */
+.prow.pick { cursor:pointer; }
+.prow.pick .tick {
+  flex:none; width:22px; height:22px; border-radius:50%;
+  border:2px solid var(--line); background:transparent;
+  transition:background .16s var(--ease), border-color .16s var(--ease);
+}
+.prow.pick.on { border-color:var(--pine-500); background:var(--tea-soft); }
+.prow.pick.on .tick {
+  border-color:var(--pine-500); background:var(--pine-500);
+  box-shadow:inset 0 0 0 3px var(--paper);
+}
+
+/* A rate typed against a piece. The row is a form, not a button, so
+   it does not press when the number field is tapped. */
+.prow.rate-row { cursor:default; }
+.prow.rate-row:active { transform:none; }
+.prow.rate-row .inp { margin:0; padding:9px 10px; text-align:right; }
+
+/* A piece's photograph, shown big enough to actually check it. */
+.photo-wide {
+  border-radius:16px; overflow:hidden; margin-bottom:16px;
+  background:var(--pine-100); box-shadow:var(--e1);
+}
+.photo-wide img { width:100%; display:block; max-height:260px; object-fit:cover; }
+
+/* Something the screen has to say before the numbers make sense —
+   a blacklisting, an archived record, a figure the import could not
+   state cleanly. */
+.notice {
+  border-radius:14px; padding:12px 14px; margin-bottom:14px;
+  background:var(--tea-soft); border:1px solid var(--line);
+}
+.notice strong { display:block; font-size:13px; font-weight:700; }
+.notice p { margin:4px 0 0; font-size:12.5px; color:var(--ink-2); }
+.notice .hint { margin-top:6px; }
+.notice.bad { background:var(--out-soft); border-color:transparent; }
+.notice.bad strong { color:var(--out); }
+.notice.warn { background:var(--warn-soft); border-color:transparent; }
+.notice.warn strong { color:var(--warn); }
+
+/* Work already commissioned against a piece, shown under the names
+   on the order sheet: who holds it, on which work order, at what
+   rate. A row, not a field — it opens the work order. */
+.piece-commissioned { margin-top:8px; border-top:1px solid var(--line-soft); }
+.qpair.as-row {
+  width:100%; background:transparent; border:0; cursor:pointer;
+  text-align:left; font:inherit;
+}
+.qpair.as-row:active { background:var(--tea-soft); }
+.qpair-v { flex:1; min-width:0; text-align:right; font-size:12.5px; color:var(--ink-2); font-weight:600; }
