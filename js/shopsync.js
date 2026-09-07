@@ -26,6 +26,7 @@ import * as orders from './orders.js';
 import * as commissions from './commissions.js';
 
 const CURSOR_KEY = 'kontour.shop.cursor';
+const SYNCED_KEY = 'kontour.shop.synced';
 const SENT_KEY = 'kontour.shop.sent';
 const PAGE = 500;
 
@@ -83,6 +84,7 @@ function setCursor(v) {
 export function resetShopSync() {
   setCursor('');
   writeSent({});
+  try { localStorage.removeItem(SYNCED_KEY); } catch (e) { /* full disk */ }
   role = '';
   unsupported = false;
 }
@@ -100,7 +102,11 @@ export function refreshRole() { role = ''; }
  */
 export function seedingAllowed() {
   if (!ready()) return true;
-  return Boolean(cursor());
+  // A completed sync, not a cursor. The cursor only moves when rows
+  // come down, so keying off it would mean books that are genuinely
+  // empty — a brand new org — never got the seed at all, because the
+  // pull that proved them empty left the cursor where it was.
+  try { return localStorage.getItem(SYNCED_KEY) === '1'; } catch (e) { return false; }
 }
 
 /* An enum the project has not been taught yet comes back from
@@ -217,6 +223,8 @@ export function syncShop() {
       const down = await pull(orgId);
       lastError = '';
       unsupported = false;
+      // This device has now seen what the books hold, empty or not.
+      try { localStorage.setItem(SYNCED_KEY, '1'); } catch (e) { /* full disk */ }
       return { ...up, ...down };
     } catch (e) {
       if (isUnknownKind(e)) {
