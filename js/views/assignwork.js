@@ -58,6 +58,7 @@ function pickOrder(subId, onDone) {
   openSheet({
     title: 'Commission work',
     full: true,
+    wide: true,
     body: '<div class="sheet-body"></div>',
     onMount(sheet, handle) {
       const draw = () => {
@@ -112,6 +113,7 @@ function pickLines(mrNo, subId, onDone) {
   openSheet({
     title: `${mrNo}${group.client ? ` · ${group.client}` : ''}`,
     full: true,
+    wide: true,
     body: `
       <div class="sheet-body">
         <p class="hint" style="margin-bottom:12px">Tick the pieces to send out.</p>
@@ -179,6 +181,7 @@ function pickSub(lines, group, onDone) {
   openSheet({
     title: 'Who makes it',
     full: true,
+    wide: true,
     body: `
       <div class="sheet-body">
         <div class="plist">
@@ -235,6 +238,7 @@ function rates(subId, lines, group, onDone) {
   openSheet({
     title: `${s.name} · ${woNo}`,
     full: true,
+    wide: true,
     body: `
       <div class="sheet-body">
         <p class="hint" style="margin-bottom:12px">

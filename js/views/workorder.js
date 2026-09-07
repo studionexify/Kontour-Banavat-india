@@ -106,6 +106,7 @@ export function openWorkOrder(woId, { onDone } = {}) {
   openSheet({
     title: `${wo.no}${sub ? ` · ${sub.name}` : ''}`,
     full: true,
+    wide: true,
     body: '<div class="sheet-body"></div>',
     onClose() { if (onDone) onDone(); },
     onMount(sheet, handle) { draw(sheet, handle); },
