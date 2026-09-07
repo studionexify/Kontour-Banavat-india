@@ -455,7 +455,12 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
   overflow-y:auto; overflow-x:hidden;
   -webkit-overflow-scrolling:touch;
   padding-top:var(--brandbar-h);
-  padding-bottom:calc(var(--tabbar-h) + var(--safe-b) + 26px);
+  /* Every screen with a primary action floats it over this corner, so
+     each one has to end far enough up that its last row can still be
+     scrolled out from under the button. Phynance always reserved
+     this; the stations did not, and their last order sat under the
+     button with nowhere left to scroll. */
+  padding-bottom:calc(var(--tabbar-h) + var(--safe-b) + 92px);
 }
 
 /* ── Sticky brand header ──────────────────────────────────────
@@ -474,11 +479,6 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 .brandbar-logo { width:22px; height:22px; border-radius:6px; flex:none; object-fit:cover; }
 .brandbar-word { font-size:14.5px; font-weight:800; letter-spacing:.6px; color:var(--beige); }
 .screen::-webkit-scrollbar { width:0; height:0; }
-/* Phynance floats the entry button over its bottom-right corner, so
-   its screens end far enough up that the last row is never under it. */
-[data-section="phynance"] .screen {
-  padding-bottom:calc(var(--tabbar-h) + var(--safe-b) + 92px);
-}
 
 /* ── Floating glass top bar ───────────────────────────────────
    Appears only once the hero has scrolled away, so the screen
@@ -727,8 +727,13 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
   box-shadow:inset 0 1px 0 rgba(255,255,255,.30), inset 0 -1px 0 rgba(0,0,0,.16), 0 3px 8px -2px rgba(8,71,52,.42);
 }
 .row-ico.in svg, .row-ico.out svg, .row-ico.tr svg { filter:drop-shadow(0 1px 1px rgba(0,0,0,.22)); }
-.row-txt { flex:1; min-width:0; }
+/* Both lines are spans, and an inline box cannot show an ellipsis —
+   it just runs on until it hits the amount, or the edge of the phone.
+   The column makes them blocks, which is what lets the truncation
+   below actually happen. */
+.row-txt { flex:1; min-width:0; display:flex; flex-direction:column; }
 .row-t {
+  display:block;
   font-size:15px; font-weight:600; letter-spacing:-.1px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
@@ -736,10 +741,16 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
    detail most often squinted at. Raised from 11.5px to 12.5px and
    from the faintest ink to the mid tone. */
 .row-s {
+  display:block;
   font-size:12.5px; color:var(--ink-2); margin-top:2px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.row-amt { font-size:16px; font-weight:700; flex:none; letter-spacing:-.3px; }
+/* The figure is the one thing that must never be shortened, so it
+   keeps its width and the text beside it gives way instead. */
+.row-amt {
+  font-size:15px; font-weight:700; flex:none; letter-spacing:-.3px;
+  white-space:nowrap; text-align:right;
+}
 .row-amt.in { color:var(--in); }
 .row-amt.out { color:var(--out); }
 .row-amt.tr { color:var(--ink-2); }
@@ -806,20 +817,17 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 }
 
 /* ── Tab bar + FAB ────────────────────────────────────────────
-   Frosted and floating, so content passes under it and the screen
-   reads as taller than it is. */
+   Solid, not frosted. The sticky bars that share the glass token
+   pass over content for a moment; this one is always there, and a
+   row of the list showing through the two labels that carry the
+   whole app does not read as glass, it reads as a bug. */
 .tabbar {
   position:absolute; bottom:0; left:0; right:0; z-index:15;
   height:calc(var(--tabbar-h) + var(--safe-b));
   padding-bottom:var(--safe-b);
-  background:var(--glass-light);
-  -webkit-backdrop-filter:var(--blur);
-  backdrop-filter:var(--blur);
+  background:var(--page);
   border-top:1px solid var(--glass-edge);
   display:flex; align-items:center; justify-content:space-around;
-}
-@supports not ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))) {
-  .tabbar { background:var(--page); }
 }
 .tab {
   flex:1; height:100%;
@@ -1271,41 +1279,6 @@ select.control { padding-right:34px; background-position:right 13px center; back
   html, body, .app { height:100dvh; }
 }
 
-/* ── Compact phones (small iPhone SE, older Androids) ───────── */
-@media (max-width:360px) {
-  :root { --r-lg:22px; --r-md:17px; }
-
-  .sec { padding:20px 13px 0; }
-  .panel { padding:19px 12px 4px; border-radius:26px 26px 0 0; }
-  .hero { padding-left:15px; padding-right:15px; }
-
-  .stat-val { font-size:20px; }
-  .stat-val .cur { font-size:12px; }
-  .stat-lbl { font-size:9px; letter-spacing:.6px; }
-
-  .grid2 { gap:9px; }
-  .card { padding:13px 11px; border-radius:19px; }
-  .card-ico { width:38px; height:38px; margin-bottom:10px; }
-  .card-val { font-size:19px; }
-
-  .row { padding:12px 11px; gap:11px; }
-  .row-ico { width:36px; height:36px; }
-  .row-amt { font-size:15px; }
-
-  .fab {
-    width:54px; height:54px; border-radius:19px;
-    right:13px; bottom:calc(var(--tabbar-h) + var(--safe-b) + 13px);
-  }
-  .tab span { font-size:9.5px; }
-
-  .numpad button { height:56px; font-size:21px; border-radius:18px; }
-  .numgrid button { height:49px; font-size:20px; }
-  .amount { font-size:42px; min-height:52px; }
-  .amount .cur { font-size:21px; }
-
-  .kpis, .field-2 { grid-template-columns:1fr; }
-  .sheet-body, .tray { padding-left:13px; padding-right:13px; }
-}
 
 /* ── Large phones and up: a centred column ──────────────────── */
 @media (min-width:600px) {
@@ -2630,7 +2603,9 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
    floats on every size — and clears the toast, which shares the
    corner. */
 .fab {
-  right:18px; bottom:calc(var(--safe-b) + 18px);
+  /* Clears the tab bar rather than landing on top of it — the phone
+     has both again, and the button is the thing that moves. */
+  right:18px; bottom:calc(var(--tabbar-h) + var(--safe-b) + 16px);
   left:auto; width:58px; height:58px;
   border-radius:20px; padding:0;
   display:grid; place-items:center;
@@ -2706,6 +2681,9 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
   font-size:10.5px; font-weight:600; letter-spacing:.9px;
   text-transform:uppercase; color:var(--ink-3);
 }
+/* The chevron floats over the corner, so a long label (ACTIVE ORDER
+   VALUE) has to be told to stop short of it rather than run underneath. */
+.statcard.go .statcard-l { padding-right:16px; }
 .statcard-v {
   font-size:27px; font-weight:700; letter-spacing:-1px; color:var(--ink);
   line-height:1.1; margin-top:2px;
@@ -3116,4 +3094,120 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
   .bulkbtn span { display:none; }
   .bulkbtn { padding:8px; }
   .bulkbtn.ghost { padding:8px; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   PHONES — the last word on size
+   ═══════════════════════════════════════════════════════════════
+   Last in the file on purpose. The stylesheet grew in layers and
+   the newer components (the station tiles, the page heads, the
+   rail) are defined further down than the old mobile block was,
+   so a phone rule written up there lost to them on equal
+   specificity and quietly did nothing. Everything that decides how
+   big this app is on a handset now sits here, widest breakpoint
+   first, so the narrower one is always the one that wins.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Phones ──────────────────────────────────────────────────
+   The base scale was drawn for the widest thing it has to serve, and
+   on an actual handset it reads as a demo: a 30px page title with a
+   black pill beside it, ₹ figures at 27px, cards that fit two facts
+   on a screenful. Everything here is one step down — enough to get
+   the whole line of a row, the figure beside it and the next card
+   into the same glance, and nothing taken below the size it stops
+   being comfortable to read at (12px on a label, 13.5px on anything
+   that is a sentence).
+
+   Sits before the ≤360px block on purpose: the smallest phones need
+   a tighter step still, and theirs has to be the one that wins. */
+@media (max-width:430px) {
+  /* The page's own head. The title was competing with its own
+     button for the width; both give a little. */
+  .pagehead { gap:11px; margin-bottom:16px; }
+  .pagehead h1 { font-size:23px; letter-spacing:-.7px; }
+  .pagehead p { font-size:12.5px; margin-top:4px; }
+  .pill-btn { padding:9px 14px; font-size:12.5px; gap:5px; }
+
+  /* Station tiles: two to a row, and the figure no longer the
+     loudest thing on the screen. */
+  .statcards { gap:9px; margin-bottom:18px; grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .statcard { padding:12px 13px 13px; border-radius:17px; gap:2px; }
+  .statcard-l { font-size:9.5px; letter-spacing:.7px; }
+  .statcard.go .statcard-l { padding-right:14px; }
+  .statcard-v { font-size:21px; letter-spacing:-.7px; margin-top:1px; }
+  .statcard-v .cur { font-size:13px; }
+  .statcard-h { font-size:11px; }
+  .statcard-go { top:11px; right:10px; }
+
+  /* Account and job cards on the Phynance overview. */
+  .grid2 { gap:10px; }
+  .card { padding:13px 12px; border-radius:19px; }
+  .card-ico { width:38px; height:38px; margin-bottom:9px; }
+  .card-name { font-size:13.5px; }
+  .card-sub { font-size:11.5px; }
+  .card-val { font-size:20px; }
+
+  /* Entry rows: the line most often read, so it gets the most
+     careful trim — the second line stays at 12px. */
+  .row { padding:12px 12px; gap:11px; }
+  .row-ico { width:36px; height:36px; border-radius:12px; }
+  .row-t { font-size:14.5px; }
+  .row-s { font-size:12px; }
+  .row-amt { font-size:14.5px; }
+
+  .sec { padding:20px 15px 0; }
+  .sec-head { margin-bottom:9px; }
+
+  .control { padding:11px 12px; font-size:14.5px; border-radius:14px; }
+  .searchbar .control { padding-left:36px; }
+  .chip { padding:7px 13px; font-size:12.5px; }
+
+  /* A heading with a sort row beside it has more than a phone's
+     width in it. The heading takes its own line, and the sorts
+     become one scrolling row rather than wrapping into a block of
+     buttons the title has to squeeze past. */
+  .secthead { flex-direction:column; align-items:stretch; gap:8px; margin:20px 0 10px; }
+  .secthead h2 { font-size:14.5px; }
+  .sortbar {
+    flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none;
+    margin:0 -15px; padding:1px 15px;
+  }
+  .sortbar::-webkit-scrollbar { display:none; }
+}
+
+/* ── Compact phones (small iPhone SE, older Androids) ───────── */
+@media (max-width:360px) {
+  :root { --r-lg:22px; --r-md:17px; }
+
+  .sec { padding:20px 13px 0; }
+  .panel { padding:19px 12px 4px; border-radius:26px 26px 0 0; }
+  .hero { padding-left:15px; padding-right:15px; }
+
+  .stat-val { font-size:20px; }
+  .stat-val .cur { font-size:12px; }
+  .stat-lbl { font-size:9px; letter-spacing:.6px; }
+
+  .grid2 { gap:9px; }
+  .card { padding:13px 11px; border-radius:19px; }
+  .card-ico { width:38px; height:38px; margin-bottom:10px; }
+  .card-val { font-size:19px; }
+
+  .row { padding:12px 11px; gap:11px; }
+  .row-ico { width:36px; height:36px; }
+  .row-amt { font-size:15px; }
+
+  .fab {
+    width:54px; height:54px; border-radius:19px;
+    right:13px; bottom:calc(var(--tabbar-h) + var(--safe-b) + 13px);
+  }
+  .tab span { font-size:9.5px; }
+
+  .numpad button { height:56px; font-size:21px; border-radius:18px; }
+  .numgrid button { height:49px; font-size:20px; }
+  .amount { font-size:42px; min-height:52px; }
+  .amount .cur { font-size:21px; }
+
+  .kpis, .field-2 { grid-template-columns:1fr; }
+  .sheet-body, .tray { padding-left:13px; padding-right:13px; }
 }
