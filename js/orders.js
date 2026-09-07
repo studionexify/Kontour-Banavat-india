@@ -640,6 +640,24 @@ export function claimFor(orgId) {
 
 export function ownerOrg() { return state.orgId; }
 
+/**
+ * Points this device's copy at different books without clearing it.
+ *
+ * Only for the case where the rows really did change hands: two sets of
+ * books merged into one, so what is on this device now belongs to the
+ * org that absorbed the other. claimFor() would see a different id and
+ * clear — right when the two are genuinely unrelated, wrong here, and
+ * it would take any work that had not been pushed yet with it.
+ */
+export function reclaim(orgId) {
+  const want = String(orgId || '');
+  if (!want || state.orgId === want) return false;
+  state.orgId = want;
+  write();
+  return true;
+}
+
+
 /** Everything this device holds, cleared of its org claim — used when
     signing out, so the next account starts from the server's copy. */
 export function wipe() {

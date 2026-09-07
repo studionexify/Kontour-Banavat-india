@@ -27,13 +27,13 @@ import { openSettings } from './views/settings.js';
 import { syncPending, watchConnection, canUpload, online } from './sync.js';
 import { enhance, bindHeroScroll, attachRipple } from './motion.js';
 import { cloudConfigured } from './config.js';
-import { signedIn, currentOrgId } from './auth.js';
-import { startSync } from './cloud.js';
-import { startQuoteSync } from './quotesync.js';
-import { startShopSync } from './shopsync.js';
+import { signedIn, currentOrgId, ensureValidOrg } from './auth.js';
+import { startSync, resetSyncState } from './cloud.js';
+import { startQuoteSync, resetQuoteSync } from './quotesync.js';
+import { startShopSync, resetShopSync } from './shopsync.js';
 import { load as loadQuotes, onChange as onQuotesChange, fixHashtagNumbers, attachImportedPhotos } from './quotes.js';
 import { markHTML, hasLogo } from './brand.js';
-import { openSignIn } from './views/signin.js';
+import { openSignIn, openChooseOrg } from './views/signin.js';
 
 /* ── Nav ───────────────────────────────────────────────────────
    Kontour is the production unit, and the rail is the line itself,
@@ -232,6 +232,38 @@ async function boot() {
     $('#app').hidden = true;
     await openSignIn(gate);
     gate.innerHTML = pinMarkup;
+  } else if (cloudConfigured() && signedIn()) {
+    // The books this device points at may no longer exist — two sets
+    // merged into one leaves every device that was on the younger one
+    // holding a dead id, and sync would answer "nothing here" forever
+    // rather than fail. Checked once, briefly, and never allowed to
+    // hold up an app whose first promise is that it opens with no
+    // signal: an unreachable server leaves everything as it was.
+    const check = await ensureValidOrg();
+    if (check.switched) {
+      // The cursors and the sent stamps describe the books that were
+      // left behind, so they go with them.
+      resetSyncState();
+      resetQuoteSync();
+      resetShopSync();
+
+      // The local copies, though, stay. Books that merged took this
+      // device's rows with them, so what is here belongs to the
+      // surviving set — and clearing it, as an ordinary change of org
+      // would, would take anything not yet pushed along with it.
+      const [q, o, c] = await Promise.all([
+        import('./quotes.js'), import('./orders.js'), import('./commissions.js'),
+      ]);
+      q.load(); o.load(); c.load();
+      q.reclaim(check.switched.id);
+      o.reclaim(check.switched.id);
+      c.reclaim(check.switched.id);
+    } else if (!check.ok) {
+      gate.hidden = false;
+      $('#app').hidden = true;
+      await openChooseOrg(gate);
+      gate.innerHTML = pinMarkup;
+    }
   }
   startGate();
 }

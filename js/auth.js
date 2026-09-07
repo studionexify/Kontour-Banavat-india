@@ -226,6 +226,40 @@ export async function myOrgs() {
   }));
 }
 
+/**
+ * Checks that the books this device is pointing at still exist and are
+ * still ours, and quietly moves to the only remaining set if not.
+ *
+ * Two sets of books merged into one leaves every device that was on the
+ * younger one holding an org id that no longer exists. Nothing would
+ * error: sync would ask for that org's rows, be told there are none,
+ * and show an empty app forever. So the id is checked once at boot.
+ *
+ * A failed check is not an answer — offline is the normal state for
+ * this app — so it reports `unchecked` and changes nothing.
+ */
+export async function ensureValidOrg({ timeoutMs = 5000 } = {}) {
+  const current = currentOrgId();
+  if (!current) return { ok: false, orgs: [] };
+
+  let orgs;
+  try {
+    orgs = await Promise.race([
+      myOrgs(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+    ]);
+  } catch {
+    return { ok: true, unchecked: true };
+  }
+
+  if ((orgs || []).some((o) => o.id === current)) return { ok: true, orgs };
+  if (orgs && orgs.length === 1) {
+    setCurrentOrg(orgs[0].id);
+    return { ok: true, switched: orgs[0], orgs };
+  }
+  return { ok: false, orgs: orgs || [] };
+}
+
 export async function createOrg(name) {
   // created_by is not sent: a stamp_org_creator trigger sets it from
   // auth.uid() server-side, so there is nothing here that could send a

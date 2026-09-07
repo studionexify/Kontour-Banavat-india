@@ -55,6 +55,18 @@ export function openSignIn(root) {
   });
 }
 
+/**
+ * The books picker on its own, for a session that is already signed in
+ * but pointing at books that are gone — after two sets were merged into
+ * one, say. Asking for the password again to answer a question the
+ * account can already answer would be theatre.
+ */
+export function openChooseOrg(root) {
+  return new Promise((resolve) => {
+    chooseOrg(root, resolve);
+  });
+}
+
 function shell(inner) {
   return `
     <div class="gate-inner auth">
