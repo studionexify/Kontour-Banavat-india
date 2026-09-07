@@ -116,10 +116,29 @@ function sectionOf(where) {
   return SECTION_OF[where] || where;
 }
 
+/* Which half of the line a section belongs to — the two destinations
+   a phone gets at the thumb instead of the rail. Built off NAV so the
+   two never drift apart. sectionOf() names Phynance's screens
+   "phynance" rather than the "home" its own nav row uses, so that
+   alias rides along the same way the sidebar's own highlighting
+   already special-cases it. */
+const GROUP_OF = {};
+NAV.forEach((g) => g.items.forEach((it) => {
+  GROUP_OF[it.route] = g.group === 'Production' ? 'production' : 'accounts';
+}));
+GROUP_OF.phynance = GROUP_OF.home;
+
+function groupOf(where) {
+  return GROUP_OF[sectionOf(where)] || 'production';
+}
+
 let route = 'dashboard';
 // Re-entering a module from the rail returns you to the screen you
 // were last on in it, the way switching apps does.
 let lastInSection = { phynance: 'home' };
+// Same idea, one level up: which screen a tap on "Production" or
+// "Accounts" lands on, on a phone.
+let lastInGroup = { production: 'dashboard', accounts: 'phynance' };
 let painting = false;
 let detachScroll = null;   // hero↔topbar binding for the live screen
 let revealIO = null;       // entrance observer for the live screen
@@ -364,6 +383,25 @@ function closeNav() {
   document.body.classList.remove('nav-open');
 }
 
+/* ── The phone's tab bar ────────────────────────────────────────
+   Two destinations, not seven: what is being made, and what it
+   costs and earns. A tap remembers which screen you were last on in
+   that half, the same way the rail's own rows do. Desktop never
+   builds this — the rail already stands there. */
+function buildTabbar() {
+  const bar = $('#tabbar');
+  if (!bar) return;
+  bar.innerHTML = `
+    <button class="tab" data-tabgroup="production">${icon('anvil', 22)}<span>Production</span></button>
+    <button class="tab" data-tabgroup="accounts">${icon('wallet', 22)}<span>Accounts</span></button>
+  `;
+  on(bar, '[data-tabgroup]', (e, b) => {
+    const g = b.dataset.tabgroup;
+    const section = lastInGroup[g] || (g === 'production' ? 'dashboard' : 'phynance');
+    show(lastInSection[section] || section);
+  });
+}
+
 /* The module's own three screens, as a row of pills that sticks to
    the top of the scroller once the hero has gone by. Rebuilt with
    each render because the screen element is rebuilt with it. */
@@ -473,6 +511,11 @@ async function show(where) {
       if (on_) b.setAttribute('aria-current', 'page');
       else b.removeAttribute('aria-current');
     });
+    const group = groupOf(where);
+    lastInGroup[group] = section;
+    $('#tabbar').querySelectorAll('[data-tabgroup]').forEach((b) => {
+      b.classList.toggle('on', b.dataset.tabgroup === group);
+    });
     if (location.hash !== `#/${where}`) history.replaceState(null, '', `#/${where}`);
     screen.scrollTop = Math.min(keepScroll, screen.scrollHeight);
 
@@ -501,10 +544,16 @@ function start() {
   fixHashtagNumbers();
   attachImportedPhotos();
   buildSidebar();
+  buildTabbar();
   attachRipple($('#app'));
 
+  // A phone has no rail beside the work, so it opens on Accounts —
+  // that is where this app spends most of its mobile life. A desktop
+  // keeps the rail and opens on the production floor as it always has.
+  const mobile = !window.matchMedia('(min-width:900px)').matches;
+  const defaultRoute = mobile ? 'home' : 'dashboard';
   const fromHash = (location.hash || '').replace('#/', '');
-  show(VIEWS[fromHash] ? fromHash : 'dashboard');
+  show(VIEWS[fromHash] ? fromHash : defaultRoute);
 
   // Back button closes a sheet before it leaves the app.
   window.addEventListener('popstate', () => {
@@ -513,7 +562,7 @@ function start() {
       history.pushState(null, '', location.hash);
     }
   });
-  history.pushState(null, '', location.hash || '#/dashboard');
+  history.pushState(null, '', location.hash || `#/${defaultRoute}`);
 
   // Redraw when the data changes underneath us (import, settings, seed).
   let queued = null;

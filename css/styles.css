@@ -157,7 +157,7 @@
   --ink-rgb:11,11,13;
   --shade-rgb:5,5,6;
 
-  --tabbar-h:0px;
+  --tabbar-h:60px;
   --topbar-h:58px;
   --brandbar-h:calc(env(safe-area-inset-top, 0px) + 40px);
   --safe-b:env(safe-area-inset-bottom, 0px);
@@ -2616,6 +2616,7 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
   .nav-scrim { display:none !important; }
   .side-shut { display:none; }
   .brandbar { display:none; }
+  .tabbar { display:none; }
 
   /* Everything that was inset by the old rail is inset by this one
      instead — same variable, so the numbers never drifted. */
