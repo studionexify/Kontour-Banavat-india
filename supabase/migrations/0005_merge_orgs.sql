@@ -95,7 +95,11 @@ begin
   update public.invites set org_id = keeper where org_id = loser;
 
   -- ── History ──────────────────────────────────────────────
-  update public.record_audit set org_id = keeper where org_id = loser;
+  -- Only present once 0003_quotations.sql has run. Absent on a project
+  -- that has not, in which case there is no audit history to carry.
+  if to_regclass('public.record_audit') is not null then
+    update public.record_audit set org_id = keeper where org_id = loser;
+  end if;
 
   -- ── Shared settings ──────────────────────────────────────
   -- The kept books' own settings stand. The younger row is only used
