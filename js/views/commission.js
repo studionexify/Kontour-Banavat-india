@@ -14,9 +14,12 @@ import {
   commissionOf, netOf, partnerSummary, totalSummary, seedKnownPartners,
 } from '../commissions.js';
 import { inr, dmy, todayISO } from '../format.js';
+import { seedingAllowed } from '../shopsync.js';
 
 export function render(root, ctx) {
-  seedKnownPartners();
+  // Only where this device's copy is the only one — see
+  // shopsync.seedingAllowed().
+  if (seedingAllowed()) seedKnownPartners();
   const list = partners().map((p) => ({ p, s: partnerSummary(p.id) }));
   const totals = totalSummary();
 

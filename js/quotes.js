@@ -1148,3 +1148,11 @@ export function claimFor(orgId) {
 }
 
 export function ownerOrg() { return state.orgId; }
+
+/** Everything this device holds, cleared along with its org claim.
+    Used on sign-out: nothing is deleted on the books, and signing back
+    in fetches them again from the beginning. */
+export function wipe() {
+  state = blank();
+  write(); emit();
+}

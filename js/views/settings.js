@@ -24,6 +24,7 @@ import {
   members, invite, pendingInvites, revokeInvite, setRole, removeMember,
 } from '../auth.js';
 import { sync, pendingCount, lastSyncError } from '../cloud.js';
+import { syncShop, lastSyncError as shopError, needsMigration } from '../shopsync.js';
 
 export function openSettings(ctx) {
   const sheet = openSheet({
@@ -1166,7 +1167,7 @@ function syncSheet(ctx, back) {
 
       function paint() {
         const waiting = pendingCount();
-        const err = lastSyncError();
+        const err = lastSyncError() || qsError() || shopError();
         body.innerHTML = `
           <div class="list" style="padding:2px 14px">
             <div class="kv"><span>Waiting to upload</span><b>${waiting || 'nothing'}</b></div>
@@ -1174,11 +1175,19 @@ function syncSheet(ctx, back) {
             ${err ? `<div class="kv"><span>Last attempt</span><b style="color:var(--out)">Failed</b></div>` : ''}
           </div>
           ${err ? `<div class="hint warn">${esc(err)}</div>` : ''}
+          ${needsMigration() ? `<div class="hint warn">
+            The production line and the commission book cannot sync until
+            supabase/migrations/0004_shop_kinds.sql has been run on the
+            Supabase project. The ledger and the quotations are unaffected.
+          </div>` : ''}
           <button class="btn sm" data-now>Sync now</button>
           <div class="hint">
-            Entries save on this device first and go up on their own — when
-            the connection returns, when you come back to the app, and every
-            few minutes. Nothing here has to be done by hand.
+            Everything saves on this device first and goes up on its own —
+            when the connection returns, when you come back to the app, and
+            every few minutes. The ledger, the quotations, the production
+            line and the commission book all ride the same books, so a
+            piece moved on the workshop phone is moved on every other
+            device too. Nothing here has to be done by hand.
           </div>`;
       }
 
@@ -1186,12 +1195,26 @@ function syncSheet(ctx, back) {
         const b = root.querySelector('[data-now]');
         b.disabled = true;
         b.textContent = 'Syncing…';
-        const r = await sync({ settingsToo: true });
+
+        // All four stores, because "Sync now" should mean the whole app
+        // and not only the ledger — the screen this button is on is
+        // where someone goes when a device looks out of date.
+        const rs = await Promise.all([
+          sync({ settingsToo: true }), syncQuotes({ settingsToo: true }), syncShop(),
+        ]);
+
         b.disabled = false;
         b.textContent = 'Sync now';
-        if (r.error) toast(r.error, 'err');
-        else if (r.skipped) toast(`Not synced — ${r.skipped}`, 'warn');
-        else toast(`${r.pushed || 0} up, ${r.pulled || 0} down`);
+
+        const failed = rs.find((r) => r && r.error);
+        const skipped = rs.find((r) => r && r.skipped);
+        if (failed) toast(failed.error, 'err');
+        else if (skipped) toast(`Not synced — ${skipped.skipped}`, 'warn');
+        else {
+          const up = rs.reduce((n, r) => n + (r.pushed || 0), 0);
+          const down = rs.reduce((n, r) => n + (r.pulled || 0), 0);
+          toast(`${up} up, ${down} down`);
+        }
         paint();
         ctx.refresh();
       });
@@ -1229,24 +1252,46 @@ function accountSheet(ctx, back) {
         });
         if (!ok) return;
 
-        // One last push, so work done on a bad connection is not stranded
-        // on a device that is about to forget it.
-        if (waiting) {
-          const r = await sync();
-          if (r.error || pendingCount()) {
-            const anyway = await confirmSheet({
-              title: 'Still not uploaded',
-              message: 'Those changes could not be sent. Signing out now loses them. Staying signed in keeps them until the connection is better.',
-              confirmLabel: 'Sign out and lose them',
-              danger: true,
-            });
-            if (!anyway) return;
-          }
+        // One last push of everything, so work done on a bad connection
+        // is not stranded on a device that is about to forget it. All
+        // three stores, because sign-out now clears all three: pushing
+        // only the ledger and wiping the rest would lose the
+        // quotations and the production line outright.
+        const { syncShop } = await import('../shopsync.js');
+        const results = await Promise.all([sync(), syncQuotes(), syncShop()]);
+        if (results.some((r) => r && r.error) || pendingCount()) {
+          const anyway = await confirmSheet({
+            title: 'Still not uploaded',
+            message: 'Some changes could not be sent. Signing out now loses them. Staying signed in keeps them until the connection is better.',
+            confirmLabel: 'Sign out and lose them',
+            danger: true,
+          });
+          if (!anyway) return;
         }
 
-        const { wipe } = await import('../store.js');
+        // Every store, not just the ledger. Leaving the quotations,
+        // the production line and the commission book behind — with
+        // their pull cursors still pointing at the last sync — is what
+        // made the next sign-in show a half-empty app: the cursor said
+        // there was nothing new, and the rows it had already skipped
+        // never came down again.
+        const [store, quotesStore, ordersStore, commissionsStore] = await Promise.all([
+          import('../store.js'), import('../quotes.js'),
+          import('../orders.js'), import('../commissions.js'),
+        ]);
+        const { resetSyncState } = await import('../cloud.js');
+        const { resetQuoteSync } = await import('../quotesync.js');
+        const { resetShopSync } = await import('../shopsync.js');
+
         await signOut();
-        wipe();
+        store.wipe();
+        quotesStore.wipe();
+        ordersStore.wipe();
+        commissionsStore.wipe();
+        resetSyncState();
+        resetQuoteSync();
+        resetShopSync();
+        try { localStorage.removeItem('kontour.adopted'); } catch {}
         location.reload();
       });
     },

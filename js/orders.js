@@ -34,7 +34,7 @@ export const STAGES = [
 ];
 const STAGE_KEYS = STAGES.map((s) => s.key);
 
-function blank() { return { orders: [] }; }
+function blank() { return { orders: [], orgId: '' }; }
 
 let state = blank();
 const listeners = new Set();
@@ -46,7 +46,10 @@ function read() {
     const raw = localStorage.getItem(KEY);
     if (!raw) return blank();
     const s = JSON.parse(raw);
-    return { orders: Array.isArray(s.orders) ? s.orders : [] };
+    return {
+      orders: Array.isArray(s.orders) ? s.orders : [],
+      orgId: typeof s.orgId === 'string' ? s.orgId : '',
+    };
   } catch (e) {
     console.error('[kontour] could not read orders', e);
     return blank();
@@ -76,7 +79,10 @@ export function linesByMr(mrNo) {
 
 export function addLine(input = {}) {
   const line = {
-    id: makeId('ord'),
+    // Callers normally let the id be made here. The seed passes its
+    // own, derived from the piece itself, so two devices seeding the
+    // same history land on the same row rather than two copies of it.
+    id: input.id || makeId('ord'),
     mrNo: String(input.mrNo || '').trim().toUpperCase(),
     client: input.client || '',
     orderReceived: input.orderReceived || todayISO(),
@@ -521,8 +527,122 @@ const SEED = [
 /* Guarded the same way the Commission module seeds its two known
    partners: only when there is nothing on file yet, so a real edit
    or delete is never quietly reintroduced by re-opening the tab. */
+/* A stable id for a seeded row: the same piece seeded on the office
+   laptop and on the workshop phone has to be one row on the shared
+   books, not two. Derived from what identifies the piece rather than
+   from its position in the list, so adding a row to SEED later does
+   not rename the others. */
+function seedId(row) {
+  const slug = `${row.mrNo || ''} ${row.name || ''} ${row.dims || ''}`
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+  return `ord_seed_${slug}`;
+}
+
 export function seedOrders() {
-  if (state.orders.some((o) => !o.deletedAt)) return { added: 0 };
-  for (const s of SEED) addLine(s);
+  // Any row at all, tombstones included: a device that has synced and
+  // holds only deletions must not seed them back and push the lot
+  // straight to every other device.
+  if (state.orders.length) return { added: 0 };
+
+  // Two pieces on one order can be identical down to the dimensions —
+  // a pair of matching brackets is two rows, not one — so a repeated
+  // id is numbered rather than allowed to collapse the two into one
+  // row. SEED's order is fixed in the source, so the numbering is the
+  // same on every device.
+  const seen = new Map();
+  for (const s of SEED) {
+    const base = seedId(s);
+    const n = (seen.get(base) || 0) + 1;
+    seen.set(base, n);
+    addLine({ ...s, id: n === 1 ? base : `${base}-${n}` });
+  }
   return { added: SEED.length };
+}
+
+/* ── The shared books ──────────────────────────────────────────
+   The shop floor is not one person's screen: a piece moved to
+   Assembly on the workshop phone has to be at Assembly on the
+   office laptop. So orders ride the same records table the ledger
+   and the quotations do — one kind, keyed by the line item's own
+   id, last write wins per row. See js/shopsync.js for the pump.
+
+   Every mutation above already stamps updatedAt and deletes softly
+   (deletedAt rather than a splice), which is exactly what a
+   tombstone needs, so nothing here has to be tracked by hand. */
+
+export const SYNC_KINDS = [
+  { kind: 'order', arr: 'orders', key: 'id' },
+];
+
+/** Every line item, tombstones included, as the server wants them. */
+export function syncRecords() {
+  const out = [];
+  for (const rec of state.orders || []) {
+    if (!rec.id) continue;
+    out.push({
+      kind: 'order',
+      id: String(rec.id),
+      data: rec,
+      updatedAt: rec.updatedAt || rec.createdAt || Date.now(),
+      deletedAt: rec.deletedAt || null,
+    });
+  }
+  return out;
+}
+
+/**
+ * Rows the server sent, folded in newest-write-wins per record.
+ * Returns how many actually moved, so a sync that found nothing does
+ * not repaint a screen someone is reading.
+ */
+export function applyRemote(rows) {
+  let changed = 0;
+
+  for (const row of rows || []) {
+    if (row.kind !== 'order') continue;
+    const at = Date.parse(row.updated_at) || 0;
+    const i = state.orders.findIndex((o) => String(o.id) === String(row.id));
+    const mine = i >= 0 ? state.orders[i] : null;
+    const mineAt = mine ? (mine.updatedAt || mine.createdAt || 0) : -1;
+
+    // A tie goes to the device, which is what stops a pull from
+    // undoing an edit made in the same second it arrived.
+    if (mine && mineAt >= at) continue;
+
+    const next = { ...(row.data || {}), id: String(row.id), updatedAt: at };
+    if (row.deleted_at) next.deletedAt = Date.parse(row.deleted_at) || at;
+    else delete next.deletedAt;
+
+    if (mine) state.orders[i] = next; else state.orders.push(next);
+    changed += 1;
+  }
+
+  if (changed) { write(); emit(); }
+  return changed;
+}
+
+/* Whose books these are. Local work done before there was an account
+   is claimed by the first org that signs in; work belonging to a
+   different org is cleared rather than pushed into somebody else's
+   books. Returns true when it had to clear, so the caller resets its
+   cursor and pulls the new org from the beginning. */
+export function claimFor(orgId) {
+  const want = String(orgId || '');
+  if (!want) return false;
+  if (!state.orgId) { state.orgId = want; write(); return false; }
+  if (state.orgId === want) return false;
+
+  state.orders = [];
+  state.orgId = want;
+  write(); emit();
+  return true;
+}
+
+export function ownerOrg() { return state.orgId; }
+
+/** Everything this device holds, cleared of its org claim — used when
+    signing out, so the next account starts from the server's copy. */
+export function wipe() {
+  state = blank();
+  write(); emit();
 }

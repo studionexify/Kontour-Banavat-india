@@ -19,7 +19,7 @@ import {
   accessToken, rest, currentOrgId, signedIn, myRole, canWrite,
 } from './auth.js';
 import {
-  queued, queuedCount, resolve, cursor, setCursor, KINDS,
+  queued, queuedCount, resolve, cursor, setCursor, prune, KINDS,
 } from './outbox.js';
 import { applyRemote, settings, saveSettings, load } from './store.js';
 
@@ -93,9 +93,14 @@ async function push(orgId) {
 async function pull(orgId) {
   const since = cursor();
   const filter = since ? `&updated_at=gt.${encodeURIComponent(since)}` : '';
+  // Filtered to the ledger's own kinds. Unfiltered, this page also
+  // carried the quotations, the designs and the production line —
+  // every row of which store.js discards — so a phone paid for
+  // downloading the whole app's history to sync five kinds of it.
+  const kinds = KINDS.map((k) => k.kind).join(',');
   const rows = await rest(
-    `/records?select=kind,id,data,updated_at,deleted_at&org_id=eq.${orgId}${filter}`
-    + '&order=updated_at.asc&limit=2000'
+    `/records?select=kind,id,data,updated_at,deleted_at&org_id=eq.${orgId}`
+    + `&kind=in.(${kinds})${filter}&order=updated_at.asc&limit=2000`
   );
 
   if (!rows || !rows.length) return { pulled: 0 };
@@ -166,6 +171,9 @@ export function sync({ settingsToo = false } = {}) {
       if (!role) role = await myRole(orgId);
       const up = await push(orgId);
       const down = await pull(orgId);
+      // Anything the pull answered with a newer copy has lost and is
+      // dropped, rather than queued for a push that can only be refused.
+      prune(load());
       if (settingsToo) await syncSettings(orgId);
       lastError = '';
       return { ...up, ...down };
@@ -226,13 +234,36 @@ export function startSync({ onChange } = {}) {
  * Signing in on a device that already has books is the one case the
  * cursor cannot describe: the records are real and unsynced, but the
  * outbox is empty because they were written before there was anywhere
- * to send them. Diffing against an empty snapshot re-queues the lot.
+ * to send them. Every record is queued, tombstones aside.
+ *
+ * Each keeps its own stamp rather than being restamped as new. That is
+ * what makes this safe to run on a device that is not the first one
+ * in: push_records settles by last write wins per row, so a local copy
+ * that is genuinely older loses to what the books already hold instead
+ * of overwriting a colleague's newer edit with a stale one.
  */
 export async function adoptLocalData() {
   const s = load();
-  const { snapshot, diff, enqueue } = await import('./outbox.js');
-  const empty = {};
-  for (const { kind } of KINDS) empty[kind] = new Map();
-  enqueue(diff(empty, snapshot(s), s));
+  const { enqueue } = await import('./outbox.js');
+  const changes = [];
+
+  for (const { kind, arr, key } of KINDS) {
+    for (const rec of s[arr] || []) {
+      const id = rec[key];
+      if (id == null || id === '') continue;
+      changes.push({
+        kind,
+        id: String(id),
+        data: rec,
+        // A record with no stamp of its own predates the stamping and
+        // is treated as the oldest thing on the books, which is what
+        // it is.
+        updatedAt: rec.updatedAt || rec.createdAt || 1,
+        deletedAt: null,
+      });
+    }
+  }
+
+  enqueue(changes);
   return sync({ settingsToo: true });
 }

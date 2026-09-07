@@ -12,9 +12,9 @@
  * of their entries, the same way a job's outstanding figure is the
  * sum of its ledger entries, so the two can never drift apart.
  *
- * This module is local to the device for now, the way the whole app
- * was before Phynance and Quotation grew their own sync — see
- * quotesync.js if this needs to follow the same path later.
+ * Partners and their entries ride the shared books the same way the
+ * ledger and the quotations do — two record kinds on the same table,
+ * last write wins per row. See js/shopsync.js for the pump.
  */
 
 import { round2, todayISO } from './format.js';
@@ -26,7 +26,7 @@ function uid(prefix = 'p') {
 }
 
 function blank() {
-  return { partners: [], entries: [] };
+  return { partners: [], entries: [], orgId: '' };
 }
 
 let state = blank();
@@ -42,6 +42,7 @@ function read() {
     return {
       partners: Array.isArray(s.partners) ? s.partners : [],
       entries: Array.isArray(s.entries) ? s.entries : [],
+      orgId: typeof s.orgId === 'string' ? s.orgId : '',
     };
   } catch (e) {
     console.error('[kontour] could not read commissions', e);
@@ -72,7 +73,9 @@ export function getPartner(id) {
 
 export function addPartner(input = {}) {
   const p = {
-    id: uid('cp'),
+    // As in orders.js: the seed passes its own id so the same partner
+    // seeded on two devices is one row on the shared books.
+    id: input.id || uid('cp'),
     name: String(input.name || '').trim(),
     phone: input.phone || '',
     // undefined (not passed at all) means "no opinion yet, use 10";
@@ -128,7 +131,7 @@ export function deletePartner(id) {
 
 export function newEntry(input = {}) {
   return {
-    id: uid('ce'),
+    id: input.id || uid('ce'),
     partnerId: input.partnerId || '',
     project: input.project || '',
     jobCode: (input.jobCode || '').trim().toUpperCase(),
@@ -245,8 +248,16 @@ export function totalSummary() {
    someone to retype. Runs once — a partner already on file (matched
    by name) is left alone, so this never overwrites an edit made
    since. */
+/* Stable across devices, for the reason orders.js gives at seedId(). */
+function slug(text) {
+  return String(text || '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+}
+
 export function seedKnownPartners() {
-  if (state.partners.some((p) => !p.deletedAt)) return { added: 0 };
+  // Any partner at all, tombstones included — a device holding only
+  // deletions must not seed them back onto the shared books.
+  if (state.partners.length) return { added: 0 };
   const seed = [
     {
       name: 'Shreemay Associate',
@@ -281,8 +292,91 @@ export function seedKnownPartners() {
 
   let added = 0;
   for (const p of seed) {
-    const partner = addPartner({ name: p.name, defaultPct: p.defaultPct, notes: p.notes || '' });
-    for (const e of p.entries) { addEntry({ ...e, partnerId: partner.id }); added += 1; }
+    const partner = addPartner({
+      id: `cp_seed_${slug(p.name)}`,
+      name: p.name, defaultPct: p.defaultPct, notes: p.notes || '',
+    });
+    for (const e of p.entries) {
+      addEntry({ ...e, id: `ce_seed_${slug(p.name)}_${slug(e.project)}`, partnerId: partner.id });
+      added += 1;
+    }
   }
   return { added };
+}
+
+/* ── The shared books ──────────────────────────────────────────
+   Two kinds, because a partner and one of their entries are edited
+   independently and a whole-object push would let one device's stale
+   partner list undo another's new entry. Every mutation above already
+   stamps updatedAt and deletes softly, which is what a tombstone
+   needs, so nothing here is tracked by hand. */
+
+export const SYNC_KINDS = [
+  { kind: 'partner', arr: 'partners', key: 'id' },
+  { kind: 'commission', arr: 'entries', key: 'id' },
+];
+
+export function syncRecords() {
+  const out = [];
+  for (const { kind, arr } of SYNC_KINDS) {
+    for (const rec of state[arr] || []) {
+      if (!rec.id) continue;
+      out.push({
+        kind,
+        id: String(rec.id),
+        data: rec,
+        updatedAt: rec.updatedAt || rec.createdAt || Date.now(),
+        deletedAt: rec.deletedAt || null,
+      });
+    }
+  }
+  return out;
+}
+
+export function applyRemote(rows) {
+  let changed = 0;
+
+  for (const row of rows || []) {
+    const spec = SYNC_KINDS.find((k) => k.kind === row.kind);
+    if (!spec) continue;
+
+    const list = state[spec.arr];
+    const at = Date.parse(row.updated_at) || 0;
+    const i = list.findIndex((r) => String(r.id) === String(row.id));
+    const mine = i >= 0 ? list[i] : null;
+    const mineAt = mine ? (mine.updatedAt || mine.createdAt || 0) : -1;
+
+    if (mine && mineAt >= at) continue;
+
+    const next = { ...(row.data || {}), id: String(row.id), updatedAt: at };
+    if (row.deleted_at) next.deletedAt = Date.parse(row.deleted_at) || at;
+    else delete next.deletedAt;
+
+    if (mine) list[i] = next; else list.push(next);
+    changed += 1;
+  }
+
+  if (changed) { write(); emit(); }
+  return changed;
+}
+
+/* See orders.js — same bargain, same reason. */
+export function claimFor(orgId) {
+  const want = String(orgId || '');
+  if (!want) return false;
+  if (!state.orgId) { state.orgId = want; write(); return false; }
+  if (state.orgId === want) return false;
+
+  state.partners = [];
+  state.entries = [];
+  state.orgId = want;
+  write(); emit();
+  return true;
+}
+
+export function ownerOrg() { return state.orgId; }
+
+export function wipe() {
+  state = blank();
+  write(); emit();
 }

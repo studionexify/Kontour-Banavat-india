@@ -14,12 +14,36 @@ import {
   signIn, signUp, sendPasswordReset, signOut,
   myOrgs, createOrg, setCurrentOrg, currentUser,
 } from '../auth.js';
-import { adoptLocalData } from '../cloud.js';
+import { adoptLocalData, sync as syncLedger } from '../cloud.js';
 import { adoptLocalQuotes } from '../quotesync.js';
+import { adoptLocalShop } from '../shopsync.js';
 import { entries } from '../store.js';
-import { quotes as allQuotes } from '../quotes.js';
+import { quotes as allQuotes, load as loadQuotes } from '../quotes.js';
+import { lines as orderLines, load as loadOrders } from '../orders.js';
+import { partners as commissionPartners, load as loadCommissions } from '../commissions.js';
 
 let mode = 'in';        // 'in' | 'up' | 'forgot'
+
+/* Which books this device has already offered its own work to. An
+   upload only has to happen once per org: after that every change
+   rides the ordinary sync. Kept per org id rather than as one flag
+   because a device that joins a second set of books has never
+   uploaded to those. */
+const ADOPTED_KEY = 'kontour.adopted';
+
+function adoptedOrgs() {
+  try {
+    const v = JSON.parse(localStorage.getItem(ADOPTED_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch { return []; }
+}
+
+function markAdopted(orgId) {
+  const all = adoptedOrgs();
+  if (all.includes(orgId)) return;
+  all.push(orgId);
+  try { localStorage.setItem(ADOPTED_KEY, JSON.stringify(all)); } catch {}
+}
 
 /**
  * Runs the whole sign-in flow and resolves once there is a session and
@@ -224,7 +248,7 @@ function nameBooks(root, done) {
     btn.textContent = 'Creating…';
     try {
       const org = await createOrg(new FormData(form).get('name'));
-      await enter({ id: org.id, name: org.name, role: 'owner' }, done, { fresh: true });
+      await enter({ id: org.id, name: org.name, role: 'owner' }, done);
     } catch (e) {
       errBox.textContent = friendly(e);
       errBox.hidden = false;
@@ -238,26 +262,65 @@ function nameBooks(root, done) {
   });
 }
 
-async function enter(org, done, { fresh = false } = {}) {
+async function enter(org, done) {
   if (!org) return;
   setCurrentOrg(org.id);
 
-  // Books that already existed on this device before there was anywhere
-  // to send them. Signing in should carry them up, not strand them.
-  if (fresh) {
-    const hadEntries = entries().length;
-    const hadQuotes = allQuotes().length;
-    if (hadEntries || hadQuotes) {
-      try {
-        if (hadEntries) await adoptLocalData();
-        if (hadQuotes) await adoptLocalQuotes();
-        toast('Your existing records have been uploaded');
-      } catch {
-        // Not fatal — both syncs retry on their own schedule.
-        toast('Signed in. Your records will upload shortly', 'warn');
-      }
+  // Two halves of the same promise, and both used to be missed.
+  //
+  // Up: work done on this device before it had anywhere to send it.
+  // That is not only the case where the books are new — signing in on
+  // a phone that has been used for months, into books a colleague
+  // created, strands exactly the same records, and used to. So the
+  // upload runs the first time this device enters any given books,
+  // not only when it makes them. Each record keeps its own stamp, so
+  // an older local copy loses to the books rather than overwriting a
+  // colleague's newer edit.
+  //
+  // Down: everything already on the books. A first sync pulls it
+  // anyway, but doing it here means the app opens on the real books
+  // rather than on an empty screen that fills in a moment later —
+  // which is what "nothing shows on a new device" looked like.
+  const first = !adoptedOrgs().includes(org.id);
+
+  // These stores are read straight off localStorage by app.js
+  // later in boot; here they have not been loaded yet, and asking an
+  // unloaded store what it holds would answer "nothing" and skip the
+  // upload for exactly the device that needs it.
+  loadQuotes();
+  loadOrders();
+  loadCommissions();
+
+  const mine = {
+    entries: entries().length,
+    quotes: allQuotes().length,
+    shop: orderLines().length + commissionPartners().length,
+  };
+
+  try {
+    if (first && mine.entries) await adoptLocalData(); else await syncLedger({ settingsToo: true });
+    if (first && mine.quotes) await adoptLocalQuotes(); else await syncQuotesDown();
+    if (first && mine.shop) await adoptLocalShop(); else await syncShopDown();
+    if (first && (mine.entries || mine.quotes || mine.shop)) {
+      toast('Your existing records have been uploaded');
     }
+  } catch {
+    // Not fatal — every sync retries on its own schedule.
+    toast('Signed in. Syncing will finish in the background', 'warn');
   }
 
+  markAdopted(org.id);
   done(org);
+}
+
+/* Imported where they are used rather than at the top so the sign-in
+   screen still paints on a build where a sync module fails to load. */
+async function syncQuotesDown() {
+  const { syncQuotes } = await import('../quotesync.js');
+  return syncQuotes({ settingsToo: true });
+}
+
+async function syncShopDown() {
+  const { syncShop } = await import('../shopsync.js');
+  return syncShop();
 }

@@ -24,10 +24,17 @@ import {
 import { todayISO, fyOf, dmy } from '../format.js';
 import { pageHead, statCards, sectionHead, orderCard, nothingHere } from './chrome.js';
 import { openOrder } from './orderdetail.js';
+import { seedingAllowed } from '../shopsync.js';
 
 export function render(root, ctx) {
-  seedOrders();
-  seedKnownPartners();
+  // The history this build ships with is seeded only where it is this
+  // device's own copy. On shared books it waits for the first pull, or
+  // a phone opening the dashboard mid-sign-in would seed a second copy
+  // of a history the books already hold. See shopsync.seedingAllowed().
+  if (seedingAllowed()) {
+    seedOrders();
+    seedKnownPartners();
+  }
 
   const today = todayISO();
   const st = stationCounts();

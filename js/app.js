@@ -30,6 +30,7 @@ import { cloudConfigured } from './config.js';
 import { signedIn, currentOrgId } from './auth.js';
 import { startSync } from './cloud.js';
 import { startQuoteSync } from './quotesync.js';
+import { startShopSync } from './shopsync.js';
 import { load as loadQuotes, onChange as onQuotesChange, fixHashtagNumbers, attachImportedPhotos } from './quotes.js';
 import { markHTML, hasLogo } from './brand.js';
 import { openSignIn } from './views/signin.js';
@@ -604,6 +605,14 @@ function start() {
     // Quotations ride their own sync on the same rhythm — separate
     // store, separate outbox, same books and the same row-level rules.
     startQuoteSync({
+      onChange(r) {
+        if (r.pulled && !sheetCount()) show(route);
+      },
+    });
+    // The production line and the commission book, on the same rhythm.
+    // Without this the two screens the workshop actually lives on were
+    // device-local: what was logged on the phone stayed on the phone.
+    startShopSync({
       onChange(r) {
         if (r.pulled && !sheetCount()) show(route);
       },
