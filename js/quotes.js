@@ -849,6 +849,157 @@ export function isArchived(quote) {
   return Boolean(quote && quote.archivedAt);
 }
 
+/* ── Importing the history ────────────────────────────────────
+   The quotations that lived in the spreadsheet, brought in as
+   records rather than retyped. Matching is by MR number, so running
+   it twice adds nothing the second time and a quotation edited here
+   is never overwritten by the file.
+
+   It takes the parsed rows, or a URL to fetch them from. It is
+   deliberately not wired to a file shipped with the app: this is
+   real client names, phone numbers and prices, and anything served
+   alongside the app is readable by anyone who visits it. The file
+   is chosen from the device instead, so the data never leaves it.
+
+   Numbers the sheet reused for different clients come in flagged
+   rather than merged or dropped — the data is real either way, and
+   only you can say which one should keep the number. */
+/* The bundled history, decrypted here rather than on a server.
+   The ciphertext ships with the app because ciphertext is safe to
+   publish; the passphrase never does. AES-256-GCM authenticates as
+   well as encrypts, so a tampered blob fails to open rather than
+   opening to something someone else chose. */
+export async function decryptHistory(passphrase, onProgress, url = 'data/quotations.enc.json') {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Could not read the history file (${res.status})`);
+  const blob = await res.json();
+
+  const b64 = (s2) => Uint8Array.from(atob(s2), (c) => c.charCodeAt(0));
+  const salt = b64(blob.kdf.salt);
+  const iv = b64(blob.iv);
+  const data = b64(blob.data);
+  const pass = new TextEncoder().encode(passphrase);
+
+  let plain;
+  if (globalThis.crypto && crypto.subtle && crypto.subtle.importKey) {
+    const base = await crypto.subtle.importKey(
+      'raw', pass, 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: blob.kdf.iterations, hash: blob.kdf.hash },
+      base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    try {
+      plain = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data));
+    } catch (e) {
+      // GCM refuses on a wrong key and on a tampered blob alike, and
+      // cannot tell you which — so neither can this message.
+      throw new Error('That passphrase does not open the file');
+    }
+  } else {
+    // No crypto.subtle: the app is being read over plain http, or from
+    // a frame with an opaque origin. Do it the slow way rather than
+    // leave the history shut. Takes a few seconds.
+    const { pbkdf2, gcmDecrypt } = await import('./softcrypto.js');
+    const key = pbkdf2(pass, salt, blob.kdf.iterations, 32, onProgress);
+    plain = gcmDecrypt(key, iv, data);
+    if (!plain) throw new Error('That passphrase does not open the file');
+  }
+
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+export async function importHistory(rows) {
+  if (typeof rows === 'string') {
+    const res = await fetch(rows, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Could not read that file (${res.status})`);
+    rows = await res.json();
+  }
+  if (!Array.isArray(rows)) throw new Error('That file is not a list of quotations');
+
+  const numbers = new Set(state.quotes.map((q) => String(q.mrNo).toUpperCase()));
+  /* Identity is the number plus who and when, not the number alone.
+     The sheet reused some numbers for different clients, so the
+     number by itself cannot say whether a row is already here — and
+     matching on it alone made a second run import every clashing
+     record again under a fresh suffix. */
+  const worth = (ls) => (ls || []).reduce((t, l) => t + (l.unitPrice || 0) * (l.qty || 0), 0);
+  const identity = (q) => [
+    String(q.mrNo || '').toUpperCase().replace(/\s*\(\d+\)$/, ''),
+    q.date || '',
+    String((q.client || {}).name || '').trim().toLowerCase(),
+    // The sheet holds two different C131s for one client on one day.
+    // Without the figures in the key they would collapse into one and
+    // a real quotation would be lost.
+    (q.lines || []).length,
+    Math.round(worth(q.lines)),
+  ].join('|');
+  const seen = new Set(state.quotes.map(identity));
+
+  let added = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    const mrNo = String(row.mrNo || '').trim().toUpperCase();
+    if (!mrNo) { skipped += 1; continue; }
+
+    const key = identity(row);
+    if (seen.has(key)) { skipped += 1; continue; }
+
+    // A number the sheet reused for a different client comes in under
+    // a suffix so both survive; the flag is what tells you to settle it.
+    let useNo = mrNo;
+    if (numbers.has(useNo)) {
+      let n = 2;
+      while (numbers.has(`${mrNo} (${n})`)) n += 1;
+      useNo = `${mrNo} (${n})`;
+    }
+
+    // Everything in the sheet went out to a client; what came back of
+    // it usually is not recorded there, so a row arrives awaiting a
+    // reply by default. A caller that cross-referenced its own record
+    // of what was actually ordered — a production sheet, a payments
+    // ledger — can say otherwise: status/jobCode/archivedAt carry that
+    // decision across exactly the way accepting a quotation by hand
+    // would leave it, without this file needing to know where the
+    // caller's evidence came from.
+    const status = ['draft', 'sent', 'accepted', 'declined', 'superseded'].includes(row.status)
+      ? row.status : 'sent';
+    state.quotes.push({
+      id: uid('q'),
+      mrNo: useNo,
+      date: row.date || '',
+      validUntil: row.validUntil || '',
+      title: '',
+      client: { name: '', email: '', phone: '', shippingAddress: '', ...(row.client || {}) },
+      lines: (row.lines || []).map((l) => newLine(l)),
+      shipping: (row.shipping || []).map((x) => newShipping(x)),
+      gstRate: state.settings.gstRate,
+      gstApplicable: row.gstApplicable !== false,
+      gstMode: GST_MODES[row.gstMode] ? row.gstMode : 'total',
+      paymentTerms: row.paymentTerms || state.settings.paymentTerms,
+      fabricRate: state.settings.fabricRate,
+      leadTime: state.settings.leadTime,
+      notes: '',
+      status,
+      jobCode: status === 'accepted' ? (row.jobCode || baseNo(useNo)).toUpperCase() : (row.jobCode || ''),
+      approvedTotal: row.approvedTotal == null ? null : Number(row.approvedTotal),
+      jobExcludesGst: Boolean(row.jobExcludesGst),
+      imported: true,
+      numberClash: Boolean(row.numberClash) && useNo !== mrNo,
+      // A row the caller has already marked decided is filed away like
+      // any other decided quotation, so it does not sit in the working
+      // list next to the ones genuinely still awaiting a reply.
+      archivedAt: (status === 'accepted' || status === 'declined') ? Date.now() : 0,
+      createdAt: Date.parse(`${row.date}T00:00:00`) || Date.now(),
+      updatedAt: Date.now(),
+    });
+    numbers.add(useNo);
+    seen.add(key);
+    added += 1;
+  }
+
+  if (added) { write(); emit(); }
+  return { added, skipped, total: rows.length };
+}
 
 /* ── Dashboard figures ───────────────────────────────────────── */
 

@@ -2,7 +2,7 @@
    credentials, and backup. Opened from the gear on Home. */
 
 import { icon } from '../icons.js';
-import { settings as qSettings, updateSettings as updateQSettings, quotes as allQuotes, ownerOrg } from '../quotes.js';
+import { settings as qSettings, updateSettings as updateQSettings, importHistory, decryptHistory, quotes as allQuotes, ownerOrg } from '../quotes.js';
 import { syncQuotes, lastSyncError as qsError, online as qsOnline } from '../quotesync.js';
 import { openSheet, on, esc, toast, confirmSheet, emptyState, field } from '../ui.js';
 import {
@@ -79,6 +79,9 @@ export function openSettings(ctx) {
             ${cloudConfigured() && signedIn() ? navRow(
               qsOnline() ? 'cloud' : 'cloudOff', 'Quotation sync',
               qsError() ? 'Last sync failed' : `${allQuotes().length} on the shared books`, 'qsync') : ''}
+            ${navRow('upload', 'Quotation history',
+              allQuotes().length ? `${allQuotes().length} quotation${allQuotes().length === 1 ? '' : 's'} on file`
+                                 : 'Bring in the quotations from the sheet', 'history')}
           </div>
 
           <p class="tray-lbl sp">Quotations</p>
@@ -98,7 +101,7 @@ export function openSettings(ctx) {
         const map = {
           accounts: accountsSheet, categories: categoriesSheet, recurring: recurringSheet,
           gst: gstSheet, drive: driveSheet, ai: aiSheet, pending: pendingSheet,
-          pin: pinSheet, backup: backupSheet, about: aboutSheet, logo: logoSheet, qsync: qsyncSheet,
+          pin: pinSheet, backup: backupSheet, about: aboutSheet, logo: logoSheet, history: historySheet, qsync: qsyncSheet,
           people: peopleSheet, sync: syncSheet, account: accountSheet,
           qcompany: qCompanySheet, qpayment: qPaymentSheet,
           qterms: qTermsSheet, qnote: qNoteSheet, qdefaults: qDefaultsSheet,
@@ -1478,6 +1481,107 @@ async function logoSheet(ctx, back) {
     },
   });
   return h;
+}
+
+
+/* ── Quotation history ─────────────────────────────────────────
+   The backfill of what lived in the spreadsheet. Two ways in, both
+   ending in the same place.
+
+   The bundled copy is encrypted, because the records carry client
+   names, phone numbers and prices and the app is served publicly —
+   ciphertext can sit next to the app, the passphrase cannot. It is
+   decrypted in the browser, so the readable data never crosses the
+   network and never exists on any server but your own.
+
+   Safe to run more than once either way: matching is on number,
+   client, date and figures together, so nothing already here is
+   duplicated and nothing edited here is overwritten. */
+async function historySheet(ctx, back) {
+  openSheet({
+    title: 'Quotation history',
+    body: `<div class="sheet-body" data-hist></div>
+           <input type="file" accept="application/json,.json" data-file hidden>`,
+    onMount(root) {
+      const host = root.querySelector('[data-hist]');
+      const input = root.querySelector('[data-file]');
+
+      /* Bound once. paint() only rewrites the panel above them, so
+         nothing here is ever wired twice — two live handlers would
+         mean two imports racing on the same click. */
+      on(root, '[data-decrypt]', async (e, b) => {
+        const pass = root.querySelector('[data-pass]').value.trim();
+        if (!pass) { toast('Enter the passphrase', 'err'); return; }
+        b.disabled = true;
+        /* Without crypto.subtle this runs in plain JavaScript on this
+           thread and takes a few seconds, so say so and let the browser
+           draw the message before the grind starts. */
+        const slow = !(globalThis.crypto && crypto.subtle && crypto.subtle.importKey);
+        b.textContent = slow ? 'Unlocking… this takes a few seconds' : 'Unlocking…';
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        try {
+          done(await importHistory(await decryptHistory(pass)));
+        } catch (err) {
+          console.error('[kontour] import failed', err);
+          paint({ error: err.message || 'That file could not be opened' });
+        }
+        b.disabled = false;
+        b.textContent = 'Unlock and import';
+      });
+
+      on(root, '[data-pick]', () => input.click());
+      input.onchange = async () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        try {
+          done(await importHistory(JSON.parse(await file.text())));
+        } catch (err) {
+          console.error('[kontour] import failed', err);
+          paint({ error: err.message || 'That file could not be read' });
+        }
+        input.value = '';
+      };
+
+      paint();
+
+      function done(r) {
+        toast(r.added ? `${r.added} quotations imported` : 'Nothing new to import');
+        paint(r);
+      }
+
+      function paint(result) {
+        const n = allQuotes().length;
+        host.innerHTML = `
+          <p class="sheet-lede">
+            Brings in the quotations recorded in the Banavat spreadsheet —
+            the older BOQ-headed documents and the current ones alike — as
+            records you can open, revise and reprint.
+          </p>
+
+          ${result ? `<div class="snip-none" style="border-style:solid">
+              ${icon(result.error ? 'alert' : 'check', 20)}
+              <span>${esc(result.error
+                || `${result.added} added${result.skipped ? `, ${result.skipped} already here` : ''}`)}</span>
+            </div>` : ''}
+
+          <p class="tray-lbl">From the bundled history</p>
+          ${field('Passphrase',
+            `<input class="control" type="password" data-pass autocomplete="off"
+                    placeholder="four words and a number">`,
+            'Sent to you separately. The file ships encrypted and is opened on this device.')}
+          <button class="btn" data-decrypt>Unlock and import</button>
+
+          <p class="tray-lbl sp">Or from a file</p>
+          <button class="btn sec sm" data-pick>Choose a JSON file</button>
+
+          <p class="qb-hint">
+            ${n ? `${n} quotation${n === 1 ? '' : 's'} on file.` : 'Nothing imported yet.'}
+            Running this again only fills gaps.
+          </p>
+        `;
+      }
+    },
+  });
 }
 
 
