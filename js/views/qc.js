@@ -14,8 +14,8 @@
 
 import { icon } from '../icons.js';
 import { on, esc, toast, haptic, openSheet, field } from '../ui.js';
-import { linesAt, getLine, logQc, QC_CHECKS, QC_REASONS } from '../orders.js';
-import { designs, CATEGORIES } from '../quotes.js';
+import { linesAt, getLine, logQc } from '../orders.js';
+import { designs, CATEGORIES, qcChecks, qcReasons } from '../quotes.js';
 import { inr, dmy } from '../format.js';
 import { pageHead, statCards, searchBar, nothingHere, sectionHead, comingUp } from './chrome.js';
 import { openOrder } from './orderdetail.js';
@@ -120,7 +120,7 @@ function qcHTML(queue, rework) {
 
     ${comingUp([
       'A piece lands here once every sub-contractor commissioned on it has approved their part. Passing it sends it to Shipping, one piece at a time; sending it back returns it to production.',
-      'The checklist is a starting list, taken from what these pieces actually get sent back for. Editing it from Settings comes next — until then, tell me what to add and it goes in.',
+      'The checklist and the send-back reasons are yours to change — Settings → The floor.',
     ])}
 
     ${rework.length ? `
@@ -167,12 +167,15 @@ function qcRow(l) {
    answer; a piece going back carries one chosen reason, for the
    same reason. Photographs and a note are optional on both, and
    every round is kept — a piece that fails twice has two rounds on
-   file. See QC_CHECKS in orders.js. */
+   file. The two lists are edited in Settings → The floor; see
+   quotes.qcChecks. */
 
 function openCheck(lineId, result, onDone) {
   const line = getLine(lineId);
   if (!line) return;
   const pass = result === 'pass';
+  const checks = qcChecks();
+  const reasons = qcReasons();
   let shots = [];
 
   openSheet({
@@ -183,7 +186,7 @@ function openCheck(lineId, result, onDone) {
 
         <p class="tray-lbl">${pass ? 'What was checked' : 'What was checked before it failed'}</p>
         <div class="checklist">
-          ${QC_CHECKS.map((c, i) => `
+          ${checks.map((c, i) => `
             <label class="checkrow">
               <input type="checkbox" class="box" data-check="${i}" value="${esc(c)}">
               <span>${esc(c)}</span>
@@ -194,7 +197,7 @@ function openCheck(lineId, result, onDone) {
         ${pass ? '' : `
           ${field('Why it is going back',
             `<select class="control" data-reason>
-              ${QC_REASONS.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}
+              ${reasons.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}
             </select>`)}`}
 
         ${field(pass ? 'Note' : 'What has to be put right',
@@ -225,12 +228,12 @@ function openCheck(lineId, result, onDone) {
       });
 
       on(sheet, '[data-save]', () => {
-        const checks = [...sheet.querySelectorAll('[data-check]')]
+        const ticked = [...sheet.querySelectorAll('[data-check]')]
           .filter((b) => b.checked).map((b) => b.value);
         const reasonEl = sheet.querySelector('[data-reason]');
         logQc(line.id, {
           result,
-          checks,
+          checks: ticked,
           reason: reasonEl ? reasonEl.value : '',
           note: sheet.querySelector('[data-note]').value.trim(),
           photoIds: shots,

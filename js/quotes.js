@@ -80,6 +80,47 @@ export function quoteName(q) {
    is comparing pieces and wants to see what each one costs including
    tax before the figures are added up. Neither one changes what is
    owed — quoteTotals() is the same call either way. */
+/* ── The quality check ─────────────────────────────────────────
+   The starting lists, taken from what these pieces actually get
+   sent back for. They are only defaults: Settings → The floor
+   writes over them, and Restore puts these back. */
+
+export const DEFAULT_QC_CHECKS = [
+  'Finish & polish',
+  'Dimensions as per drawing',
+  'Joinery & structure',
+  'Hardware & fittings',
+  'Upholstery & fabric',
+  'Moving parts & mechanism',
+  'Glass, mirror & stone',
+  'Cleaned',
+  'Packed & corners protected',
+];
+
+/* Why a piece went back. One reason, chosen — not typed — so the
+   same fault reads the same way every time it happens. */
+export const DEFAULT_QC_REASONS = [
+  'Finish not acceptable',
+  'Wrong dimensions',
+  'Poor joinery or weak structure',
+  'Hardware faulty or missing',
+  'Wrong material, fabric or colour',
+  'Damaged in handling',
+  'Incomplete — work still to do',
+  'Something else',
+];
+
+/* An emptied list would leave QC with no way to record anything, so
+   an empty one reads as "not set" and the default stands. Deleting
+   every line and saving is how you ask for the defaults back. */
+function listOr(saved, fallback) {
+  const list = Array.isArray(saved) ? saved.map((x) => String(x).trim()).filter(Boolean) : [];
+  return list.length ? list : [...fallback];
+}
+
+export function qcChecks() { return listOr(state.settings.qcChecks, DEFAULT_QC_CHECKS); }
+export function qcReasons() { return listOr(state.settings.qcReasons, DEFAULT_QC_REASONS); }
+
 export const GST_MODES = {
   total:    { label: 'Total',     hint: 'One GST line under the sub-total' },
   lineitem: { label: 'Line item', hint: 'GST shown against every item' },
@@ -189,6 +230,13 @@ function blank() {
       // in Settings overrides this default.
       logo: DEFAULT_LOGO,
       bank: { ...BANK },
+      // What QC looks at, and what a piece can be sent back for. Held
+      // in the shared settings rather than in the screen so the same
+      // words are used on every device and every round can be read
+      // back as data. Editable in Settings → The floor; see
+      // DEFAULT_QC_CHECKS.
+      qcChecks: [...DEFAULT_QC_CHECKS],
+      qcReasons: [...DEFAULT_QC_REASONS],
       seq: 0,
     },
     // Which books these quotations belong to. Empty on a device that
@@ -1161,6 +1209,7 @@ export function applyRemote(rows) {
 export const SHARED_QUOTE_SETTINGS = [
   'mrPrefix', 'gstRate', 'defaultCity', 'fabricRate', 'leadTime', 'leadTimeDays',
   'paymentTerms', 'terms', 'note', 'company', 'bank', 'logo',
+  'qcChecks', 'qcReasons',
 ];
 
 export function sharedSettings() {

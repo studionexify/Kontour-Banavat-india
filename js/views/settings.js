@@ -2,7 +2,11 @@
    credentials, and backup. Opened from the gear on Home. */
 
 import { icon } from '../icons.js';
-import { settings as qSettings, updateSettings as updateQSettings, importHistory, decryptHistory, quotes as allQuotes, ownerOrg } from '../quotes.js';
+import {
+  settings as qSettings, updateSettings as updateQSettings, importHistory, decryptHistory,
+  quotes as allQuotes, ownerOrg,
+  qcChecks, qcReasons, DEFAULT_QC_CHECKS, DEFAULT_QC_REASONS,
+} from '../quotes.js';
 import { syncQuotes, lastSyncError as qsError, online as qsOnline } from '../quotesync.js';
 import { openSheet, on, esc, toast, confirmSheet, emptyState, field } from '../ui.js';
 import {
@@ -85,6 +89,11 @@ export function openSettings(ctx) {
                                  : 'Bring in the quotations from the sheet', 'history')}
           </div>
 
+          <p class="tray-lbl sp">The floor</p>
+          <div class="list">
+            ${navRow('clipboard', 'Quality check list', `${qcChecks().length} things checked · ${qcReasons().length} reasons to send back`, 'qcchecks')}
+          </div>
+
           <p class="tray-lbl sp">Quotations</p>
           <div class="list">
             ${navRow('note', 'Company & banking', `${esc(qSettings().company.name)} · shown on every quotation`, 'qcompany')}
@@ -106,6 +115,7 @@ export function openSettings(ctx) {
           people: peopleSheet, sync: syncSheet, account: accountSheet,
           qcompany: qCompanySheet, qpayment: qPaymentSheet,
           qterms: qTermsSheet, qnote: qNoteSheet, qdefaults: qDefaultsSheet,
+          qcchecks: qcChecksSheet,
         };
         await map[where](ctx, paint);
       });
@@ -1430,6 +1440,71 @@ function qNoteSheet(ctx, back) {
       on(root, '[data-save]', () => {
         updateQSettings({ note: root.querySelector('[data-note]').value });
         toast('Saved');
+        h.close();
+        back();
+      });
+    },
+  });
+  return h;
+}
+
+/* ── What QC looks at ──────────────────────────────────────────
+   Two lists, one line each, edited the same way the quotation's
+   terms and notes are — because they are the same kind of thing: a
+   short standing list the business changes a few times a year, not
+   a record with its own screen.
+
+   Kept as lists rather than free text so a check round can be read
+   back as data later ("how often does hardware come back faulty"),
+   which is also why the reason is chosen rather than typed.
+
+   Emptying a list restores the default rather than leaving QC with
+   nothing to record, and Restore says so out loud. */
+
+function qcChecksSheet(ctx, back) {
+  const h = openSheet({
+    title: 'Quality check list',
+    body: `
+      <div class="sheet-body">
+        <p class="sheet-lede">What is looked at before a piece is packed, and what it can be sent back for. Both appear on every check.</p>
+
+        <div class="field">
+          <label>What is checked — one per line</label>
+          <textarea class="control" data-checks rows="10">${esc(qcChecks().join('\n'))}</textarea>
+          <div class="hint">Ticked off as each is checked. Rounds already recorded keep the words they were checked against.</div>
+        </div>
+
+        <div class="field">
+          <label>Reasons to send a piece back — one per line</label>
+          <textarea class="control" data-reasons rows="9">${esc(qcReasons().join('\n'))}</textarea>
+          <div class="hint">Chosen from a list rather than typed, so the same fault reads the same way every time.</div>
+        </div>
+
+        <button class="btn" data-save>Save</button>
+        <button class="btn sec sm" data-restore>Restore the default lists</button>
+      </div>`,
+    onMount(root) {
+      const lines = (sel) => root.querySelector(sel).value
+        .split('\n').map((x) => x.trim()).filter(Boolean);
+
+      on(root, '[data-save]', () => {
+        const checks = lines('[data-checks]');
+        const reasons = lines('[data-reasons]');
+        updateQSettings({ qcChecks: checks, qcReasons: reasons });
+        toast(checks.length && reasons.length ? 'Saved' : 'Saved — empty lists fall back to the defaults');
+        h.close();
+        back();
+      });
+
+      on(root, '[data-restore]', async () => {
+        const ok = await confirmSheet({
+          title: 'Restore the default lists',
+          message: 'Both lists go back to what Kontour ships with. Checks already recorded on pieces are untouched.',
+          confirmLabel: 'Restore',
+        });
+        if (!ok) return;
+        updateQSettings({ qcChecks: [...DEFAULT_QC_CHECKS], qcReasons: [...DEFAULT_QC_REASONS] });
+        toast('Default lists restored');
         h.close();
         back();
       });

@@ -241,38 +241,11 @@ export function setDespatch(lineIds, despatch) {
 }
 
 /* ── The quality check ─────────────────────────────────────────
-   What is actually looked at before a piece is packed. The list is
-   held here rather than typed into the screen so that the same
-   words are used every time and the check can be read back later
-   as data — which round found the finish wrong, how often hardware
-   comes back faulty. It is a starting list, taken from what these
-   pieces actually get sent back for; it is meant to be edited from
-   Settings once you have used it for a few weeks. */
-
-export const QC_CHECKS = [
-  'Finish & polish',
-  'Dimensions as per drawing',
-  'Joinery & structure',
-  'Hardware & fittings',
-  'Upholstery & fabric',
-  'Moving parts & mechanism',
-  'Glass, mirror & stone',
-  'Cleaned',
-  'Packed & corners protected',
-];
-
-/* Why a piece went back. One reason, chosen — not typed — so the
-   same fault reads the same way every time it happens. */
-export const QC_REASONS = [
-  'Finish not acceptable',
-  'Wrong dimensions',
-  'Poor joinery or weak structure',
-  'Hardware faulty or missing',
-  'Wrong material, fabric or colour',
-  'Damaged in handling',
-  'Incomplete — work still to do',
-  'Something else',
-];
+   What is looked at, and what a piece can be sent back for, are
+   business decisions rather than code: they live in the shared
+   quotation settings and are edited in Settings → The floor (see
+   quotes.qcChecks). What lives here is only the record — which
+   round found what, and where the piece went next. */
 
 /** Records a check round on a piece and moves it accordingly. */
 export function logQc(lineId, { result, checks = [], reason = '', note = '', photoIds = [] }) {
