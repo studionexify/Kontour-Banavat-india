@@ -58,6 +58,11 @@ export async function render(root, ctx) {
     if (r.seeded) toast(`Loaded ${r.seeded} sub-contractors from the work order sheets`);
   }
 
+  // Answers that arrived after a device had already seeded — a phone
+  // number the sheets did not carry, say. Only ever fills a blank, so
+  // it cannot overwrite something typed here since. See subs.REPAIRS.
+  subs.applyRepairs();
+
   const s = subs.stats();
   const list = listFor();
 
@@ -187,7 +192,7 @@ export function openPerson(id, ctx) {
         ${trades.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}
       </div>
 
-      <div class="kpis" style="margin-bottom:8px">
+      <div class="kpis three" style="margin-bottom:16px">
         <div class="kpi">
           <div class="kpi-l">WORK ORDERED</div>
           <div class="kpi-v num">${esc(inr(bal.ordered))}</div>
@@ -198,10 +203,11 @@ export function openPerson(id, ctx) {
           <div class="kpi-v num in">${esc(inr(bal.paid))}</div>
           <div class="kpi-s">${pays.length} payment${pays.length === 1 ? '' : 's'}</div>
         </div>
-      </div>
-      <div class="kpi" style="margin-bottom:16px">
-        <div class="kpi-l">${bal.due < 0 ? 'OVERPAID BY' : 'REMAINING'}</div>
-        <div class="kpi-v num ${bal.due > 0 ? 'out' : ''}">${esc(inr(Math.abs(bal.due)))}</div>
+        <div class="kpi">
+          <div class="kpi-l">${bal.due < 0 ? 'OVERPAID BY' : 'REMAINING'}</div>
+          <div class="kpi-v num ${bal.due > 0 ? 'out' : ''}">${esc(inr(Math.abs(bal.due)))}</div>
+          <div class="kpi-s">${bal.due > 0 ? 'still to settle' : 'settled'}</div>
+        </div>
       </div>
 
       ${(s.phone || s.email || s.address) ? `
@@ -317,6 +323,10 @@ export function openPerson(id, ctx) {
   openSheet({
     title: s.name,
     full: true,
+    // A person's board is a document — their work orders, every piece
+    // and every payment — so it takes the width a document needs
+    // rather than staying a phone-shaped column on a desktop screen.
+    wide: true,
     body: '<div class="sheet-body"></div>',
     onMount(sheet, handle) { draw(sheet, handle); },
   });

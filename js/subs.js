@@ -763,3 +763,59 @@ export async function seedFromFile() {
 
   return { seeded: people.length };
 }
+
+/* ── Corrections to the imported history ───────────────────────
+ * The Drive sheets had gaps the import could not fill on its own —
+ * a work order header carrying the wrong person's contact details,
+ * most of all. When one of those is answered afterwards, the answer
+ * has to reach the devices that seeded before it was known, and
+ * seedFromFile() will not run again on those: it is a no-op the
+ * moment anything is on file.
+ *
+ * So each correction is applied once, by seed id, and only ever to a
+ * field that is still empty. A number typed on the phone in the
+ * meantime is the better record and is never overwritten by this.
+ */
+
+const REPAIRS = [
+  {
+    // Hari Ram's sheet was copied from Arif Malek's and the header
+    // never updated, so the import deliberately left his contact
+    // details blank rather than attribute Arif's to him. The number
+    // below was given by the owner.
+    id: seedId('sc', 'Hari Ram'),
+    fill: { phone: '9925033107' },
+    note: {
+      // Replaced only while it is still the note the import wrote —
+      // an edited one is somebody's own words and is left alone.
+      from: 'The work-order sheet header still shows',
+      to: "Phone number confirmed by the owner. The work-order sheet header still carries "
+        + "Arif Malek's name and address (the template was not updated when it was copied) — "
+        + 'only the payments identify this work as Hari Ram’s.',
+    },
+  },
+];
+
+/** Applies any correction that has not landed on this device yet.
+    Returns how many records it touched, so a boot that had nothing
+    to do does not repaint a screen someone is reading. */
+export function applyRepairs() {
+  let changed = 0;
+
+  for (const r of REPAIRS) {
+    const s = getSub(r.id);
+    if (!s) continue;
+
+    const patch = {};
+    for (const [k, v] of Object.entries(r.fill || {})) {
+      if (!String(s[k] || '').trim()) patch[k] = v;
+    }
+    if (r.note && String(s.dataNote || '').startsWith(r.note.from)) {
+      patch.dataNote = r.note.to;
+    }
+
+    if (Object.keys(patch).length) { updateSub(r.id, patch); changed += 1; }
+  }
+
+  return changed;
+}
