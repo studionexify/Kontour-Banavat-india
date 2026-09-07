@@ -16,7 +16,8 @@ import { on, esc, openSheet, toast, confirmSheet, field, haptic } from '../ui.js
 import {
   orderGroups, STAGES, stationOf, addLine, updateLine, deleteLine,
 } from '../orders.js';
-import { dmy, todayISO } from '../format.js';
+import { dmy, todayISO, inr } from '../format.js';
+import * as subs from '../subs.js';
 
 const TRADES = ['drawings', 'metal', 'wood', 'upholstery', 'marble', 'hardware', 'package'];
 
@@ -89,6 +90,16 @@ export function openOrder(mrNo, onChanged = () => {}) {
         repaint();
       });
 
+      on(root, '[data-sendout]', async (e, b) => {
+        const { openAssign } = await import('./assignwork.js');
+        openAssign({ mrNo, onDone: repaint });
+      });
+
+      on(root, '[data-openwo]', async (e, b) => {
+        const { openWorkOrder } = await import('./workorder.js');
+        openWorkOrder(b.dataset.openwo, { onDone: repaint });
+      });
+
       on(root, '[data-addpiece]', () => {
         openPieceSheet({
           mrNo,
@@ -153,6 +164,8 @@ function pieceHTML(l) {
                      value="${esc(cleanVendor(l.vendors && l.vendors[t]))}" placeholder="—">
             </label>`).join('')}
         </div>
+        ${commissionedHTML(l)}
+        <button class="mini" data-sendout="${esc(l.id)}">${icon('plus', 13)} Commission this piece</button>
       </details>
 
       <button class="mini danger-txt" data-delpiece="${esc(l.id)}">${icon('trash', 13)} Remove piece</button>
@@ -165,6 +178,29 @@ function pieceHTML(l) {
 function cleanVendor(v) {
   const s = String(v || '').trim();
   return s.toUpperCase() === 'NA' ? '' : s;
+}
+
+/* What has actually been commissioned against this piece, and for how
+   much. The names above are free text — who is meant to make it — and
+   this is the money side: a numbered work order at an agreed rate.
+   Kept beside them because the two answer the same question at
+   different levels of commitment. */
+function commissionedHTML(l) {
+  const items = subs.itemsForOrderLine(l.id);
+  if (!items.length) return '';
+  return `
+    <div class="piece-commissioned">
+      ${items.map((it) => {
+        const wo = subs.getWorkOrder(it.woId);
+        const s = wo && subs.getSub(wo.subId);
+        if (!wo || !s) return '';
+        return `
+          <button class="qpair as-row" data-openwo="${esc(wo.id)}">
+            <span class="qpair-l">${esc(s.name)}</span>
+            <span class="qpair-v">${esc(wo.no)} · ${it.rate > 0 ? esc(inr(subs.itemAmount(it))) : 'no rate'}</span>
+          </button>`;
+      }).join('')}
+    </div>`;
 }
 
 function namedCount(l) {

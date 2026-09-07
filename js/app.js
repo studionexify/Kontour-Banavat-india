@@ -14,6 +14,7 @@ import * as quotes from './views/quotelist.js';
 import * as library from './views/library.js';
 import * as commission from './views/commission.js';
 import { load as loadCommissions, purgeCashCommissions } from './commissions.js';
+import { load as loadSubs } from './subs.js';
 import * as inproduction from './views/production.js';
 import * as subcontractor from './views/subcontractor.js';
 import * as qc from './views/qc.js';
@@ -251,13 +252,14 @@ async function boot() {
       // device's rows with them, so what is here belongs to the
       // surviving set — and clearing it, as an ordinary change of org
       // would, would take anything not yet pushed along with it.
-      const [q, o, c] = await Promise.all([
-        import('./quotes.js'), import('./orders.js'), import('./commissions.js'),
+      const [q, o, c, sb] = await Promise.all([
+        import('./quotes.js'), import('./orders.js'), import('./commissions.js'), import('./subs.js'),
       ]);
-      q.load(); o.load(); c.load();
+      q.load(); o.load(); c.load(); sb.load();
       q.reclaim(check.switched.id);
       o.reclaim(check.switched.id);
       c.reclaim(check.switched.id);
+      sb.reclaim(check.switched.id);
     } else if (!check.ok) {
       gate.hidden = false;
       $('#app').hidden = true;
@@ -568,6 +570,7 @@ function start() {
   loadQuotes();
   loadCommissions();
   loadOrders();
+  loadSubs();
   // The CA's call, not a preference: no cash account, no entry logged
   // against one. Runs every boot — cheap once there is nothing left to
   // remove — so it also catches a row pulled back down from a device

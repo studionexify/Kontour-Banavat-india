@@ -24,6 +24,7 @@ import { cloudConfigured } from './config.js';
 import { rest, accessToken, currentOrgId, signedIn, myRole, canWrite } from './auth.js';
 import * as orders from './orders.js';
 import * as commissions from './commissions.js';
+import * as subs from './subs.js';
 
 const CURSOR_KEY = 'kontour.shop.cursor';
 const SYNCED_KEY = 'kontour.shop.synced';
@@ -35,6 +36,7 @@ const PAGE = 500;
 const STORES = [
   { mod: orders, kinds: ['order'] },
   { mod: commissions, kinds: ['partner', 'commission'] },
+  { mod: subs, kinds: ['sub', 'subwo', 'subitem', 'subpay'] },
 ];
 const KINDS = STORES.flatMap((s) => s.kinds);
 

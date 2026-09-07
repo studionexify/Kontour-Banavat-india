@@ -1,0 +1,2221 @@
+{
+ "_note": "Seeded from the Drive 'Vendor or Sub Contractor' folder. Each subcontractor reconciles to the Total/Paid/Remaining on their own Payment Status sheet.",
+ "subcontractors": [
+  {
+   "name": "Dinesh Chaudhary",
+   "firm": "",
+   "aliases": [
+    "Dinesh bhai",
+    "Dinesh Bhai"
+   ],
+   "trades": [
+    "metal",
+    "drawings"
+   ],
+   "tradeLabel": "Metal",
+   "phone": "9662486666",
+   "email": "",
+   "address": "108/B/12, near Mr. Puff - Factory Outlet, Makarpura GIDC, Industrial Estate, Vadodara, Gujarat 390010",
+   "sheetTotal": 121296,
+   "sheetPaid": 103100,
+   "workOrders": [
+    {
+     "no": "WO-DC-001",
+     "issueDate": "2026-01-02",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B109",
+       "name": "Console 01 - Veer Bedroom",
+       "desc": "Solid teak wood and powder coated metal structure.",
+       "dims": "70 x 14 x 36\"",
+       "qty": 1,
+       "delivery": "2026-01-28",
+       "rate": 22000
+      },
+      {
+       "sr": 2,
+       "mrNo": "B109",
+       "name": "Bed 01 - Veer Bedroom",
+       "desc": "Solid ash wood and fabric upholstered headboard with updated design.",
+       "dims": "84 x 78 x 84\"",
+       "qty": 1,
+       "delivery": "2026-01-28",
+       "rate": 13900
+      },
+      {
+       "sr": 3,
+       "mrNo": "B109",
+       "name": "Center Table 02 - Party Room",
+       "desc": "Powdered coated metal.",
+       "dims": "28 x 28 x 15\"",
+       "qty": 1,
+       "delivery": "2026-01-28",
+       "rate": 5800
+      },
+      {
+       "sr": 4,
+       "mrNo": "B109",
+       "name": "TV Console 01 - Party Room",
+       "desc": "Veneer, laminate, HDHMR and powder coated metal base",
+       "dims": "60 x 16 x 35\"",
+       "qty": 1,
+       "delivery": "2026-01-28",
+       "rate": 1300
+      },
+      {
+       "sr": 5,
+       "mrNo": "B108",
+       "name": "Door - Stainless steel",
+       "desc": "Material: Mild steel + 6mm plate. Process: laser cutting. Finish: Powder coated",
+       "dims": "4'10\" x 4' x 3\"",
+       "qty": 1,
+       "delivery": "2026-01-20",
+       "rate": 5000
+      },
+      {
+       "sr": 6,
+       "mrNo": "B108",
+       "name": "Grill - Stainless steel",
+       "desc": "Material: Mild steel + 6mm plate. Process: laser cutting. Finish: Powder coated",
+       "dims": "4'4\" x 1'6\" x 1\"",
+       "qty": 2,
+       "delivery": "2026-01-20",
+       "rate": 3000
+      },
+      {
+       "sr": 7,
+       "mrNo": "B108",
+       "name": "Sofa 01 - Veer bedroom",
+       "desc": "Fabric upholstery",
+       "dims": "72 x 40 x 33.5\"",
+       "qty": 1,
+       "delivery": "2026-01-20",
+       "rate": 8400
+      },
+      {
+       "sr": 8,
+       "mrNo": "",
+       "name": "Name plate - Yash Khandelwal",
+       "desc": "MS Metal plate",
+       "dims": "As per design",
+       "qty": 1,
+       "delivery": "2026-02-16",
+       "rate": 1000
+      },
+      {
+       "sr": 9,
+       "mrNo": "",
+       "name": "Lamp - Ray Rythm",
+       "desc": "MS pipe and plate",
+       "dims": "As per design",
+       "qty": 1,
+       "delivery": "2026-03-18",
+       "rate": 3000
+      }
+     ]
+    },
+    {
+     "no": "WO-DC-002",
+     "issueDate": "2026-04-21",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B121-1",
+       "name": "Dining chair 03 Meeting & Add",
+       "desc": "Fabric upholstery (Stain resistant finish, backed by acrylic, latex or knit). Metal legs structure",
+       "dims": "550mm W x 560mm D x 800mm H",
+       "qty": 1,
+       "delivery": "2026-04-22",
+       "rate": 880
+      },
+      {
+       "sr": 2,
+       "mrNo": "B121-1",
+       "name": "Armchair 1 Reception Lobby",
+       "desc": "Fabric upholstery and solid teak wood structure with required specifications",
+       "dims": "780mm W x 800mm D x 930mm H",
+       "qty": 1,
+       "delivery": "2026-04-29",
+       "rate": 4500
+      },
+      {
+       "sr": 3,
+       "mrNo": "B121-1",
+       "name": "Barstool 01 Bar",
+       "desc": "Metal Structure: Charcoal grey metal in brushed finish. Fabric will be treated commercially for soil and stain repellency",
+       "dims": "570mm W x 505mm D x 1000mm H",
+       "qty": 1,
+       "delivery": "2026-04-22",
+       "rate": 2000
+      },
+      {
+       "sr": 4,
+       "mrNo": "B128",
+       "name": "Metal shelf",
+       "desc": "Metal structure",
+       "dims": "As per dimensions",
+       "qty": 1,
+       "delivery": "2026-04-24",
+       "rate": 3500
+      },
+      {
+       "sr": 5,
+       "mrNo": "B131",
+       "name": "Mirror 1",
+       "desc": "Mildsteel structure and mirror. 5mm mirror with mdf support. Without powder coating",
+       "dims": "24 x 3 x 32\"",
+       "qty": 1,
+       "delivery": "2026-04-29",
+       "rate": 1200
+      },
+      {
+       "sr": 6,
+       "mrNo": "B131",
+       "name": "Mirror 2",
+       "desc": "Mildsteel frame structure and mirror. 5mm mirror with mdf support. Without powder coating",
+       "dims": "27\" diameter mirror, height as per dimensions",
+       "qty": 1,
+       "delivery": "2026-04-29",
+       "rate": 650
+      },
+      {
+       "sr": 7,
+       "mrNo": "",
+       "name": "Wooden capsule",
+       "desc": "Wood",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 160
+      },
+      {
+       "sr": 8,
+       "mrNo": "",
+       "name": "Metal Dias",
+       "desc": "Metal Dias",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 500
+      },
+      {
+       "sr": 9,
+       "mrNo": "",
+       "name": "Metal Lamp",
+       "desc": "Mildsteel",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 3000
+      },
+      {
+       "sr": 10,
+       "mrNo": "",
+       "name": "Wooden Toy",
+       "desc": "",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 300
+      },
+      {
+       "sr": 11,
+       "mrNo": "",
+       "name": "Basin (Shree)",
+       "desc": "Basin MS Structure & SS Leg",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 4800
+      },
+      {
+       "sr": 12,
+       "mrNo": "",
+       "name": "Nightstand Leg",
+       "desc": "MS Structure (Without powder coating)",
+       "dims": "",
+       "qty": 2,
+       "delivery": "",
+       "rate": 1920
+      },
+      {
+       "sr": 13,
+       "mrNo": "B130",
+       "name": "Center table - Glass",
+       "desc": "8mm toughned glass top, metal structure, leather plywood drawers, Veneer plywood base",
+       "dims": "54 x 27 x 15\"",
+       "qty": 1,
+       "delivery": "",
+       "rate": 5650
+      }
+     ]
+    },
+    {
+     "no": "WO-DC-003",
+     "issueDate": "2026-06-10",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "C106",
+       "name": "Custom Entry Room Sofa with attached side table",
+       "desc": "Mildsteel metal frame structure with powder coating finish and fabric upholstery",
+       "dims": "66 x 26 x 32\"",
+       "qty": 1,
+       "delivery": "2026-06-18",
+       "rate": 6000
+      },
+      {
+       "sr": 2,
+       "mrNo": "C115",
+       "name": "Stair railing",
+       "desc": "16mm MS pipe unfinished with installation. (Includes 4 railings - Ground and first floor)",
+       "dims": "As per dimensions",
+       "qty": 4,
+       "delivery": "2026-06-26",
+       "rate": 3068,
+       "remark": "With GST"
+      },
+      {
+       "sr": 3,
+       "mrNo": "C113",
+       "name": "Entrance Door Grill",
+       "desc": "3 mm MS Powder coated grill with shutter opening down inside and with stopper to close",
+       "dims": "As per dimensions",
+       "qty": 2,
+       "delivery": "2026-06-26",
+       "rate": 500
+      },
+      {
+       "sr": 4,
+       "mrNo": "C114",
+       "name": "Parents room leg",
+       "desc": "12 mm metal patta",
+       "dims": "As per dimensions",
+       "qty": 1,
+       "delivery": "2026-06-26",
+       "rate": 250
+      },
+      {
+       "sr": 5,
+       "mrNo": "C114",
+       "name": "Parents room leg",
+       "desc": "12 mm metal patta",
+       "dims": "As per dimensions",
+       "qty": 2,
+       "delivery": "2026-06-26",
+       "rate": 175
+      },
+      {
+       "sr": 6,
+       "mrNo": "C114",
+       "name": "Kids room leg",
+       "desc": "25 x 25mm MS pipe and powder coating finish",
+       "dims": "As per dimensions",
+       "qty": 1,
+       "delivery": "2026-06-26",
+       "rate": 900
+      },
+      {
+       "sr": 7,
+       "mrNo": "C119-1",
+       "name": "Outdoor Structure",
+       "desc": "Metal Structure",
+       "dims": "As per dimensions",
+       "qty": 1,
+       "delivery": "2026-07-20",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 8,
+       "mrNo": "",
+       "name": "Siddharthbhai shelf",
+       "desc": "Metal Structure",
+       "dims": "As per dimensions",
+       "qty": 1,
+       "delivery": "",
+       "rate": 1200
+      },
+      {
+       "sr": 9,
+       "mrNo": "",
+       "name": "Brass patti - Natu kaka samasta",
+       "desc": "",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 1000
+      },
+      {
+       "sr": 10,
+       "mrNo": "",
+       "name": "MS Grill welding - Shamnu door",
+       "desc": "",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 500
+      },
+      {
+       "sr": 11,
+       "mrNo": "",
+       "name": "Lamp hanging cable - Yashraj satware",
+       "desc": "",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 444
+      },
+      {
+       "sr": 12,
+       "mrNo": "C130",
+       "name": "Staircase railing",
+       "desc": "16mm MS pipe unfinished with installation. (Includes 2 railings - Ground and first floor)",
+       "dims": "As per dimensions",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 13,
+       "mrNo": "C130",
+       "name": "Bathroom support pipe",
+       "desc": "SS pipe.",
+       "dims": "3 feet long",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 14,
+       "mrNo": "C130",
+       "name": "Cloth hanger pipes",
+       "desc": "SS pipes and hanger holders (Kitchen, bedrooms) 5 pieces",
+       "dims": "As per dimensions",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 15,
+       "mrNo": "C131",
+       "name": "Mirror 1",
+       "desc": "MS pipe structure in black powder coat finish and mirror.",
+       "dims": "38 x 1 x 58\"",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 16,
+       "mrNo": "C131",
+       "name": "Mirror 2",
+       "desc": "SS pipe structure in PVD Coating finish and mirror.",
+       "dims": "25 x 1 x 68\"",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 17,
+       "mrNo": "",
+       "name": "Book Shelf - Living room",
+       "desc": "MS steel frame with HDHMR",
+       "dims": "40 x 12 x 58\"",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 18,
+       "mrNo": "",
+       "name": "Shelf - Bar unit",
+       "desc": "MS steel frame with HDHMR",
+       "dims": "31 x 12 x 48\"",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 19,
+       "mrNo": "",
+       "name": "Bench",
+       "desc": "Metal structure and MS plate in powder coating",
+       "dims": "96 x 18 x 18\"",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 20,
+       "mrNo": "",
+       "name": "Study table - Bedroom",
+       "desc": "MS structure and HDHMR and metal legs",
+       "dims": "48 x 20 x 1\"",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 21,
+       "mrNo": "",
+       "name": "Shelf above study table",
+       "desc": "MS structure and HDHMR",
+       "dims": "32 x 9 x 1\"",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 22,
+       "mrNo": "",
+       "name": "Shelf - Master bedroom",
+       "desc": "MS sheet metal",
+       "dims": "As per dimensions",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      },
+      {
+       "sr": 23,
+       "mrNo": "",
+       "name": "Mirror - Parents room",
+       "desc": "MS structure and mirror.",
+       "dims": "As per dimensions",
+       "qty": 1,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Not yet priced"
+      }
+     ]
+    }
+   ],
+   "payments": [
+    {
+     "sr": 1,
+     "date": "2026-02-25",
+     "remarks": "Payment for metal work",
+     "amount": 50000,
+     "mode": "Cash",
+     "note": "To Dinesh Bhai"
+    },
+    {
+     "sr": 2,
+     "date": "2026-06-16",
+     "remarks": "Payment for metal work",
+     "amount": 12000,
+     "mode": "UPI",
+     "note": "To Uttam bhai"
+    },
+    {
+     "sr": 3,
+     "date": "2026-06-26",
+     "remarks": "Payment",
+     "amount": 10000,
+     "mode": "Cash",
+     "note": "To Uttam bhai"
+    },
+    {
+     "sr": 4,
+     "date": "2026-06-27",
+     "remarks": "Payment for metal work",
+     "amount": 9000,
+     "mode": "Cash",
+     "note": "To Uttam bhai"
+    },
+    {
+     "sr": 5,
+     "date": "2026-07-04",
+     "remarks": "Advance for C119-1",
+     "amount": 0,
+     "mode": "Bank Transfer",
+     "note": "To Arbuda"
+    },
+    {
+     "sr": 6,
+     "date": "2026-07-08",
+     "remarks": "Remaining payment",
+     "amount": 20000,
+     "mode": "UPI",
+     "note": "To Uttam bhai"
+    },
+    {
+     "sr": 7,
+     "date": "2026-08-07",
+     "remarks": "Payment",
+     "amount": 2100,
+     "mode": "UPI",
+     "note": "To Uttam bhai"
+    }
+   ]
+  },
+  {
+   "name": "Vikas Jangid",
+   "firm": "Shree Vishwakarma Interior & Woods",
+   "aliases": [
+    "Vikas Bhai",
+    "Vikas bhai"
+   ],
+   "trades": [
+    "wood"
+   ],
+   "tradeLabel": "Wood",
+   "phone": "9106009805",
+   "email": "vittalwoodtech@gmail.com",
+   "address": "Shree Vishwakarma Interior & Woods, Outside Ren Gate, Kailashpuri, Bhinai (Ajmer).",
+   "sheetTotal": 284200,
+   "sheetPaid": 284200,
+   "workOrders": [
+    {
+     "no": "WO-VJ-001",
+     "issueDate": "2025-11-07",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B102",
+       "name": "Sofa",
+       "desc": "Solid teak wood structure, metal element on armrest sides, fabric upholstery and 8 loose cushions (total)",
+       "dims": "86 x 36 x 35\"",
+       "qty": 3,
+       "delivery": "2026-01-19",
+       "rate": 15000
+      }
+     ]
+    },
+    {
+     "no": "WO-VJ-002",
+     "issueDate": "2026-01-01",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B109",
+       "name": "Console 01 - Veer Bedroom",
+       "desc": "Solid teak wood and powder coated metal structure.",
+       "dims": "70 x 14 x 36\"",
+       "qty": 1,
+       "delivery": "2026-01-19",
+       "rate": 10000
+      },
+      {
+       "sr": 2,
+       "mrNo": "B109",
+       "name": "Side table 01 - Veer bedroom",
+       "desc": "Solid ash wood",
+       "dims": "29 x 18 x 28\"",
+       "qty": 4,
+       "delivery": "2026-01-19",
+       "rate": 9500
+      },
+      {
+       "sr": 3,
+       "mrNo": "B109",
+       "name": "Bed 01 - Veer Bedroom",
+       "desc": "Solid ash wood and fabric upholstered headboard with updated design.",
+       "dims": "84 x 78 x 84\"",
+       "qty": 1,
+       "delivery": "2026-01-19",
+       "rate": 52000
+      },
+      {
+       "sr": 4,
+       "mrNo": "B109",
+       "name": "Center table 01 - Veer Bedroom",
+       "desc": "Solid teak wood",
+       "dims": "28 x 28 x 15\"",
+       "qty": 1,
+       "delivery": "2026-01-19",
+       "rate": 10000
+      },
+      {
+       "sr": 5,
+       "mrNo": "B109",
+       "name": "Armchair + Foot stool 01 - Veer Bedroom",
+       "desc": "Fabric upholstery and solid teak wood structure",
+       "dims": "30 x 34 x 34\"",
+       "qty": 1,
+       "delivery": "2026-01-19",
+       "rate": 17000
+      },
+      {
+       "sr": 6,
+       "mrNo": "B109",
+       "name": "Sofa 02 - Party Room",
+       "desc": "Fabric upholstery and powdered coated metal structure.",
+       "dims": "72 x 42 x 32\"",
+       "qty": 1,
+       "delivery": "2026-01-19",
+       "rate": 7000
+      },
+      {
+       "sr": 7,
+       "mrNo": "B109",
+       "name": "Armchair 02 - Party Room",
+       "desc": "Fabric upholstery and solid teak wood structure.",
+       "dims": "27.5 x 33.5 x 31\"",
+       "qty": 1,
+       "delivery": "2026-01-19",
+       "rate": 8000
+      },
+      {
+       "sr": 8,
+       "mrNo": "B109",
+       "name": "Study Table 01 - Parents room",
+       "desc": "Solid teak wood",
+       "dims": "48 x 20 x 30\"",
+       "qty": 1,
+       "delivery": "2026-01-19",
+       "rate": 20000
+      },
+      {
+       "sr": 9,
+       "mrNo": "B109",
+       "name": "Study Chair 01 - Parents room",
+       "desc": "Faux leather upholstery and solid teak wood",
+       "dims": "21.5 x 18.5 x 28\"",
+       "qty": 1,
+       "delivery": "2026-01-19",
+       "rate": 7000
+      },
+      {
+       "sr": 10,
+       "mrNo": "B109",
+       "name": "Console 03 - Living Room Entry",
+       "desc": "Solid teak wood.",
+       "dims": "40 x 10 x 35\"",
+       "qty": 1,
+       "delivery": "2026-01-19",
+       "rate": 20000
+      },
+      {
+       "sr": 11,
+       "mrNo": "B109",
+       "name": "Console 04 - Room Lobby",
+       "desc": "Solid teak wood.",
+       "dims": "34 x 7 x 35\"",
+       "qty": 1,
+       "delivery": "2026-01-19",
+       "rate": 8000
+      },
+      {
+       "sr": 12,
+       "mrNo": "B109",
+       "name": "Delivery charges",
+       "desc": "Delivery charges",
+       "dims": "",
+       "qty": 1,
+       "delivery": "2026-01-19",
+       "rate": 6000
+      },
+      {
+       "sr": 13,
+       "mrNo": "",
+       "name": "Candle holder",
+       "desc": "Candle holder",
+       "dims": "",
+       "qty": 3,
+       "delivery": "",
+       "rate": 1200
+      },
+      {
+       "sr": 14,
+       "mrNo": "",
+       "name": "Candle holder - Sheesham",
+       "desc": "Candle holder - Sheesham",
+       "dims": "",
+       "qty": 2,
+       "delivery": "",
+       "rate": 800
+      }
+     ]
+    },
+    {
+     "no": "WO-VJ-003",
+     "issueDate": "2026-04-10",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B123-1",
+       "name": "Side Table",
+       "desc": "Solid sheesham wood - Without Polish",
+       "dims": "400 x 400 x 512 mm",
+       "qty": 2,
+       "delivery": "2026-04-15",
+       "rate": 6000
+      },
+      {
+       "sr": 2,
+       "mrNo": "",
+       "name": "Transport",
+       "desc": "Transport",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 1000
+      },
+      {
+       "sr": 3,
+       "mrNo": "B127-1",
+       "name": "Sofa - Custom",
+       "desc": "Solid teak wood polished structure and fabric upholstery. Fabric not included.",
+       "dims": "90 x 40 x 32\"",
+       "qty": 1,
+       "delivery": "2026-04-27",
+       "rate": 18000
+      }
+     ]
+    }
+   ],
+   "payments": [
+    {
+     "sr": 1,
+     "date": "2025-12-01",
+     "remarks": "B102 - Sofa Structure - Qty: 1 - Teakwood",
+     "amount": 10000,
+     "mode": "UPI",
+     "note": "To Vikas bhai"
+    },
+    {
+     "sr": 2,
+     "date": "2026-01-01",
+     "remarks": "B109 (Veer) Advance amount",
+     "amount": 50000,
+     "mode": "UPI",
+     "note": "To Vikas bhai"
+    },
+    {
+     "sr": 3,
+     "date": "2026-01-13",
+     "remarks": "B109 (Veer)",
+     "amount": 30000,
+     "mode": "UPI",
+     "note": "To Kamlesh"
+    },
+    {
+     "sr": 4,
+     "date": "2026-01-19",
+     "remarks": "B109 (Veer) - Transport - Joint",
+     "amount": 16000,
+     "mode": "UPI",
+     "note": "To Sawarlal Teli"
+    },
+    {
+     "sr": 5,
+     "date": "2026-01-27",
+     "remarks": "B109 (Veer) - Polish person",
+     "amount": 10000,
+     "mode": "UPI",
+     "note": "To Ramkaran"
+    },
+    {
+     "sr": 6,
+     "date": "2026-02-03",
+     "remarks": "B109 (Veer) - Polish person",
+     "amount": 10000,
+     "mode": "UPI",
+     "note": "To Ramkaran"
+    },
+    {
+     "sr": 7,
+     "date": "2026-02-11",
+     "remarks": "Payment",
+     "amount": 49000,
+     "mode": "Bank Transfer",
+     "note": "Putter Devi WO Mahaveer Parsa Mahaveer Parsad SO Fool Chand"
+    },
+    {
+     "sr": 8,
+     "date": "2026-02-12",
+     "remarks": "Payment - To Polish work",
+     "amount": 10000,
+     "mode": "UPI",
+     "note": "To Ramkaran"
+    },
+    {
+     "sr": 9,
+     "date": "2026-02-14",
+     "remarks": "To Ankit - For 3d printed Gift",
+     "amount": 2000,
+     "mode": "UPI",
+     "note": "To Ankit"
+    },
+    {
+     "sr": 10,
+     "date": "2026-02-14",
+     "remarks": "Payment - Vikas bhai",
+     "amount": 41000,
+     "mode": "Cash",
+     "note": "To Kamlesh"
+    },
+    {
+     "sr": 11,
+     "date": "2026-04-10",
+     "remarks": "Advanced payment - B123-1 Harshil Shah",
+     "amount": 10000,
+     "mode": "UPI",
+     "note": "To Vikas bhai"
+    },
+    {
+     "sr": 12,
+     "date": "2026-04-20",
+     "remarks": "Harshil Table",
+     "amount": 3000,
+     "mode": "UPI",
+     "note": "To Vikas bhai"
+    },
+    {
+     "sr": 13,
+     "date": "2026-04-29",
+     "remarks": "Remaining payment",
+     "amount": 25000,
+     "mode": "UPI",
+     "note": "To Vikas bhai"
+    },
+    {
+     "sr": 14,
+     "date": "2026-05-23",
+     "remarks": "Remaining payment",
+     "amount": 13000,
+     "mode": "Cash",
+     "note": "To Dilip bhai (AWS)"
+    },
+    {
+     "sr": 15,
+     "date": "2026-08-11",
+     "remarks": "Remaining payment",
+     "amount": 5200,
+     "mode": "UPI",
+     "note": "To Vikas bhai"
+    }
+   ]
+  },
+  {
+   "name": "Arif Malek",
+   "firm": "",
+   "aliases": [
+    "Arif bhai",
+    "Arifbhai"
+   ],
+   "trades": [
+    "upholstery"
+   ],
+   "tradeLabel": "Upholstery",
+   "phone": "8200154534",
+   "email": "",
+   "address": "NAZNIN FARM, KALI TALAVDI, nr. BRIGHT DAY SCHOOL, Tandalja, Vadodara, Gujarat 390020",
+   "sheetTotal": 194000,
+   "sheetPaid": 194000,
+   "workOrders": [
+    {
+     "no": "WO-AM-001",
+     "issueDate": "2025-11-06",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B102",
+       "name": "Sofa",
+       "desc": "Solid teak wood structure, metal element on armrest sides, fabric upholstery and 8 loose cushions (total)",
+       "dims": "86 x 36 x 35\"",
+       "qty": 3,
+       "delivery": "",
+       "rate": 22000
+      },
+      {
+       "sr": 2,
+       "mrNo": "B111",
+       "name": "Side Table",
+       "desc": "Solid teak wood structure, ply + veneer and metal handle",
+       "dims": "27 x 23 x 22\"",
+       "qty": 2,
+       "delivery": "",
+       "rate": 3000
+      }
+     ]
+    },
+    {
+     "no": "WO-AM-002",
+     "issueDate": "2026-01-01",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B109",
+       "name": "Bed 01 - Veer Bedroom",
+       "desc": "Solid ash wood and fabric upholstered headboard with updated design.",
+       "dims": "84 x 78 x 84\"",
+       "qty": 1,
+       "delivery": "2026-01-28",
+       "rate": 4000
+      },
+      {
+       "sr": 2,
+       "mrNo": "B109",
+       "name": "Sofa 01 - Veer bedroom",
+       "desc": "Fabric upholstery",
+       "dims": "72 x 40 x 33.5\"",
+       "qty": 1,
+       "delivery": "2026-01-28",
+       "rate": 22000
+      },
+      {
+       "sr": 3,
+       "mrNo": "B109",
+       "name": "Armchair + Foot stool 01 - Veer Bedroom",
+       "desc": "Fabric upholstery and solid teak wood structure",
+       "dims": "30 x 34 x 34\"",
+       "qty": 1,
+       "delivery": "2026-01-28",
+       "rate": 9000
+      },
+      {
+       "sr": 4,
+       "mrNo": "B109",
+       "name": "Sofa 02 - Party Room",
+       "desc": "Fabric upholstery and powdered coated metal structure.",
+       "dims": "72 x 42 x 32\"",
+       "qty": 1,
+       "delivery": "2026-01-28",
+       "rate": 22000
+      },
+      {
+       "sr": 5,
+       "mrNo": "B109",
+       "name": "Armchair 02 - Party Room",
+       "desc": "Fabric upholstery and solid teak wood structure.",
+       "dims": "27.5 x 33.5 x 31\"",
+       "qty": 1,
+       "delivery": "2026-01-28",
+       "rate": 9000
+      },
+      {
+       "sr": 6,
+       "mrNo": "B109",
+       "name": "Study Chair 01 - Parents room",
+       "desc": "Faux leather upholstery and solid teak wood",
+       "dims": "21.5 x 18.5 x 28\"",
+       "qty": 1,
+       "delivery": "2026-01-28",
+       "rate": 2000
+      }
+     ]
+    },
+    {
+     "no": "WO-AM-003",
+     "issueDate": "2026-04-21",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B121-1",
+       "name": "Dining chair 03 Meeting & Add",
+       "desc": "Fabric upholstery (Stain resistant finish, backed by acrylic, latex or knit). Metal legs structure",
+       "dims": "550mm W x 560mm D x 800mm H",
+       "qty": 1,
+       "delivery": "2026-04-25",
+       "rate": 2100
+      },
+      {
+       "sr": 2,
+       "mrNo": "B121-1",
+       "name": "Armchair 2 Reception Lobby",
+       "desc": "Metal Structure: Charcoal grey metal in brushed finish. Fabric will be treated commercially for soil and stain repellency",
+       "dims": "770mm W x 760mm D x 750mm H",
+       "qty": 1,
+       "delivery": "2026-04-25",
+       "rate": 2900
+      },
+      {
+       "sr": 3,
+       "mrNo": "B121-1",
+       "name": "Barstool 01 Bar",
+       "desc": "Metal Structure: Charcoal grey metal in brushed finish. Fabric will be treated commercially for soil and stain repellency",
+       "dims": "570mm W x 505mm D x 1000mm H",
+       "qty": 1,
+       "delivery": "2026-04-25",
+       "rate": 2000
+      },
+      {
+       "sr": 4,
+       "mrNo": "B102",
+       "name": "Sofa and cushion Alteration",
+       "desc": "Sofa and cushion Alteration",
+       "dims": "",
+       "qty": 1,
+       "delivery": "2026-04-22",
+       "rate": 6000
+      },
+      {
+       "sr": 5,
+       "mrNo": "B130",
+       "name": "Sofa - Custom",
+       "desc": "Solid teak wood polished structure and fabric upholstery. Fabric not included.",
+       "dims": "90 x 40 x 32\"",
+       "qty": 1,
+       "delivery": "2026-05-15",
+       "rate": 24000
+      },
+      {
+       "sr": 6,
+       "mrNo": "C106-1",
+       "name": "Custom Entry Room Sofa with attached side table",
+       "desc": "Mildsteel metal frame structure with powder coating finish and fabric upholstery",
+       "dims": "66 x 26 x 32\"",
+       "qty": 1,
+       "delivery": "2026-06-23",
+       "rate": 17000
+      }
+     ]
+    }
+   ],
+   "payments": [
+    {
+     "sr": 1,
+     "date": "2025-12-04",
+     "remarks": "B102 - Sofa upholstery - Qty: 1",
+     "amount": 15000,
+     "mode": "UPI",
+     "note": "To Arif bhai"
+    },
+    {
+     "sr": 2,
+     "date": "2025-12-24",
+     "remarks": "B102 - Sofa upholstery - Qty: 1",
+     "amount": 7000,
+     "mode": "UPI",
+     "note": "To Arif bhai"
+    },
+    {
+     "sr": 3,
+     "date": "2026-01-03",
+     "remarks": "B109 - Veer - Advance",
+     "amount": 35000,
+     "mode": "UPI",
+     "note": "To Arif bhai"
+    },
+    {
+     "sr": 4,
+     "date": "2026-01-24",
+     "remarks": "B109 - Veer - Advance",
+     "amount": 20000,
+     "mode": "UPI",
+     "note": "To Arif bhai"
+    },
+    {
+     "sr": 5,
+     "date": "2026-02-08",
+     "remarks": "B109 - Veer - Advance",
+     "amount": 25000,
+     "mode": "UPI",
+     "note": "To Arif bhai"
+    },
+    {
+     "sr": 6,
+     "date": "2026-03-03",
+     "remarks": "B111 Advance Amount",
+     "amount": 8000,
+     "mode": "UPI",
+     "note": "To Arif bhai"
+    },
+    {
+     "sr": 7,
+     "date": "2026-03-28",
+     "remarks": "B111 advance payment",
+     "amount": 1000,
+     "mode": "UPI",
+     "note": "To Afsar bhai"
+    },
+    {
+     "sr": 8,
+     "date": "2026-04-14",
+     "remarks": "Payment - Drawings",
+     "amount": 12000,
+     "mode": "UPI",
+     "note": "To Designer"
+    },
+    {
+     "sr": 9,
+     "date": "2026-04-29",
+     "remarks": "Payment",
+     "amount": 20000,
+     "mode": "UPI",
+     "note": "To Arif bhai"
+    },
+    {
+     "sr": 10,
+     "date": "2026-05-02",
+     "remarks": "Remaining payment",
+     "amount": 11000,
+     "mode": "UPI",
+     "note": "To Arif bhai"
+    },
+    {
+     "sr": 11,
+     "date": "2026-05-12",
+     "remarks": "Advance payment sofa",
+     "amount": 12000,
+     "mode": "UPI",
+     "note": "To Arifbhai"
+    },
+    {
+     "sr": 12,
+     "date": "2026-05-22",
+     "remarks": "Remaining payment - Sofa",
+     "amount": 13000,
+     "mode": "UPI",
+     "note": "To Arifbhai"
+    },
+    {
+     "sr": 13,
+     "date": "2026-05-08",
+     "remarks": "Payment Advanced",
+     "amount": 15000,
+     "mode": "UPI",
+     "note": "To Arifbhai"
+    }
+   ]
+  },
+  {
+   "name": "Parthsarthi Suthar",
+   "firm": "Krishna Furnitech",
+   "aliases": [
+    "Parth"
+   ],
+   "trades": [
+    "wood"
+   ],
+   "tradeLabel": "Wood",
+   "phone": "7014433926",
+   "email": "parthsarthisuthar@gmail.com",
+   "address": "Jodhpur",
+   "sheetTotal": 137000,
+   "sheetPaid": 134000,
+   "workOrders": [
+    {
+     "no": "WO-PB-001",
+     "issueDate": "2026-02-05",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B111",
+       "name": "Center Table - Small",
+       "desc": "Solid ash wood structure Ply + veneer top with solid wood edge",
+       "dims": "16 x 16 x 19\"",
+       "qty": 2,
+       "delivery": "2026-02-23",
+       "rate": 7000
+      },
+      {
+       "sr": 2,
+       "mrNo": "B111",
+       "name": "Center Table - Small",
+       "desc": "Solid ash wood structure and glass top",
+       "dims": "16 x 16 x 19\"",
+       "qty": 1,
+       "delivery": "2026-02-23",
+       "rate": 6000
+      },
+      {
+       "sr": 3,
+       "mrNo": "B111",
+       "name": "Center table - Medium",
+       "desc": "Solid ash wood structure and glass top",
+       "dims": "29 x 29 x 13\"",
+       "qty": 1,
+       "delivery": "2026-02-23",
+       "rate": 8000
+      },
+      {
+       "sr": 4,
+       "mrNo": "B111",
+       "name": "Center table - Large",
+       "desc": "Solid ash wood structure Ply + veneer top with solid wood edge",
+       "dims": "37 x 37 x 16\"",
+       "qty": 1,
+       "delivery": "2026-02-23",
+       "rate": 14000
+      },
+      {
+       "sr": 5,
+       "mrNo": "B111",
+       "name": "Armchair",
+       "desc": "Solid teak wood structure and fabric upholstery",
+       "dims": "27 x 33 x 30\"",
+       "qty": 2,
+       "delivery": "2026-02-23",
+       "rate": 15000
+      },
+      {
+       "sr": 6,
+       "mrNo": "B111",
+       "name": "Side Table",
+       "desc": "Solid teak wood structure, ply + veneer and metal handle",
+       "dims": "27 x 23 x 22\"",
+       "qty": 2,
+       "delivery": "2026-02-23",
+       "rate": 14000
+      },
+      {
+       "sr": 7,
+       "mrNo": "B111",
+       "name": "Solid wood usage",
+       "desc": "Extra solid wood usage",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 5000
+      },
+      {
+       "sr": 8,
+       "mrNo": "B111",
+       "name": "Polish work",
+       "desc": "Polish work",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 12000
+      }
+     ]
+    },
+    {
+     "no": "WO-PB-002",
+     "issueDate": "2026-07-18",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "C122-1",
+       "name": "Naavo - Custom Bench",
+       "desc": "Fabric upholstery and solid teak wood base.",
+       "dims": "55 x 16 x 20\"",
+       "qty": 1,
+       "delivery": "2026-07-22",
+       "rate": 20000
+      }
+     ]
+    }
+   ],
+   "payments": [
+    {
+     "sr": 1,
+     "date": "2026-02-05",
+     "remarks": "B111 advance amount",
+     "amount": 30000,
+     "mode": "UPI",
+     "note": "To Parth"
+    },
+    {
+     "sr": 2,
+     "date": "2026-02-14",
+     "remarks": "B111 advance amount",
+     "amount": 20000,
+     "mode": "UPI",
+     "note": "To Parth"
+    },
+    {
+     "sr": 3,
+     "date": "2026-04-09",
+     "remarks": "B111 advance amount",
+     "amount": 25000,
+     "mode": "UPI",
+     "note": "To Parth"
+    },
+    {
+     "sr": 4,
+     "date": "2026-04-20",
+     "remarks": "B111 advance amount",
+     "amount": 20000,
+     "mode": "UPI",
+     "note": "To Parth"
+    },
+    {
+     "sr": 5,
+     "date": "2026-05-04",
+     "remarks": "Payment",
+     "amount": 15000,
+     "mode": "UPI",
+     "note": "To Parth"
+    },
+    {
+     "sr": 6,
+     "date": "2026-07-14",
+     "remarks": "C122-1 Advance payment",
+     "amount": 12000,
+     "mode": "UPI",
+     "note": "To Parth"
+    },
+    {
+     "sr": 7,
+     "date": "2026-08-08",
+     "remarks": "Bench remaining",
+     "amount": 12000,
+     "mode": "UPI",
+     "note": "To Parth"
+    }
+   ]
+  },
+  {
+   "name": "Unique Laser Cutting",
+   "firm": "Unique Laser Cutting",
+   "aliases": [
+    "Unique"
+   ],
+   "trades": [
+    "metal"
+   ],
+   "tradeLabel": "Laser cutting",
+   "phone": "9662496787",
+   "email": "",
+   "address": "Vadodara",
+   "dataNote": "Row 1 shows a unit rate of Rs 5,598 but a line total of Rs 5,508; the sheet's own grand total uses 5,508, so 5,508 was imported. Rows 7-14, 16 and 17 have amounts but no description in the sheet.",
+   "sheetTotal": 103455,
+   "sheetPaid": 51000,
+   "workOrders": [
+    {
+     "no": "WO-UQ-001",
+     "issueDate": "2026-05-22",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B131",
+       "name": "Mirror Laser cutting",
+       "desc": "",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 5508,
+       "remark": "Sheet rate cell reads 5598; line total 5508 used"
+      },
+      {
+       "sr": 2,
+       "mrNo": "",
+       "name": "BNI Dias",
+       "desc": "",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 565
+      },
+      {
+       "sr": 3,
+       "mrNo": "B128",
+       "name": "Metal shelf",
+       "desc": "Metal structure",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 770
+      },
+      {
+       "sr": 4,
+       "mrNo": "B121",
+       "name": "Armchair 1 Reception Lobby",
+       "desc": "Fabric upholstery and solid teak wood structure with required specifications",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 1972
+      },
+      {
+       "sr": 5,
+       "mrNo": "",
+       "name": "Logo - Fiscal Ox",
+       "desc": "",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 2185
+      },
+      {
+       "sr": 6,
+       "mrNo": "C113",
+       "name": "Shamnu flats",
+       "desc": "",
+       "dims": "",
+       "qty": 2,
+       "delivery": "",
+       "rate": 1485
+      },
+      {
+       "sr": 7,
+       "mrNo": "",
+       "name": "Unlabelled item (Sr 7)",
+       "desc": "No description in the sheet",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 240
+      },
+      {
+       "sr": 8,
+       "mrNo": "",
+       "name": "Unlabelled item (Sr 8)",
+       "desc": "No description in the sheet",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 250
+      },
+      {
+       "sr": 9,
+       "mrNo": "",
+       "name": "Unlabelled item (Sr 9)",
+       "desc": "No description in the sheet",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 595
+      },
+      {
+       "sr": 10,
+       "mrNo": "",
+       "name": "Unlabelled item (Sr 10)",
+       "desc": "No description in the sheet",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 900
+      },
+      {
+       "sr": 11,
+       "mrNo": "",
+       "name": "Unlabelled item (Sr 11)",
+       "desc": "No description in the sheet",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 2250
+      },
+      {
+       "sr": 12,
+       "mrNo": "",
+       "name": "Unlabelled item (Sr 12)",
+       "desc": "No description in the sheet",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 710
+      },
+      {
+       "sr": 13,
+       "mrNo": "",
+       "name": "Unlabelled item (Sr 13)",
+       "desc": "No description in the sheet",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 220
+      },
+      {
+       "sr": 14,
+       "mrNo": "",
+       "name": "Unlabelled item (Sr 14)",
+       "desc": "No description in the sheet",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 450
+      },
+      {
+       "sr": 15,
+       "mrNo": "C119",
+       "name": "Exterior metal fascade",
+       "desc": "As per drawing and site measurements",
+       "dims": "3546 x 25 x 6478 mm (139 x 1 x 255 inches)",
+       "qty": 1,
+       "delivery": "",
+       "rate": 52500
+      },
+      {
+       "sr": 16,
+       "mrNo": "",
+       "name": "Unlabelled item (Sr 16)",
+       "desc": "No description in the sheet",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 2450
+      },
+      {
+       "sr": 17,
+       "mrNo": "",
+       "name": "Unlabelled item (Sr 17)",
+       "desc": "No description in the sheet",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 1383
+      },
+      {
+       "sr": 18,
+       "mrNo": "",
+       "name": "Shade blocks Jayanti Kaka",
+       "desc": "",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 2519
+      },
+      {
+       "sr": 19,
+       "mrNo": "",
+       "name": "Gate bottom plate (6x6 inch) - 20 pieces",
+       "desc": "",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 3050
+      },
+      {
+       "sr": 20,
+       "mrNo": "",
+       "name": "Mannequin Jaali",
+       "desc": "Shivalin",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 12000
+      },
+      {
+       "sr": 21,
+       "mrNo": "",
+       "name": "Name plate Howden - Aluminium",
+       "desc": "",
+       "dims": "",
+       "qty": 2,
+       "delivery": "",
+       "rate": 527
+      },
+      {
+       "sr": 22,
+       "mrNo": "",
+       "name": "Name plate Howden - SS",
+       "desc": "",
+       "dims": "",
+       "qty": 2,
+       "delivery": "",
+       "rate": 2250
+      },
+      {
+       "sr": 23,
+       "mrNo": "",
+       "name": "Gulabchand handle (Etching)",
+       "desc": "",
+       "dims": "",
+       "qty": 2,
+       "delivery": "",
+       "rate": 2207
+      }
+     ]
+    }
+   ],
+   "payments": [
+    {
+     "sr": 1,
+     "date": "2026-07-08",
+     "remarks": "Paid",
+     "amount": 11000,
+     "mode": "Cash",
+     "note": ""
+    },
+    {
+     "sr": 2,
+     "date": "2026-09-07",
+     "remarks": "Payment",
+     "amount": 40000,
+     "mode": "Cash",
+     "note": ""
+    }
+   ]
+  },
+  {
+   "name": "Firoz Ghanchi",
+   "firm": "",
+   "aliases": [
+    "Firozbhai"
+   ],
+   "trades": [
+    "metal"
+   ],
+   "tradeLabel": "Metal on site",
+   "phone": "9998149507",
+   "email": "",
+   "address": "",
+   "sheetTotal": 213700,
+   "sheetPaid": 130500,
+   "workOrders": [
+    {
+     "no": "WO-FG-001",
+     "issueDate": "2026-08-13",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "C115",
+       "name": "Metal railling",
+       "desc": "MS Pipe structure",
+       "dims": "As per dimensions",
+       "qty": 1,
+       "delivery": "",
+       "rate": 40500,
+       "remark": "Rate covers Sr 1 and 2 together"
+      },
+      {
+       "sr": 2,
+       "mrNo": "C115",
+       "name": "Window grill",
+       "desc": "16 x 16mm bright bar window grill, unfinished with installation.",
+       "dims": "As per dimensions",
+       "qty": 6,
+       "delivery": "",
+       "rate": 0,
+       "remark": "Priced together with Sr 1 (Metal railling)"
+      },
+      {
+       "sr": 3,
+       "mrNo": "C126",
+       "name": "Compound wall shade - Metal fabrication",
+       "desc": "Material: MS 4x4 inch, 2x2 inch, 2x1 inch, 1x1 inch. Finish: Red oxide washed. Installation: Included",
+       "dims": "As per site measurements",
+       "qty": 1,
+       "delivery": "",
+       "rate": 122600
+      },
+      {
+       "sr": 4,
+       "mrNo": "C132",
+       "name": "Compound wall - Grill",
+       "desc": "MS Bright Bar and MS Patti. Outside patti: 40 x 8 mm. Inside rod: 16mm round section. Gap: 3 inch bottom, 1 inch around. Finish: Red oxide. Weight: 321 kg",
+       "dims": "As per site measurements",
+       "qty": 1,
+       "delivery": "",
+       "rate": 50600
+      }
+     ]
+    }
+   ],
+   "payments": [
+    {
+     "sr": 1,
+     "date": "2026-06-22",
+     "remarks": "Gulabchand grill advance",
+     "amount": 20000,
+     "mode": "UPI",
+     "note": "To Firozbhai"
+    },
+    {
+     "sr": 2,
+     "date": "2026-07-20",
+     "remarks": "Remaining",
+     "amount": 20500,
+     "mode": "Cash",
+     "note": "Firozbhai's son"
+    },
+    {
+     "sr": 3,
+     "date": "2026-08-13",
+     "remarks": "Advance, Jayantibhai shade",
+     "amount": 50000,
+     "mode": "Cash",
+     "note": "To Firozbhai"
+    },
+    {
+     "sr": 4,
+     "date": "2026-08-21",
+     "remarks": "Advance shade",
+     "amount": 20000,
+     "mode": "Cash",
+     "note": "To Firozbhai"
+    },
+    {
+     "sr": 5,
+     "date": "2026-09-04",
+     "remarks": "Advance grill",
+     "amount": 20000,
+     "mode": "Cash",
+     "note": "To Firozbhai"
+    }
+   ]
+  },
+  {
+   "name": "Mukesh Bhai",
+   "firm": "Vipra Industries",
+   "aliases": [],
+   "trades": [
+    "wood"
+   ],
+   "tradeLabel": "Ply/Laminate",
+   "phone": "9879949443",
+   "email": "",
+   "address": "Vadodara",
+   "sheetTotal": 73000,
+   "sheetPaid": 73000,
+   "workOrders": [
+    {
+     "no": "WO-MB-001",
+     "issueDate": "2026-02-05",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B109",
+       "name": "TV Console 01 - Party Room",
+       "desc": "Veneer, laminate, HDHMR and powder coated metal base",
+       "dims": "60 x 16 x 35\"",
+       "qty": 1,
+       "delivery": "2026-02-23",
+       "rate": 27000
+      },
+      {
+       "sr": 2,
+       "mrNo": "B130",
+       "name": "Center table - platform sofa",
+       "desc": "HDHMR & PU finish",
+       "dims": "44 x 44 x 12\"",
+       "qty": 1,
+       "delivery": "2026-05-26",
+       "rate": 25000
+      },
+      {
+       "sr": 3,
+       "mrNo": "B130",
+       "name": "Center table - Glass",
+       "desc": "8mm toughned glass top, metal structure, leather plywood drawers, Veneer plywood base",
+       "dims": "54 x 27 x 15\"",
+       "qty": 1,
+       "delivery": "2026-05-26",
+       "rate": 21000
+      }
+     ]
+    }
+   ],
+   "payments": [
+    {
+     "sr": 1,
+     "date": "2026-02-11",
+     "remarks": "B109 Console",
+     "amount": 27000,
+     "mode": "Cash",
+     "note": "To Uttambhai"
+    },
+    {
+     "sr": 2,
+     "date": "2026-07-23",
+     "remarks": "Remaining payment",
+     "amount": 46000,
+     "mode": "Cash",
+     "note": "To Uttambhai"
+    }
+   ]
+  },
+  {
+   "name": "Hari Ram",
+   "firm": "",
+   "aliases": [
+    "Hariram"
+   ],
+   "trades": [
+    "upholstery"
+   ],
+   "tradeLabel": "Upholstery",
+   "phone": "",
+   "email": "",
+   "address": "",
+   "dataNote": "The work-order sheet header still shows Arif Malek's name, phone and address (template not updated). Contact fields left blank deliberately; payments confirm the person is Hari Ram.",
+   "sheetTotal": 36000,
+   "sheetPaid": 36000,
+   "workOrders": [
+    {
+     "no": "WO-AM-001",
+     "issueDate": "2025-11-06",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "C104",
+       "name": "Sofa Cum Bed - Custom (Only Upholstery) (Without fabric)",
+       "desc": "Fabric upholstery",
+       "dims": "96 x 46 x 30\"",
+       "qty": 1,
+       "delivery": "",
+       "rate": 27000
+      },
+      {
+       "sr": 2,
+       "mrNo": "C117",
+       "name": "Headboard and foot board upholstery",
+       "desc": "Upholstery",
+       "dims": "As per dimensions",
+       "qty": 1,
+       "delivery": "",
+       "rate": 5000
+      },
+      {
+       "sr": 3,
+       "mrNo": "C122-1",
+       "name": "Naavo - Custom Bench",
+       "desc": "Fabric upholstery and solid teak wood base.",
+       "dims": "55 x 16 x 20\"",
+       "qty": 1,
+       "delivery": "",
+       "rate": 4000
+      }
+     ]
+    }
+   ],
+   "payments": [
+    {
+     "sr": 1,
+     "date": "2026-06-19",
+     "remarks": "C104, C117 - Pranav - Headboard and sofa cum bed",
+     "amount": 14000,
+     "mode": "Cash",
+     "note": "To Hariram"
+    },
+    {
+     "sr": 2,
+     "date": "2026-06-19",
+     "remarks": "C104, C117 - Pranav - Headboard and sofa cum bed",
+     "amount": 18000,
+     "mode": "Cash",
+     "note": "To Chandubhai, Aavkar"
+    },
+    {
+     "sr": 3,
+     "date": "2026-08-04",
+     "remarks": "C122-1 Bench Advance",
+     "amount": 2000,
+     "mode": "UPI",
+     "note": "To Hariram"
+    },
+    {
+     "sr": 4,
+     "date": "2026-08-07",
+     "remarks": "C122-1 Bench Remaining",
+     "amount": 2000,
+     "mode": "UPI",
+     "note": "To Hariram"
+    }
+   ]
+  },
+  {
+   "name": "Chirag Visani",
+   "firm": "",
+   "aliases": [],
+   "trades": [
+    "upholstery"
+   ],
+   "tradeLabel": "Upholstery",
+   "phone": "",
+   "email": "",
+   "address": "Vadodara",
+   "sheetTotal": 27108,
+   "sheetPaid": 27108,
+   "workOrders": [
+    {
+     "no": "WO-CV-001",
+     "issueDate": "2026-05-22",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "",
+       "name": "Krishna Ahmedabad - Project",
+       "desc": "",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 15596
+      },
+      {
+       "sr": 2,
+       "mrNo": "",
+       "name": "SMK Project",
+       "desc": "",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 5675
+      },
+      {
+       "sr": 3,
+       "mrNo": "",
+       "name": "Krishna Ahmedabad - Project Extra fabric",
+       "desc": "For under sofa cover",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 3802
+      },
+      {
+       "sr": 4,
+       "mrNo": "",
+       "name": "Krishna Ahmedabad - Project Extra fabric",
+       "desc": "For Cushion",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 877
+      },
+      {
+       "sr": 5,
+       "mrNo": "",
+       "name": "Harshil Project tray fabric leather",
+       "desc": "TURRI 508",
+       "dims": "",
+       "qty": 1,
+       "delivery": "",
+       "rate": 1158
+      }
+     ]
+    }
+   ],
+   "payments": [
+    {
+     "sr": 1,
+     "date": "2026-04-25",
+     "remarks": "Advance",
+     "amount": 20000,
+     "mode": "Cash",
+     "note": "To Chirag Visani"
+    },
+    {
+     "sr": 2,
+     "date": "2026-07-30",
+     "remarks": "Remaining payment",
+     "amount": 7108,
+     "mode": "UPI",
+     "note": "To Chirag Visani"
+    }
+   ]
+  },
+  {
+   "name": "Keyur Chotaliya",
+   "firm": "",
+   "aliases": [
+    "Keyur bhai",
+    "Keyur"
+   ],
+   "trades": [
+    "upholstery",
+    "wood"
+   ],
+   "tradeLabel": "Upholstery",
+   "phone": "9824844774",
+   "email": "",
+   "address": "Vadodara",
+   "sheetTotal": 15000,
+   "sheetPaid": 15000,
+   "blacklisted": true,
+   "blacklistReason": "Blacklisted (per payment remark on the work order sheet)",
+   "blacklistDate": "2026-02-11",
+   "workOrders": [
+    {
+     "no": "WO-KC-001",
+     "issueDate": "2026-05-22",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B121",
+       "name": "Dining chair 01 Meeting & Add",
+       "desc": "Fabric will be treated commercially for soil and stain repellency.",
+       "dims": "570mm W x 580mm D x 800mm H",
+       "qty": 1,
+       "delivery": "",
+       "rate": 8000
+      },
+      {
+       "sr": 2,
+       "mrNo": "B121",
+       "name": "Dining chair 02 Meeting & Add",
+       "desc": "Fabric upholstery and solid teak wood structure with required specifications",
+       "dims": "610mm W x 580mm D x 800mm H",
+       "qty": 1,
+       "delivery": "",
+       "rate": 7000
+      }
+     ]
+    }
+   ],
+   "payments": [
+    {
+     "sr": 1,
+     "date": "2026-02-11",
+     "remarks": "Blacklisted",
+     "amount": 15000,
+     "mode": "UPI",
+     "note": "To Keyur"
+    }
+   ]
+  },
+  {
+   "name": "Bansari Panchal",
+   "firm": "",
+   "aliases": [
+    "Bansari Patel"
+   ],
+   "trades": [
+    "drawings"
+   ],
+   "tradeLabel": "Drawing",
+   "phone": "8160932734",
+   "email": "",
+   "address": "Vadodara",
+   "dataNote": "This sheet has no Payment Status tab and no rates - drawing work was not priced per line item. The sheet header spells the name 'Bansari Patel'; the file and the app use 'Bansari Panchal'. A Rs 12,000 'Payment - Drawings / To Designer' sits in Arif Malek's payment sheet and may belong here - please confirm.",
+   "sheetTotal": 0,
+   "sheetPaid": 0,
+   "workOrders": [
+    {
+     "no": "WO-BP-001",
+     "issueDate": "2026-01-01",
+     "items": [
+      {
+       "sr": 1,
+       "mrNo": "B109",
+       "name": "Console 01 - Veer Bedroom",
+       "desc": "Solid teak wood and powder coated metal structure.",
+       "dims": "70 x 14 x 36\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 2,
+       "mrNo": "B109",
+       "name": "Side table 01 - Veer bedroom",
+       "desc": "Solid ash wood",
+       "dims": "29 x 18 x 28\"",
+       "qty": 2,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 3,
+       "mrNo": "B109",
+       "name": "Bed 01 - Veer Bedroom",
+       "desc": "Solid ash wood and fabric upholstered headboard with updated design.",
+       "dims": "84 x 78 x 84\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 4,
+       "mrNo": "B109",
+       "name": "Sofa 01 - Veer bedroom",
+       "desc": "Fabric upholstery",
+       "dims": "72 x 40 x 33.5\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 5,
+       "mrNo": "B109",
+       "name": "Center table 01 - Veer Bedroom",
+       "desc": "Solid teak wood",
+       "dims": "28 x 28 x 15\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 6,
+       "mrNo": "B109",
+       "name": "Armchair + Foot stool 01 - Veer Bedroom",
+       "desc": "Fabric upholstery and solid teak wood structure",
+       "dims": "30 x 34 x 34\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 7,
+       "mrNo": "B109",
+       "name": "Sofa 02 - Party Room",
+       "desc": "Fabric upholstery and powdered coated metal structure.",
+       "dims": "72 x 42 x 32\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 8,
+       "mrNo": "B109",
+       "name": "Center Table 02 - Party Room",
+       "desc": "Powdered coated metal.",
+       "dims": "28 x 28 x 15\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 9,
+       "mrNo": "B109",
+       "name": "Armchair 02 - Party Room",
+       "desc": "Fabric upholstery and solid teak wood structure.",
+       "dims": "27.5 x 33.5 x 31\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 10,
+       "mrNo": "B109",
+       "name": "TV Console 01 - Party Room",
+       "desc": "Veneer, laminate, HDHMR and powder coated metal base",
+       "dims": "60 x 16 x 35\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 11,
+       "mrNo": "B109",
+       "name": "Study Table 01 - Parents room",
+       "desc": "Solid teak wood",
+       "dims": "48 x 20 x 30\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 12,
+       "mrNo": "B109",
+       "name": "Study Chair 01 - Parents room",
+       "desc": "Faux leather upholstery and solid teak wood",
+       "dims": "21.5 x 18.5 x 28\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 13,
+       "mrNo": "B109",
+       "name": "Console 03 - Living Room Entry",
+       "desc": "Solid teak wood.",
+       "dims": "40 x 10 x 35\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      },
+      {
+       "sr": 14,
+       "mrNo": "B109",
+       "name": "Console 04 - Room Lobby",
+       "desc": "Solid teak wood.",
+       "dims": "34 x 7 x 35\"",
+       "qty": 1,
+       "delivery": "2026-01-05",
+       "rate": 0
+      }
+     ]
+    }
+   ],
+   "payments": []
+  }
+ ]
+}
