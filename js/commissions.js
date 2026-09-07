@@ -26,7 +26,11 @@ function uid(prefix = 'p') {
 }
 
 function blank() {
-  return { partners: [], entries: [], orgId: '' };
+  // `purged` is ids only, keyed "kind:id" and stamped — no amount, no
+  // project, no partner. It is what tells the other devices that a
+  // record is gone, and it is deliberately empty of anything that was
+  // on the record itself.
+  return { partners: [], entries: [], purged: {}, orgId: '' };
 }
 
 let state = blank();
@@ -42,6 +46,7 @@ function read() {
     return {
       partners: Array.isArray(s.partners) ? s.partners : [],
       entries: Array.isArray(s.entries) ? s.entries : [],
+      purged: (s.purged && typeof s.purged === 'object') ? s.purged : {},
       orgId: typeof s.orgId === 'string' ? s.orgId : '',
     };
   } catch (e) {
@@ -201,7 +206,18 @@ export function updateEntry(id, changes) {
    nothing left tagged this way. */
 export function purgeCashCommissions() {
   const before = state.entries.length;
-  state.entries = state.entries.filter((e) => String(e.mode || '').trim().toLowerCase() !== 'cash');
+  const isCash = (e) => String(e.mode || '').trim().toLowerCase() === 'cash';
+
+  // Removed outright, and recorded as gone. The record itself is not
+  // kept in any form — only its id, stamped, so the deletion reaches
+  // the other devices instead of one of them pushing the entry
+  // straight back onto the books at the next sync.
+  for (const e of state.entries.filter(isCash)) {
+    const k = `commission:${e.id}`;
+    if (!state.purged[k]) state.purged[k] = Date.now();
+  }
+  state.entries = state.entries.filter((e) => !isCash(e));
+
   const removed = before - state.entries.length;
   if (removed) { write(); emit(); }
   return { removed };
@@ -330,6 +346,18 @@ export function syncRecords() {
       });
     }
   }
+
+  // A record removed outright rather than soft-deleted — a cash entry —
+  // still has to be removed everywhere else. It rides as a tombstone
+  // carrying its id and nothing else.
+  for (const [k, at] of Object.entries(state.purged)) {
+    const cut = k.indexOf(':');
+    if (cut < 1) continue;
+    const kind = k.slice(0, cut);
+    const id = k.slice(cut + 1);
+    if (!SYNC_KINDS.some((x) => x.kind === kind)) continue;
+    out.push({ kind, id, data: { id }, updatedAt: at, deletedAt: at });
+  }
   return out;
 }
 
@@ -341,16 +369,28 @@ export function applyRemote(rows) {
     if (!spec) continue;
 
     const list = state[spec.arr];
+    const id = String(row.id);
     const at = Date.parse(row.updated_at) || 0;
-    const i = list.findIndex((r) => String(r.id) === String(row.id));
+    const i = list.findIndex((r) => String(r.id) === id);
     const mine = i >= 0 ? list[i] : null;
-    const mineAt = mine ? (mine.updatedAt || mine.createdAt || 0) : -1;
+    const gone = `${row.kind}:${id}`;
+    const mineAt = mine ? (mine.updatedAt || mine.createdAt || 0) : (state.purged[gone] || -1);
 
-    if (mine && mineAt >= at) continue;
+    if (mineAt >= at) continue;
 
-    const next = { ...(row.data || {}), id: String(row.id), updatedAt: at };
-    if (row.deleted_at) next.deletedAt = Date.parse(row.deleted_at) || at;
-    else delete next.deletedAt;
+    // A deletion is applied as a deletion: the row goes, and only its
+    // id stays behind. Nothing of a removed record is written back into
+    // storage, and a tombstone for something this device never had adds
+    // nothing at all.
+    if (row.deleted_at) {
+      state.purged[gone] = Date.parse(row.deleted_at) || at;
+      if (mine) { list.splice(i, 1); changed += 1; }
+      continue;
+    }
+
+    const next = { ...(row.data || {}), id, updatedAt: at };
+    delete next.deletedAt;
+    delete state.purged[gone];
 
     if (mine) list[i] = next; else list.push(next);
     changed += 1;
@@ -369,6 +409,7 @@ export function claimFor(orgId) {
 
   state.partners = [];
   state.entries = [];
+  state.purged = {};
   state.orgId = want;
   write(); emit();
   return true;
