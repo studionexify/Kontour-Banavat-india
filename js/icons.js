@@ -52,6 +52,11 @@ const P = {
   clipboard: '<path d="M9 4.5H7A1.5 1.5 0 0 0 5.5 6v13A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V6A1.5 1.5 0 0 0 17 4.5h-2"/><rect x="9" y="2.5" width="6" height="4" rx="1.3"/><path d="m9.5 13 2 2 3.5-4"/>',
   truck:     '<path d="M2.5 6.5h11v10h-11z"/><path d="M13.5 10h4l4 3.5v3h-8z"/><circle cx="7" cy="18.5" r="1.8"/><circle cx="17" cy="18.5" r="1.8"/>',
   archive:   '<rect x="2.5" y="3.5" width="19" height="4.5" rx="1.3"/><path d="M4.5 8v11a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V8"/><path d="M9.5 12h5"/>',
+  grid:      '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
+  rows:      '<path d="M3.5 6h17M3.5 12h17M3.5 18h17"/><path d="M3.5 6v0M3.5 12v0M3.5 18v0"/>',
+  columns:   '<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="11" rx="1.5"/><rect x="16" y="4" width="5" height="14" rx="1.5"/>',
+  timeline:  '<path d="M3 5h9M6 12h11M9 19h8"/><circle cx="3" cy="12" r="1.4"/><circle cx="3" cy="19" r="1.4"/>',
+  calendar:  '<rect x="3.5" y="5" width="17" height="16" rx="2.2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
   menu:      '<path d="M3.5 6.5h17M3.5 12h17M3.5 17.5h17"/>',
 };
 

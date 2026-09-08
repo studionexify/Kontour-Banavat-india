@@ -15,6 +15,76 @@ import {
 } from '../commissions.js';
 import { inr, dmy, todayISO } from '../format.js';
 import { seedingAllowed } from '../shopsync.js';
+import {
+  viewToggle, wireViewToggle, createSorter, dataTable,
+} from './viewkit.js';
+
+/* Commission is a settlement list: the question is almost always
+   "who is owed the most", and sometimes "who have we paid the
+   least of what they earned". Both are a tap on a column heading,
+   so the table is the working view and the cards are the browse. */
+let view = 'table';
+
+const VIEWS = [
+  { key: 'table', label: 'Table', icon: 'rows' },
+  { key: 'cards', label: 'Cards', icon: 'grid' },
+];
+
+const COLUMNS = [
+  {
+    key: 'name',
+    label: 'Partner',
+    cell: (r) => `<span class="dt-strong">${esc(r.p.name)}</span>`,
+    cmp: (a, b) => a.p.name.localeCompare(b.p.name),
+  },
+  {
+    key: 'projects',
+    label: 'Projects',
+    align: 'right',
+    cls: 'num',
+    defaultDir: 'desc',
+    cell: (r) => String(r.s.count),
+    cmp: (a, b) => a.s.count - b.s.count,
+  },
+  {
+    key: 'rate',
+    label: 'Rate',
+    align: 'right',
+    cell: (r) => (r.p.defaultPct != null ? `${esc(String(r.p.defaultPct))}%` : '<span class="dt-mut">varies</span>'),
+    cmp: (a, b) => (a.p.defaultPct ?? -1) - (b.p.defaultPct ?? -1),
+  },
+  {
+    key: 'earned',
+    label: 'Earned',
+    align: 'right',
+    cls: 'dt-amt num',
+    defaultDir: 'desc',
+    cell: (r) => esc(inr(r.s.commission)),
+    cmp: (a, b) => a.s.commission - b.s.commission,
+  },
+  {
+    key: 'paid',
+    label: 'Paid',
+    align: 'right',
+    cls: 'dt-amt num',
+    defaultDir: 'desc',
+    cell: (r) => `<span class="in">${esc(inr(r.s.paid))}</span>`,
+    cmp: (a, b) => a.s.paid - b.s.paid,
+  },
+  {
+    key: 'remaining',
+    label: 'Outstanding',
+    align: 'right',
+    cls: 'dt-amt num',
+    defaultDir: 'desc',
+    cell: (r) => (r.s.remaining > 0
+      ? `<span class="out">${esc(inr(r.s.remaining))}</span>`
+      : '<span class="pill sm in">settled</span>'),
+    cmp: (a, b) => a.s.remaining - b.s.remaining,
+  },
+];
+
+const sorter = createSorter(COLUMNS, 'remaining', 'desc');
 
 export function render(root, ctx) {
   // Only where this device's copy is the only one — see
@@ -50,13 +120,25 @@ export function render(root, ctx) {
     </header>
 
     <section class="sec" style="padding-top:16px">
-      ${list.length ? `<div class="list">${list.map(partnerRow).join('')}</div>`
+      <div class="secthead">
+        <h2>${esc(view === 'table' ? 'Every partner' : 'Partners')}</h2>
+        ${viewToggle(VIEWS, view)}
+      </div>
+      ${list.length
+        ? (view === 'table' ? `
+            ${sorter.chips()}
+            ${dataTable(COLUMNS, sorter.sort(list), sorter, {
+              rowAttrs: (r) => `data-partner="${esc(r.p.id)}" tabindex="0" role="button"`,
+            })}`
+          : `<div class="list">${list.map(partnerRow).join('')}</div>`)
         : emptyState('percent', 'No commission partners yet',
             'Add anyone who earns a cut of a job rather than a wage for it')}
     </section>`;
 
   ctx.setTopbar('Commission', `<span class="cur">₹</span>${totals.remaining.toLocaleString('en-IN')}`, 'OUTSTANDING');
 
+  wireViewToggle(root, (v) => { view = v; ctx.refresh(); });
+  sorter.wire(root, ctx.refresh);
   on(root, '[data-partner]', (e, b) => openPartner(b.dataset.partner, ctx));
   on(root, '[data-addpartner]', () => openNewPartner(ctx));
 }

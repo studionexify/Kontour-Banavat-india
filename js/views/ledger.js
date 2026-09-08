@@ -9,8 +9,89 @@ import { inr, num, monthLabel, monthShort, thisMonthKey, shiftMonth, dayHeading,
 import { openEntryDetail } from './entry.js';
 import { rowHTML } from './home.js';
 import { exportMonthCSV, dayTextSummary } from '../export.js';
+import {
+  viewToggle, wireViewToggle, createSorter, dataTable,
+} from './viewkit.js';
 
 const state = { month: thisMonthKey(), type: 'all', accountId: '', jobCode: '', q: '' };
+
+/* Two readings of one month. Days is the book as it is written —
+   in order, with each day's own total. Table is the book as it is
+   audited: every column sorts, so "the five biggest payments out
+   this month" is a tap on Amount rather than a scroll.
+
+   The table's sort lives here, not in the row, so it survives a
+   redraw and a month change. */
+let view = 'days';
+
+const VIEWS = [
+  { key: 'days', label: 'By day', icon: 'calendar' },
+  { key: 'table', label: 'Table', icon: 'rows' },
+];
+
+const TYPE_LABEL = { in: 'In', out: 'Out', transfer: 'Transfer' };
+
+const COLUMNS = [
+  {
+    key: 'date',
+    label: 'Date',
+    defaultDir: 'desc',
+    cls: 'dt-date',
+    cell: (e) => esc(dayHeading(e.date)),
+    cmp: (a, b) => (a.date || '').localeCompare(b.date || ''),
+  },
+  {
+    key: 'party',
+    label: 'Party',
+    cell: (e) => `<span class="dt-strong">${esc(partyOf(e))}</span>`,
+    cmp: (a, b) => partyOf(a).localeCompare(partyOf(b)),
+  },
+  {
+    key: 'category',
+    label: 'Category',
+    cell: (e) => esc(e.type === 'transfer' ? 'Transfer' : categoryName(e.categoryId)),
+    cmp: (a, b) => catOf(a).localeCompare(catOf(b)),
+  },
+  {
+    key: 'job',
+    label: 'Job',
+    cell: (e) => (e.jobCode ? `<span class="dt-tag">${esc(e.jobCode)}</span>` : '<span class="dt-mut">—</span>'),
+    cmp: (a, b) => (a.jobCode || '').localeCompare(b.jobCode || ''),
+  },
+  {
+    key: 'account',
+    label: 'Account',
+    cell: (e) => esc(accountName(e.accountId)),
+    cmp: (a, b) => accountName(a.accountId).localeCompare(accountName(b.accountId)),
+  },
+  {
+    key: 'type',
+    label: 'Kind',
+    cell: (e) => `<span class="pill sm ${e.type === 'in' ? 'in' : e.type === 'out' ? 'out' : 'mut'}">${esc(TYPE_LABEL[e.type] || e.type)}</span>`,
+    cmp: (a, b) => String(a.type).localeCompare(String(b.type)),
+  },
+  {
+    key: 'amount',
+    label: 'Amount',
+    defaultDir: 'desc',
+    align: 'right',
+    cls: 'dt-amt num',
+    cell: (e) => `<span class="${e.type}">${e.type === 'in' ? '+' : e.type === 'out' ? '−' : ''}${esc(inr(e.total))}</span>`,
+    cmp: (a, b) => a.total - b.total,
+  },
+];
+
+const sorter = createSorter(COLUMNS, 'date', 'desc');
+
+function partyOf(e) {
+  return e.type === 'transfer'
+    ? `${accountName(e.accountId)} → ${accountName(e.toAccountId)}`
+    : (e.party || categoryName(e.categoryId) || '—');
+}
+
+function catOf(e) {
+  return e.type === 'transfer' ? 'Transfer' : (categoryName(e.categoryId) || '');
+}
 
 export function setFilter(params = {}) {
   Object.assign(state, params);
@@ -68,11 +149,21 @@ export function render(root, ctx) {
     </section>
 
     <section class="sec" style="padding-top:6px">
-      ${groups.length ? groups.map(dayHTML).join('') : emptyState(
+      <div class="secthead">
+        <h2>${esc(view === 'table' ? 'Every entry' : 'Day by day')}</h2>
+        ${viewToggle(VIEWS, view)}
+      </div>
+      ${view === 'table' && list.length ? `
+        ${sorter.chips()}
+        ${dataTable(COLUMNS, sorter.sort(list), sorter, {
+          rowAttrs: (e) => `data-entry="${esc(e.id)}" tabindex="0" role="button"`,
+        })}` : ''}
+      ${view === 'table' ? '' : (groups.length ? groups.map(dayHTML).join('') : emptyState(
         'inbox',
         state.q || state.accountId || state.jobCode ? 'Nothing matches that' : `No entries in ${monthShort(state.month)}`,
         state.q || state.accountId || state.jobCode ? 'Try clearing the filters' : 'Tap + to log one'
-      )}
+      ))}
+      ${view === 'table' && !list.length ? emptyState('inbox', 'Nothing to tabulate', 'Clear a filter, or log an entry') : ''}
     </section>
 
     ${list.length ? `
@@ -82,6 +173,8 @@ export function render(root, ctx) {
 
   ctx.setTopbar(monthLabel(state.month), `${t.net < 0 ? '−' : ''}<span class="cur">₹</span>${num(Math.abs(t.net))}`, 'NET');
 
+  wireViewToggle(root, (v) => { view = v; ctx.refresh(); });
+  sorter.wire(root, ctx.refresh);
   on(root, '[data-month]', (e, b) => {
     const next = shiftMonth(state.month, Number(b.dataset.month));
     if (next > thisMonthKey()) return;
