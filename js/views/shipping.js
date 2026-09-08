@@ -30,6 +30,7 @@ import { pageHead, statCards, searchBar, nothingHere, sectionHead } from './chro
 import { wire } from './production.js';
 import { viewToggle, wireViewToggle, cardGrid, bigCard } from './viewkit.js';
 import { lineThumb, coverStrip } from './thumbs.js';
+import { nextButton, wireNext } from './nextstep.js';
 
 let query = '';
 
@@ -91,6 +92,7 @@ export function render(root, ctx) {
 
   wire(root, ctx, { onSearch: (v) => { query = v; } });
   wireViewToggle(root, (v) => { view = v; ctx.refresh(); });
+  wireNext(root, ctx.refresh);
 
   on(root, '[data-delivered]', async (e, b) => {
     e.stopPropagation();
@@ -159,10 +161,23 @@ function orderShipCard(mrNo, group) {
     }),
     foot: group.map((l) => `
       <span class="bigcard-act">
-        <button class="mini" data-despatch="${esc(l.id)}">${icon('truck', 13)} ${l.despatch ? 'Details' : 'How it leaves'} · ${esc(shortName(l))}</button>
-        <button class="mini ok" data-delivered="${esc(l.id)}">${icon('check', 13)} Delivered</button>
+        <span class="bigcard-act-n">${esc(shortName(l))}</span>
+        ${pieceActs(l)}
       </span>`).join(''),
   });
+}
+
+/* The one thing that happens to this piece next, in the corner, with
+   the exception beside it. A piece with no despatch on file is asked
+   for one; a piece that has one is asked whether the client has it.
+   Marking a piece delivered with nothing recorded about how it left
+   is still possible — it is just no longer the obvious button. */
+function pieceActs(l) {
+  return `
+    ${l.despatch
+      ? `<button class="mini" data-despatch="${esc(l.id)}">${icon('truck', 13)} Details</button>`
+      : `<button class="mini" data-delivered="${esc(l.id)}">${icon('check', 13)} Delivered</button>`}
+    ${nextButton(l, 'sm')}`;
 }
 
 function shortName(l) {
@@ -185,10 +200,7 @@ function pieceRow(l) {
         <span class="prow-t">${esc(l.name || 'Untitled piece')}</span>
         <span class="prow-s">${esc(bits.join(' · '))}</span>
       </span>
-      <span class="qcrow-acts">
-        <button class="mini" data-despatch="${esc(l.id)}">${icon('truck', 13)} ${d ? 'Details' : 'How it leaves'}</button>
-        <button class="mini ok" data-delivered="${esc(l.id)}">${icon('check', 13)} Delivered</button>
-      </span>
+      <span class="qcrow-acts">${pieceActs(l)}</span>
     </article>`;
 }
 

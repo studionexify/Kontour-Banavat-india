@@ -24,6 +24,7 @@ import * as subs from '../subs.js';
 import { openItemBoard, stateChip, capturePhotos, photosFor } from './piecework.js';
 import { photos, blobURL } from '../db.js';
 import { lineThumb } from './thumbs.js';
+import { nextButton, wireNext } from './nextstep.js';
 import { pickImage, shrink } from '../photos.js';
 import { uid } from '../store.js';
 import { orderGroups } from '../orders.js';
@@ -84,10 +85,11 @@ export function render(root, ctx) {
   on(root, '[data-editdesign]', (e, b) => openDesignSheet({ code: b.dataset.editdesign, onSaved: ctx.refresh }));
   on(root, '[data-cat]', (e, b) => { cat = b.dataset.cat; ctx.refresh(); });
 
-  on(root, '[data-pass]', (e, b) => {
-    e.stopPropagation();
-    openCheck(b.dataset.pass, 'pass', ctx.refresh);
-  });
+  /* Passing a piece is its next step, so it comes off the same
+     button as everywhere else on the line — the one in the corner.
+     Sending it back is the exception, not the next thing, and stays
+     a small button beside it. */
+  wireNext(root, ctx.refresh);
 
   on(root, '[data-fail]', (e, b) => {
     e.stopPropagation();
@@ -156,8 +158,8 @@ function qcRow(l) {
         <span class="prow-s">${esc(bits.join(' · '))}</span>
       </span>
       <span class="qcrow-acts">
-        <button class="mini" data-fail="${esc(l.id)}">${icon('back', 13)} Back</button>
-        <button class="mini ok" data-pass="${esc(l.id)}">${icon('check', 13)} Pass</button>
+        <button class="mini" data-fail="${esc(l.id)}">${icon('back', 13)} Send back</button>
+        ${nextButton(l, 'sm')}
       </span>
     </article>`;
 }
