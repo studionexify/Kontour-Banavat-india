@@ -33,6 +33,7 @@ import { openWorkOrder } from './workorder.js';
 import { wire } from './production.js';
 import { openItemBoard, stateChip } from './piecework.js';
 import { viewToggle, wireViewToggle, timeline, levelTone } from './viewkit.js';
+import { itemNextButton, wireNextAll } from './nextstep.js';
 
 /* Which half of a person's board is showing. Kept per person rather
    than globally, so opening Dinesh after Arif does not land you on
@@ -387,7 +388,18 @@ export function openPerson(id, ctx) {
     const refresh = () => { draw(sheet, handle); if (ctx) ctx.refresh(); };
 
     on(sheet, '[data-ptab]', (e, b) => { personTab.set(id, b.dataset.ptab); refresh(); });
-    on(sheet, '[data-item]', (e, b) => openItemBoard(b.dataset.item, refresh));
+    on(sheet, '[data-item]', (e, b) => {
+      if (e.target.closest('.nextbtn')) return;
+      openItemBoard(b.dataset.item, refresh);
+    });
+
+    /* draw() re-binds on every repaint, so the one handler that
+       changes a record rather than opening something is wired once
+       — twice would approve a piece twice and say so twice. */
+    if (!sheet._nextWired) {
+      sheet._nextWired = true;
+      wireNextAll(sheet, refresh);
+    }
     on(sheet, '[data-wo]', (e, b) => openWorkOrder(b.dataset.wo, { onDone: refresh }));
     on(sheet, '[data-new-wo]', () => openAssign({ subId: id, onDone: refresh }));
     on(sheet, '[data-pay]', (e, b) => openPayment(subs.getPayment(b.dataset.pay), id, refresh));
@@ -656,7 +668,7 @@ export function openPayment(pay, subId, refresh) {
    list is what this piece is costing us. */
 function itemRow(it) {
   return `
-    <button class="prow" data-item="${esc(it.id)}">
+    <article class="prow" data-item="${esc(it.id)}" tabindex="0" role="button">
       <span class="prow-txt">
         <span class="prow-t">${esc(it.name || 'Untitled piece')}</span>
         <span class="prow-s">${esc(it.mrNo)}${it.trade ? ` · ${esc(subs.TRADE_LABELS[it.trade] || it.trade)}` : ''}${it.delivery ? ` · due ${esc(dmy(it.delivery))}` : ''}</span>
@@ -664,6 +676,7 @@ function itemRow(it) {
       <span class="prow-end">
         ${stateChip(it)}
         <span class="prow-qty num">${esc(inr(it.rate))}</span>
+        ${itemNextButton(it, 'sm')}
       </span>
-    </button>`;
+    </article>`;
 }

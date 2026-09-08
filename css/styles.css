@@ -3991,3 +3991,14 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .bigcard-act .nextbtn { margin-left:0; }
+
+/* A quotation row's corner button sits under its amount, and the
+   table's under the icons, so the eye finds the next step in the
+   same place on every screen. */
+.qrow2-side { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+.qrow2-side .nextbtn { margin-left:0; }
+/* The table's action column is a cell — it stays a cell, and the
+   button simply sits inline in it beside the icons. */
+.qt-acts .nextbtn { vertical-align:middle; margin:0 6px 0 0; }
+.prow-end { display:flex; align-items:center; gap:9px; flex:none; }
+.prow-end .nextbtn { margin-left:0; }

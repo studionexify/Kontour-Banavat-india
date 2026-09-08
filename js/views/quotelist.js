@@ -27,6 +27,7 @@ import { openQuoteDoc } from './quotedoc.js';
 import { shareQuotePdf, downloadQuotePdf } from '../quotepdf.js';
 import { pageHead, statCards, searchBar, sectionHead, nothingHere } from './chrome.js';
 import { createQuoteTable } from './quotetable.js';
+import { quoteNextButton, wireNextAll } from './nextstep.js';
 
 let filter = 'all';
 let query = '';
@@ -136,6 +137,9 @@ export async function render(root, ctx) {
   `;
 
   qtable.wire(root, ctx, list);
+  // What happens next to a quotation — sent, or approved — from the
+  // same corner button the pieces use.
+  wireNextAll(root, ctx.refresh, ctx);
 
   on(root, '[data-filter]', (e, b) => { filter = b.dataset.filter; ctx.refresh(); });
   on(root, '[data-fy]', (e, b) => { fy = b.dataset.fy; ctx.refresh(); });
@@ -176,6 +180,7 @@ export async function render(root, ctx) {
    pencil, and everything else stays one tap under the "⋯". */
 function rowActions(q) {
   return `
+    ${quoteNextButton(q, 'sm')}
     <button class="icon-btn plain sm" data-edit="${esc(q.id)}" aria-label="Edit ${esc(q.mrNo)}">${icon('edit', 16)}</button>
     <button class="icon-btn plain sm" data-more="${esc(q.id)}" aria-label="More actions for ${esc(q.mrNo)}">${icon('menu', 16)}</button>`;
 }
@@ -292,6 +297,7 @@ function row({ head: q, family, revisions }) {
           <button class="icon-btn plain sm" data-edit="${esc(q.id)}" aria-label="Edit this quotation">${icon('edit', 16)}</button>
           <button class="icon-btn plain sm" data-more="${esc(q.id)}" aria-label="More actions">${icon('menu', 16)}</button>
         </div>
+        ${quoteNextButton(q, 'sm')}
       </div>
     </article>
   `;
@@ -418,7 +424,7 @@ function openActions(id, ctx) {
    two apart — editing it away from the quoted total is what makes a
    sub-quotation, not a separate button, because that is the one
    piece of information that decides it. */
-async function openAccept(id, ctx) {
+export async function openAccept(id, ctx) {
   const { acceptQuote, quoteTotals: totals, baseNo } = await import('../quotes.js');
   const q = getQuote(id);
   if (!q) return;
