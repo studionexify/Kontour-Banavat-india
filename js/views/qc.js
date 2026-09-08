@@ -172,7 +172,9 @@ function qcRow(l) {
    file. The two lists are edited in Settings → The floor; see
    quotes.qcChecks. */
 
-function openCheck(lineId, result, onDone) {
+/* Exported so the next-process button on a piece card can open the
+   same check, rather than a second one that could drift from it. */
+export function openCheck(lineId, result, onDone) {
   const line = getLine(lineId);
   if (!line) return;
   const pass = result === 'pass';

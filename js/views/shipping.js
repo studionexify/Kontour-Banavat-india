@@ -208,7 +208,9 @@ function pieceRow(l) {
    they share this record — and its single ledger entry — rather
    than each being typed again. */
 
-function openDespatch(lineId, onDone) {
+/* Exported for the next-process button: despatching a piece is one
+   flow wherever it is started from. */
+export function openDespatch(lineId, onDone) {
   const line = getLine(lineId);
   if (!line) return;
   const current = despatchOf(lineId) || {};

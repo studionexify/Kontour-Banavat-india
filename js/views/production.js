@@ -23,6 +23,7 @@ import {
   viewToggle, wireViewToggle, board, boardCard, timeline, toneOf,
 } from './viewkit.js';
 import { lineThumb, lineImage, orderImage, thumb } from './thumbs.js';
+import { nextButton, wireNext } from './nextstep.js';
 
 let query = '';
 
@@ -76,6 +77,7 @@ export function render(root, ctx) {
 
   wire(root, ctx, { onSearch: (v) => { query = v; } });
   wireViewToggle(root, (v) => { view = v; ctx.refresh(); });
+  wireNext(root, ctx.refresh);
 }
 
 /* Shared by every station screen: the same three bindings, because
@@ -138,6 +140,9 @@ function pieceBoard(groups) {
         tone: toneOf(col.key),
         pill: late ? 'Overdue' : '',
         flag: 'out',
+        // What happens to this piece next, named on the card, so the
+        // board is worked from rather than only read.
+        action: nextButton(l, 'sm'),
       });
     }),
   })));
