@@ -3382,3 +3382,308 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
 /* A row whose whole width is the label, so the tap target is the
    row and not the box. */
 .tickrow { cursor:pointer; }
+
+/* ════════════════════════════════════════════════════════════
+   THE FOUR READINGS — board, timeline, cards, table
+   (js/views/viewkit.js)
+
+   One list, four shapes. Everything below shares one idea: the
+   colour is the stage, and it is the same colour in all four, so
+   moving between them never asks you to relearn the floor.
+
+   Each shape resolves the stage into a `--tone` / `--tone-ink`
+   pair and then only ever refers to those, which is why a new
+   station is two lines in the map below rather than an edit
+   everywhere.
+   ════════════════════════════════════════════════════════════ */
+
+:root { --st-wait:#F0EBE1; --st-wait-ink:#6B6357; }
+
+:is(.bcol, .bcard, .bigcard, .gantt-bar, .legend li, .meters li,
+    .bar, .ch-seg, .bigcard-lines li, .cgrid .bigcard) {
+  --tone:var(--st-wait); --tone-ink:var(--st-wait-ink);
+}
+:is(.bcol, .bcard, .bigcard, .gantt-bar, .legend li, .meters li,
+    .bar, .ch-seg, .bigcard-lines li).t-quote { --tone:var(--st-quote); --tone-ink:var(--st-quote-ink); }
+:is(.bcol, .bcard, .bigcard, .gantt-bar, .legend li, .meters li,
+    .bar, .ch-seg, .bigcard-lines li).t-prod  { --tone:var(--st-prod);  --tone-ink:var(--st-prod-ink); }
+:is(.bcol, .bcard, .bigcard, .gantt-bar, .legend li, .meters li,
+    .bar, .ch-seg, .bigcard-lines li).t-sub   { --tone:var(--st-sub);   --tone-ink:var(--st-sub-ink); }
+:is(.bcol, .bcard, .bigcard, .gantt-bar, .legend li, .meters li,
+    .bar, .ch-seg, .bigcard-lines li).t-qc    { --tone:var(--st-qc);    --tone-ink:var(--st-qc-ink); }
+:is(.bcol, .bcard, .bigcard, .gantt-bar, .legend li, .meters li,
+    .bar, .ch-seg, .bigcard-lines li).t-ship  { --tone:var(--st-ship);  --tone-ink:var(--st-ship-ink); }
+:is(.bcol, .bcard, .bigcard, .gantt-bar, .legend li, .meters li,
+    .bar, .ch-seg, .bigcard-lines li).t-done  { --tone:var(--st-done);  --tone-ink:var(--st-done-ink); }
+
+/* ── The view switch ───────────────────────────────────────── */
+.viewtoggle {
+  display:inline-flex; gap:2px; padding:3px;
+  background:var(--tea-soft); border:1px solid var(--line-soft);
+  border-radius:999px; flex:none;
+}
+.viewbtn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 12px; border:0; border-radius:999px;
+  background:transparent; color:var(--ink-2);
+  font:inherit; font-size:12px; font-weight:600; cursor:pointer;
+  transition:background var(--t-fast) ease, color var(--t-fast) ease;
+}
+.viewbtn.on { background:var(--paper); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.viewbtn span { display:none; }
+@media (min-width:560px) { .viewbtn span { display:inline; } }
+
+/* ── The board ─────────────────────────────────────────────── */
+.board {
+  display:grid; gap:12px; margin-bottom:22px;
+  grid-auto-flow:column; grid-auto-columns:minmax(230px, 1fr);
+  overflow-x:auto; padding-bottom:6px;
+  scroll-snap-type:x proximity;
+}
+.board::-webkit-scrollbar { height:7px; }
+.board::-webkit-scrollbar-thumb { background:var(--line); border-radius:4px; }
+.bcol {
+  scroll-snap-align:start;
+  background:var(--paper); border:1px solid var(--line-soft);
+  border-radius:18px; overflow:hidden; display:flex; flex-direction:column;
+  min-height:120px;
+}
+.bcol-h {
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:11px 13px; background:var(--tone); color:var(--tone-ink);
+}
+.bcol-t { font-size:12.5px; font-weight:700; letter-spacing:.2px; }
+.bcol-n {
+  min-width:22px; text-align:center; padding:1px 7px; border-radius:999px;
+  background:rgba(255,255,255,.6); font-size:11.5px; font-weight:700;
+}
+/* A column of forty pieces should scroll inside its column rather
+   than make the whole page as tall as the worst pile-up. */
+.bcol-b { padding:10px; display:flex; flex-direction:column; gap:9px;
+  max-height:min(62vh, 620px); overflow-y:auto; }
+.bcol-empty { margin:6px 2px; font-size:12px; color:var(--ink-3); }
+
+.bcard {
+  text-align:left; background:var(--grad-card);
+  border:1px solid var(--line-soft); border-left:4px solid var(--tone-ink);
+  border-radius:13px; padding:10px 11px; cursor:pointer;
+  transition:transform var(--t-fast) ease, box-shadow var(--t-fast) ease;
+}
+.bcard:active { transform:scale(.985); }
+.bcard-t { font-size:13.5px; font-weight:650; color:var(--ink); line-height:1.3; }
+.bcard-s { margin-top:3px; font-size:11.5px; color:var(--ink-2); }
+.bcard-m { margin-top:7px; display:flex; flex-wrap:wrap; gap:4px 10px; font-size:11px; color:var(--ink-3); }
+.bcard-f:empty { display:none; }
+.bcard-f { margin-top:8px; }
+@media (hover:hover) and (pointer:fine) {
+  .bcard:hover { box-shadow:0 6px 18px -10px rgba(0,0,0,.35); transform:translateY(-1px); }
+}
+
+/* ── The timeline ──────────────────────────────────────────── */
+.gantt { margin-bottom:22px; background:var(--paper); border:1px solid var(--line-soft); border-radius:18px; padding:14px 14px 10px; }
+.gantt-scale {
+  position:relative; height:20px; margin-left:38%; margin-bottom:8px;
+  border-bottom:1px dashed var(--line);
+}
+@media (min-width:720px) { .gantt-scale { margin-left:30%; } }
+.gantt-tick {
+  position:absolute; top:0; transform:translateX(-50%);
+  font-size:10.5px; color:var(--ink-3); white-space:nowrap;
+}
+.gantt-now {
+  position:absolute; top:-2px; transform:translateX(-50%);
+  font-size:10px; font-weight:700; color:var(--out); white-space:nowrap;
+}
+.gantt-now i { display:block; }
+.gantt-rows { display:flex; flex-direction:column; gap:7px; }
+.gantt-row {
+  display:grid; grid-template-columns:38% 1fr; gap:10px; align-items:center;
+  padding:4px 2px; border-radius:10px; cursor:pointer;
+}
+@media (min-width:720px) { .gantt-row { grid-template-columns:30% 1fr; } }
+.gantt-row:active { background:var(--tea-soft); }
+@media (hover:hover) and (pointer:fine) { .gantt-row:hover { background:var(--tea-soft); } }
+.gantt-lbl { min-width:0; }
+.gantt-lbl-t { display:block; font-size:12.5px; font-weight:640; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gantt-lbl-s { display:block; font-size:11px; color:var(--ink-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gantt-track { position:relative; height:26px; background:var(--tea-soft); border-radius:8px; overflow:hidden; }
+.gantt-rule { position:absolute; top:0; bottom:0; width:1px; background:var(--out); opacity:.45; }
+.gantt-bar {
+  position:absolute; top:3px; bottom:3px; min-width:24px;
+  background:var(--tone); border-radius:6px;
+  display:flex; align-items:center; overflow:hidden;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.05);
+}
+.gantt-bar.late { box-shadow:inset 0 0 0 1.5px var(--out); }
+.gantt-fill { position:absolute; left:0; top:0; bottom:0; background:rgba(255,255,255,.45); }
+.gantt-bar-t {
+  position:relative; padding:0 8px; font-size:10.5px; font-weight:700;
+  color:var(--tone-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.gantt-foot, .gantt-none { margin:10px 2px 2px; font-size:12px; color:var(--ink-3); }
+
+/* ── Card grid ─────────────────────────────────────────────── */
+.cgrid { display:grid; gap:14px; margin-bottom:22px; grid-template-columns:1fr; }
+@media (min-width:640px) { .cgrid { grid-template-columns:repeat(2, 1fr); } }
+@media (min-width:1180px) { .cgrid { grid-template-columns:repeat(3, 1fr); } }
+
+.bigcard {
+  text-align:left; background:var(--grad-card);
+  border:1px solid var(--line-soft); border-top:4px solid var(--tone-ink);
+  border-radius:20px; padding:14px 15px 12px; cursor:pointer;
+  display:flex; flex-direction:column; gap:10px;
+  transition:transform var(--t-fast) ease, box-shadow var(--t-fast) ease;
+}
+@media (hover:hover) and (pointer:fine) {
+  .bigcard:hover { transform:translateY(-2px); box-shadow:0 14px 30px -18px rgba(0,0,0,.5); }
+}
+.bigcard-id { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.bigcard-mr { font-size:11.5px; font-weight:750; letter-spacing:.6px; color:var(--tone-ink); }
+.bigcard-t { margin:4px 0 0; font-size:16px; font-weight:650; color:var(--ink); }
+.bigcard-stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; background:var(--tone); border-radius:13px; padding:9px 10px; }
+.bigcard-stat { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.bigcard-sv { font-size:14.5px; font-weight:700; color:var(--tone-ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bigcard-sl { font-size:9.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--tone-ink); opacity:.75; }
+.bigcard-lines { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; }
+.bigcard-lines li {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:6px 9px; border-radius:9px; background:var(--tea-soft);
+  border-left:3px solid var(--tone-ink); font-size:12px;
+}
+.bigcard-line-t { color:var(--ink); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bigcard-line-r { color:var(--ink-3); font-size:11px; white-space:nowrap; }
+.bigcard-foot { display:flex; flex-direction:column; gap:6px; }
+.bigcard-act { display:flex; flex-wrap:wrap; gap:6px; }
+.bigcard-note { font-size:11.5px; color:var(--ink-3); }
+
+/* ── Sortable table ────────────────────────────────────────── */
+.dtable-wrap {
+  overflow-x:auto; background:var(--paper);
+  border:1px solid var(--line-soft); border-radius:16px; margin-bottom:20px;
+}
+.dtable { width:100%; border-collapse:collapse; font-size:13px; }
+.dtable th { text-align:left; background:var(--tea-soft); border-bottom:1px solid var(--line); white-space:nowrap; }
+.dtable th.sorted { background:var(--k-100); }
+.dt-h {
+  display:inline-flex; align-items:center; gap:5px; width:100%;
+  padding:10px 12px; border:0; background:transparent; cursor:pointer;
+  font:inherit; font-size:11px; font-weight:750; letter-spacing:.5px;
+  text-transform:uppercase; color:var(--ink-2);
+}
+.dt-h.flat { cursor:default; }
+.dt-mark { display:inline-flex; opacity:.35; }
+.dt-mark.on { opacity:1; color:var(--ink); }
+.dtable td { padding:11px 12px; border-bottom:1px solid var(--line-soft); vertical-align:middle; }
+.dtable tbody tr:last-child td { border-bottom:0; }
+.dtable tbody tr { cursor:pointer; }
+.dtable tbody tr:active { background:var(--tea-soft); }
+@media (hover:hover) and (pointer:fine) { .dtable tbody tr:hover { background:var(--tea-soft); } }
+.dt-strong { font-weight:640; color:var(--ink); }
+.dt-mut { color:var(--ink-3); }
+.dt-date { white-space:nowrap; color:var(--ink-2); }
+.dt-amt { white-space:nowrap; font-weight:700; }
+.dt-amt .in { color:var(--in); }
+.dt-amt .out { color:var(--out); }
+.dt-tag {
+  display:inline-block; padding:2px 8px; border-radius:999px;
+  background:var(--tea-soft); font-size:11px; font-weight:700; color:var(--ink-2);
+}
+.ta-right, th.ta-right .dt-h { text-align:right; justify-content:flex-end; }
+.ta-center { text-align:center; }
+/* On a phone the headings are too narrow to tap, so the same sort
+   is offered as the chip row every other list already uses. */
+@media (max-width:719px) { .dtable-wrap { border-radius:14px; } }
+
+/* ── Dashboard panels and charts ───────────────────────────── */
+.panels { display:grid; gap:14px; margin-bottom:22px; grid-template-columns:1fr; }
+@media (min-width:760px) { .panels { grid-template-columns:repeat(2, 1fr); } .panel.wide { grid-column:1 / -1; } }
+@media (min-width:1180px) { .panels { grid-template-columns:repeat(3, 1fr); } .panel.wide { grid-column:span 2; } }
+
+.panel { background:var(--paper); border:1px solid var(--line-soft); border-radius:20px; padding:14px 16px 16px; }
+.panel-h { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.panel-h h3 { margin:0; font-size:14.5px; font-weight:680; color:var(--ink); }
+.panel-h p { margin:2px 0 0; font-size:11.5px; color:var(--ink-3); }
+.panel-b { min-height:60px; }
+.chart-none { padding:18px 2px; font-size:12.5px; color:var(--ink-3); }
+
+.chart { width:100%; height:auto; display:block; color:var(--ink); }
+.ch-grid { stroke:var(--line-soft); stroke-width:1; }
+.ch-ax { fill:var(--ink-3); font-size:10px; }
+.ch-val { fill:var(--ink-2); font-size:10px; font-weight:700; }
+.ch-line { fill:none; stroke:var(--ink); stroke-width:2.2; stroke-linejoin:round; stroke-linecap:round; }
+.ch-dot { fill:var(--paper); stroke:var(--ink); stroke-width:2; }
+.chart-donut { max-width:150px; }
+.ch-track { fill:none; stroke:var(--tea-soft); stroke-width:16; }
+.ch-seg { fill:none; stroke:var(--tone-ink); stroke-width:16; }
+.ch-cap { fill:var(--ink-3); font-size:10px; }
+.ch-tot { fill:var(--ink); font-size:17px; font-weight:700; }
+
+.donut { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.legend { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; flex:1; min-width:130px; }
+.legend.flat { flex-direction:row; flex-wrap:wrap; gap:6px 14px; margin-top:10px; }
+.legend li { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink-2);
+  background:transparent; border:0; }
+.legend li i { width:10px; height:10px; border-radius:3px; background:var(--tone-ink); flex:none; }
+.legend li b { margin-left:auto; color:var(--ink); }
+.legend li em { font-style:normal; color:var(--ink-3); min-width:34px; text-align:right; }
+.legend.flat li b, .legend.flat li em { display:none; }
+
+.barchart { display:flex; align-items:flex-end; gap:10px; }
+.barcol { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:4px; }
+.barval { font-size:11px; font-weight:700; color:var(--ink-2); }
+.bar { width:100%; max-width:38px; background:var(--tone-ink); border-radius:6px 6px 3px 3px; }
+.barlbl { font-size:10.5px; color:var(--ink-3); }
+
+.meters { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:11px; }
+.meters li { display:flex; flex-direction:column; gap:4px; background:transparent; border:0; }
+.meter-h { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.meter-l { font-size:12.5px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.meter-v { font-size:12.5px; font-weight:700; color:var(--ink-2); white-space:nowrap; }
+.meter-track { height:8px; border-radius:999px; background:var(--tea-soft); overflow:hidden; }
+.meter-track i { display:block; height:100%; border-radius:999px; background:var(--tone-ink); }
+.meter-n { font-size:11px; color:var(--ink-3); }
+
+/* ── The centred window ────────────────────────────────────────
+   A card or a row opens into the middle of the screen rather than
+   up from its bottom edge: three quarters of the viewport, the same
+   margin on all four sides, and the floor still visible around it
+   so you can see what you came from. Tapping that floor closes it —
+   the scrim already carried that behaviour, this only makes the
+   target the whole of the space around the window.
+
+   A phone keeps the sheet it always had: three quarters of a
+   540-pixel screen is not a window, it is a worse full screen. */
+@media (min-width:900px) {
+  .sheet, .sheet.full {
+    left:50%; right:auto; top:50%; bottom:auto;
+    width:75vw; max-width:75vw;
+    height:75vh; max-height:75vh;
+    transform:translate(-50%, -50%);
+    border-radius:24px;
+    box-shadow:0 30px 80px -30px rgba(var(--shade-rgb), .6);
+    animation:centre-in .3s var(--ease);
+    overflow:hidden;
+  }
+  /* Narrow, form-shaped sheets do not want to be three quarters of a
+     wide monitor — a single column of fields stretched to 1400px is
+     unreadable. They cap, and stay centred. */
+  .sheet:not(.wide):not(.full) { max-width:min(75vw, 640px); }
+  .sheet.wide, .sheet.full.wide { max-width:min(75vw, 1100px); }
+  .sheet-content, .sheet-body { max-height:100%; }
+}
+
+@keyframes centre-in {
+  from { opacity:0; transform:translate(-50%, -46%) scale(.97); }
+  to   { opacity:1; transform:translate(-50%, -50%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet, .sheet.full { animation:none; }
+}
+
+/* Leaving, in the direction it arrived from. */
+.sheet.closing { transition:transform .2s ease-in, opacity .2s ease-in; transform:translateY(100%); }
+@media (min-width:900px) {
+  .sheet.closing, .sheet.full.closing {
+    transform:translate(-50%, -48%) scale(.98); opacity:0;
+  }
+}

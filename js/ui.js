@@ -74,9 +74,13 @@ export function openSheet({ title = '', body = '', dark = false, full = false, w
     close() {
       if (handle._closed) return;
       handle._closed = true;
+      /* How it leaves is decided in CSS, because where it came from
+         is: a phone's sheet drops back off the bottom edge, a
+         desktop's centred window fades back into the floor it is
+         sitting on. Setting a transform here would fight the one
+         that centres it. */
       sheet.style.animation = 'none';
-      sheet.style.transition = 'transform .2s ease-in';
-      sheet.style.transform = 'translateY(100%)';
+      sheet.classList.add('closing');
       scrim.style.transition = 'opacity .2s';
       scrim.style.opacity = '0';
       setTimeout(() => { sheet.remove(); scrim.remove(); }, 200);

@@ -32,6 +32,7 @@ import { openAssign } from './assignwork.js';
 import { openWorkOrder } from './workorder.js';
 import { wire } from './production.js';
 import { openItemBoard, stateChip } from './piecework.js';
+import { viewToggle, wireViewToggle, timeline, levelTone } from './viewkit.js';
 
 /* Which half of a person's board is showing. Kept per person rather
    than globally, so opening Dinesh after Arif does not land you on
@@ -40,6 +41,19 @@ const personTab = new Map();
 
 let query = '';
 let filter = 'all';   // all | owing | blacklisted | archived
+
+/* Two ways to read the same shed. "People" is the address book with
+   a balance against each name — who is owed what. "In progress" is
+   the same work laid against a calendar: every piece somebody is
+   holding right now, from the day it was handed over to the day it
+   is wanted, so a week where four people are all due on the same
+   Thursday is visible before it happens rather than after. */
+let view = 'people';
+
+const VIEWS = [
+  { key: 'people', label: 'People', icon: 'hands' },
+  { key: 'progress', label: 'In progress', icon: 'timeline' },
+];
 
 const FILTERS = [
   { id: 'all', label: 'Everyone' },
@@ -86,27 +100,86 @@ export async function render(root, ctx) {
         { label: 'Outstanding', value: inr(s.owed), hint: s.owing ? `${s.owing} to settle` : 'all settled' },
       ])}
 
-      <div class="chipbar" style="margin:14px 0 4px">
-        ${FILTERS.map((f) => `<button class="chip ${filter === f.id ? 'on' : ''}" data-filter="${f.id}">${esc(f.label)}</button>`).join('')}
-      </div>
+      ${view === 'people' ? `
+        <div class="chipbar" style="margin:14px 0 4px">
+          ${FILTERS.map((f) => `<button class="chip ${filter === f.id ? 'on' : ''}" data-filter="${f.id}">${esc(f.label)}</button>`).join('')}
+        </div>
 
-      ${searchBar(query, 'Search a name, a firm or a trade')}
+        ${searchBar(query, 'Search a name, a firm or a trade')}` : ''}
 
-      ${sectionHead(filter === 'all' ? 'By balance' : FILTERS.find((f) => f.id === filter).label)}
-      ${list.length
-        ? `<div class="vgrid">${list.map(card).join('')}</div>`
-        : nothingHere('hands',
-            query ? 'No sub-contractor matches' : emptyTextFor(),
-            query ? 'Try another search' : 'Add one, or commission work from inside an order')}
+      ${sectionHead(view === 'progress' ? 'Out with somebody, right now'
+        : (filter === 'all' ? 'By balance' : FILTERS.find((f) => f.id === filter).label),
+        viewToggle(VIEWS, view))}
 
-      ${filter === 'all' && !query ? assignCta() : ''}
+      ${view === 'progress' ? progressTimeline() : `
+        ${list.length
+          ? `<div class="vgrid">${list.map(card).join('')}</div>`
+          : nothingHere('hands',
+              query ? 'No sub-contractor matches' : emptyTextFor(),
+              query ? 'Try another search' : 'Add one, or commission work from inside an order')}
+
+        ${filter === 'all' && !query ? assignCta() : ''}`}
     </div>`;
 
   wire(root, ctx, { onSearch: (v) => { query = v; } });
+  wireViewToggle(root, (v) => { view = v; ctx.refresh(); });
+  on(root, '[data-item]', (e, b) => openItemBoard(b.dataset.item, ctx.refresh));
   on(root, '[data-filter]', (e, b) => { filter = b.dataset.filter; ctx.refresh(); });
   on(root, '[data-add]', () => openEditor(null, ctx));
   on(root, '[data-sub]', (e, b) => openPerson(b.dataset.sub, ctx));
   on(root, '[data-assign]', () => openAssign({ onDone: ctx.refresh }));
+}
+
+/* ── Everything currently out of the workshop ──────────────────
+   One bar per commissioned piece: it starts the day its work order
+   was issued and ends the day the piece is wanted, and its colour
+   is the person holding it, so a name is read off the chart without
+   reading a word. A piece that has been sent back — improve or
+   rejected — takes the warning stripe instead: those are the ones
+   that will cost the schedule.
+
+   Ordered by who is due first, because that is the only order this
+   chart is ever read in. */
+function progressTimeline() {
+  const open = subs.itemsInState(['working', 'improve', 'rejected']);
+  if (!open.length) {
+    return nothingHere('hands', 'Nothing is out with anybody',
+      'Commissioned pieces appear here until they are approved');
+  }
+
+  // A stable colour per person, assigned in the order they appear on
+  // this chart, so one shed reads as one legend.
+  const tones = new Map();
+  const toneFor = (id) => {
+    if (!tones.has(id)) tones.set(id, levelTone(tones.size));
+    return tones.get(id);
+  };
+
+  const rows = open.map((it) => {
+    const wo = it.woId ? subs.getWorkOrder(it.woId) : null;
+    const person = subs.subOfItem(it);
+    const sent = it.state !== 'working';
+    return {
+      id: it.id,
+      label: it.name || 'Untitled piece',
+      sub: [person ? person.name : 'Unassigned', it.mrNo].filter(Boolean).join(' · '),
+      start: (wo && wo.issueDate) || '',
+      end: it.delivery || '',
+      tone: sent ? 'sub' : toneFor(person ? person.id : '—'),
+      late: Boolean(it.delivery && it.delivery < todayISO()),
+      barLabel: subs.ITEM_STATES[it.state || 'working'].label,
+      range: [(wo && wo.issueDate) ? dmy(wo.issueDate) : '', it.delivery ? dmy(it.delivery) : ''].filter(Boolean).join(' → '),
+    };
+  }).sort((a, b) => (a.end || '9999').localeCompare(b.end || '9999'));
+
+  const legend = [...tones.entries()].map(([id, tone]) => {
+    const p = subs.getSub(id);
+    return `<li class="t-${tone}"><i></i>${esc(p ? p.name : 'Unassigned')}</li>`;
+  }).join('');
+
+  return `
+    ${timeline(rows, { today: todayISO(), openAttr: 'data-item' })}
+    ${legend ? `<ul class="legend flat">${legend}</ul>` : ''}`;
 }
 
 function emptyTextFor() {

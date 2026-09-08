@@ -24,12 +24,23 @@ import {
   linesAt, groupsAt, updateLine, linesByMr, getLine,
   DESPATCH_MODES, despatchOf, setDespatch,
 } from '../orders.js';
-import { dmy, todayISO, inr } from '../format.js';
+import { dmy, dayLabel, todayISO, inr } from '../format.js';
 import { addEntry } from '../store.js';
 import { pageHead, statCards, searchBar, nothingHere, sectionHead } from './chrome.js';
 import { wire } from './production.js';
+import { viewToggle, wireViewToggle, cardGrid, bigCard } from './viewkit.js';
 
 let query = '';
+
+/* Shipping is read one order at a time — is this client's lot all
+   out, and on what — so the card is the default here and the flat
+   list is the alternative rather than the other way round. */
+let view = 'cards';
+
+const VIEWS = [
+  { key: 'cards', label: 'Cards', icon: 'grid' },
+  { key: 'list', label: 'List', icon: 'rows' },
+];
 
 export function render(root, ctx) {
   const pieces = linesAt('shipping');
@@ -65,15 +76,20 @@ export function render(root, ctx) {
 
       ${searchBar(query, 'Search piece, client, MR number')}
 
-      ${byMr.size ? [...byMr.entries()].map(([mrNo, group]) => `
-        ${sectionHead(`${mrNo}${group[0].client ? ` · ${group[0].client}` : ''}`,
-          `<span class="sec-link">${group.length} piece${group.length === 1 ? '' : 's'} ready</span>`)}
-        <div class="plist" style="margin-bottom:20px">${group.map(pieceRow).join('')}</div>`).join('')
+      ${sectionHead('Out of the workshop', viewToggle(VIEWS, view))}
+
+      ${byMr.size ? (view === 'cards'
+        ? cardGrid([...byMr.entries()].map(([mrNo, group]) => orderShipCard(mrNo, group)))
+        : [...byMr.entries()].map(([mrNo, group]) => `
+          ${sectionHead(`${mrNo}${group[0].client ? ` · ${group[0].client}` : ''}`,
+            `<span class="sec-link">${group.length} piece${group.length === 1 ? '' : 's'} ready</span>`)}
+          <div class="plist" style="margin-bottom:20px">${group.map(pieceRow).join('')}</div>`).join(''))
         : nothingHere('truck', query ? 'Nothing matches' : 'Nothing shipping right now',
             query ? 'Try another search' : 'Pieces arrive here once they pass QC')}
     </div>`;
 
   wire(root, ctx, { onSearch: (v) => { query = v; } });
+  wireViewToggle(root, (v) => { view = v; ctx.refresh(); });
 
   on(root, '[data-delivered]', async (e, b) => {
     e.stopPropagation();
@@ -97,6 +113,57 @@ export function render(root, ctx) {
     e.stopPropagation();
     openDespatch(b.dataset.despatch, ctx.refresh);
   });
+}
+
+/* ── One order, as a card ──────────────────────────────────────
+   Everything of one number that is standing at Shipping: how many
+   pieces, how many still have no despatch against them, and the
+   pieces themselves with their own colour — green once they have a
+   despatch record, amber while they do not, red once the date they
+   were wanted has passed. The two buttons stay on the piece, on the
+   card as in the list, because despatching is per piece.
+
+   The card body opens the order; its buttons do not, which is why
+   wire() checks where the tap landed. */
+function orderShipCard(mrNo, group) {
+  const today = todayISO();
+  const waiting = group.filter((l) => !l.despatch).length;
+  const late = group.filter((l) => l.deliveryDate && l.deliveryDate < today).length;
+  const due = group.map((l) => l.deliveryDate).filter(Boolean).sort()[0] || '';
+
+  return bigCard({
+    id: mrNo,
+    mrNo,
+    title: group[0].client || 'Unnamed client',
+    tone: late ? 'sub' : waiting ? 'ship' : 'done',
+    pill: waiting ? `${waiting} to despatch` : 'All despatched',
+    pillTone: waiting ? 'warn' : 'in',
+    stats: [
+      { label: 'Pieces', value: group.length },
+      { label: 'Despatched', value: group.length - waiting },
+      { label: due ? 'Due' : 'No date', value: due ? dayLabel(due) : '—' },
+    ],
+    lines: group.map((l) => {
+      const d = l.despatch;
+      const mode = d && DESPATCH_MODES[d.mode] ? DESPATCH_MODES[d.mode].label : '';
+      const overdue = l.deliveryDate && l.deliveryDate < today;
+      return {
+        text: `${l.name || 'Untitled piece'}${l.qty > 1 ? ` ×${l.qty}` : ''}`,
+        right: d ? [mode, d.ref].filter(Boolean).join(' · ') : 'awaiting despatch',
+        tone: d ? 'done' : overdue ? 'sub' : 'ship',
+      };
+    }),
+    foot: group.map((l) => `
+      <span class="bigcard-act">
+        <button class="mini" data-despatch="${esc(l.id)}">${icon('truck', 13)} ${l.despatch ? 'Details' : 'How it leaves'} · ${esc(shortName(l))}</button>
+        <button class="mini ok" data-delivered="${esc(l.id)}">${icon('check', 13)} Delivered</button>
+      </span>`).join(''),
+  });
+}
+
+function shortName(l) {
+  const n = l.name || 'piece';
+  return n.length > 18 ? `${n.slice(0, 17)}…` : n;
 }
 
 function pieceRow(l) {

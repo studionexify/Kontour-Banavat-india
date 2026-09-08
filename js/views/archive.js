@@ -14,15 +14,28 @@
 import { esc, on, toast } from '../ui.js';
 import { groupsAt } from '../orders.js';
 import { quoteFamilies, quoteTotals, quoteName, jobValueFor, STATUS, getQuote, unarchiveQuote } from '../quotes.js';
-import { dmy, fyOf, inr, todayISO } from '../format.js';
+import { dmy, dayLabel, fyOf, inr, todayISO } from '../format.js';
 import { pageHead, statCards, searchBar, orderCard, nothingHere, sectionHead } from './chrome.js';
 import { openOrder } from './orderdetail.js';
 import { openQuoteDoc } from './quotedoc.js';
 import { downloadQuotePdf } from '../quotepdf.js';
 import { createQuoteTable } from './quotetable.js';
+import { viewToggle, wireViewToggle, cardGrid, bigCard } from './viewkit.js';
+import { linesByMr } from '../orders.js';
 
 let tab = 'orders';    // 'orders' | 'quotes'
 let query = '';
+
+/* A finished order is looked up, not scanned: a year later somebody
+   wants to see everything that went out under one number, with its
+   pieces, rather than a line in a register. So the archive opens as
+   cards, and keeps the register as the second reading. */
+let view = 'cards';
+
+const VIEWS = [
+  { key: 'cards', label: 'Cards', icon: 'grid' },
+  { key: 'list', label: 'List', icon: 'rows' },
+];
 
 /* The decided half of the archive is the same list of quotations the
    working screen holds, so it is the same table — columns that sort
@@ -101,8 +114,10 @@ export function render(root, ctx) {
       ${searchBar(query, tab === 'orders' ? 'Search client, MR number' : 'Search client, MR number')}
 
       ${tab === 'orders' ? `
-        ${sectionHead('Made and delivered')}
-        ${delivered.length ? `<div class="olist">${delivered.map(orderRow).join('')}</div>`
+        ${sectionHead('Made and delivered', viewToggle(VIEWS, view))}
+        ${delivered.length ? (view === 'cards'
+            ? cardGrid(delivered.map(orderArchiveCard))
+            : `<div class="olist">${delivered.map(orderRow).join('')}</div>`)
           : nothingHere('archive', query ? 'Nothing matches' : 'Nothing archived yet',
               query ? 'Try another search' : 'Orders land here once every piece is delivered')}
       ` : `
@@ -117,6 +132,7 @@ export function render(root, ctx) {
 
   if (tab === 'quotes') qtable.wire(root, ctx, shown);
 
+  wireViewToggle(root, (v) => { view = v; ctx.refresh(); });
   on(root, '[data-tab]', (e, b) => { tab = b.dataset.tab; query = ''; qtable.clear(); ctx.refresh(); });
   // The table's own rows carry data-open, so on the quotations tab
   // that id is a quotation, not an order.
@@ -152,6 +168,36 @@ function filterQuotes(list) {
    document, and what can still be done to a handful of them is on
    the bulk bar. */
 const rowActions = () => '';
+
+/* ── A finished order, as a card ───────────────────────────────
+   What was made, for whom, how many pieces, when it went out and
+   how it left — the whole record of one number, without opening it.
+   Everything reads in the archive's own grey: nothing here is
+   waiting on anybody, and colouring it like live work would make
+   the floor harder to read, not easier. */
+function orderArchiveCard(g) {
+  const pieces = linesByMr(g.mrNo);
+  const modes = [...new Set(pieces.map((l) => (l.despatch && l.despatch.mode) || '').filter(Boolean))];
+  return bigCard({
+    id: g.mrNo,
+    mrNo: g.mrNo,
+    title: g.client || 'Unnamed client',
+    tone: 'done',
+    pill: 'Delivered',
+    pillTone: 'in',
+    stats: [
+      { label: 'Pieces', value: g.lines.length },
+      { label: 'Delivered', value: g.deliveryDate ? dayLabel(g.deliveryDate) : '—' },
+      { label: 'Received', value: g.orderReceived ? dayLabel(g.orderReceived) : '—' },
+    ],
+    lines: g.lines.slice(0, 6).map((l) => ({
+      text: `${l.name || 'Untitled piece'}${l.qty > 1 ? ` ×${l.qty}` : ''}`,
+      right: (l.despatch && l.despatch.ref) || '',
+      tone: 'done',
+    })),
+    foot: `<span class="bigcard-note">${esc(g.lines.length > 6 ? `and ${g.lines.length - 6} more · ` : '')}${esc(modes.length ? `left by ${modes.join(', ')}` : 'no despatch recorded')}</span>`,
+  });
+}
 
 function orderRow(g) {
   const meta = [`${g.lines.length} piece${g.lines.length === 1 ? '' : 's'}`];
