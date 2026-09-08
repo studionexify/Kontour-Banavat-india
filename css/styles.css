@@ -3853,3 +3853,41 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
   [data-section="phynance"] .sec > .empty,
   [data-section="commission"] .sec > .list { max-width:1120px; }
 }
+
+/* ── Filling the room, top to bottom ──────────────────────────
+   Widening the page exposed the other half of the same problem:
+   the board stopped at a fixed height with the bottom third of the
+   monitor empty under it, and a short analytics panel was stretched
+   into a tall box with a hole in it.
+
+   Two rules, and they pull in opposite directions on purpose. The
+   board is a workspace: it should reach the bottom of the screen
+   and scroll inside its own columns, so the pile-up at one stage is
+   read against the height of the window. A panel is a statement:
+   it should be exactly as tall as what it says, and sit at the top
+   of its row rather than being stretched to match its neighbour. */
+@media (min-width:900px) {
+  /* Only a screen that is holding a board becomes a full-height
+     column; every other screen keeps flowing as it did. */
+  .floor:has(.board) {
+    display:flex; flex-direction:column; height:100%;
+    /* Every other screen reserves a strip at the bottom so its last
+       row can be scrolled out from under the floating button. A
+       board does not scroll — its columns do — so that strip is
+       just a bare inch of page. */
+    padding-bottom:calc(var(--safe-b) + 26px);
+  }
+  /* Takes the room left under the headings, and never less than a
+     usable column — on a short window the page scrolls instead. */
+  .floor > .board { flex:1 1 auto; min-height:380px; }
+  .bcol { height:100%; }
+  /* The cap moves off the body and onto the column: the body now
+     takes whatever height the window gives the board. */
+  .bcol-b { max-height:none; flex:1 1 auto; min-height:0; overflow-y:auto; }
+
+  /* A panel is as tall as its contents. */
+  .panels { align-items:start; }
+
+  /* Five bars on a metre of panel should be bars, not pencils. */
+  .bar { max-width:58px; }
+}
