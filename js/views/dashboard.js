@@ -135,14 +135,14 @@ function row(g, late) {
 
 function panel(title, sub, body, mod = '') {
   return `
-    <section class="panel ${mod}">
-      <header class="panel-h">
+    <section class="dpanel ${mod}">
+      <header class="dpanel-h">
         <div>
           <h3>${esc(title)}</h3>
           ${sub ? `<p>${esc(sub)}</p>` : ''}
         </div>
       </header>
-      <div class="panel-b">${body}</div>
+      <div class="dpanel-b">${body}</div>
     </section>`;
 }
 

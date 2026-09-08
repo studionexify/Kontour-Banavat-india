@@ -3596,14 +3596,14 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
 
 /* ── Dashboard panels and charts ───────────────────────────── */
 .panels { display:grid; gap:14px; margin-bottom:22px; grid-template-columns:1fr; }
-@media (min-width:760px) { .panels { grid-template-columns:repeat(2, 1fr); } .panel.wide { grid-column:1 / -1; } }
-@media (min-width:1180px) { .panels { grid-template-columns:repeat(3, 1fr); } .panel.wide { grid-column:span 2; } }
+@media (min-width:760px) { .panels { grid-template-columns:repeat(2, 1fr); } .dpanel.wide { grid-column:1 / -1; } }
+@media (min-width:1180px) { .panels { grid-template-columns:repeat(3, 1fr); } .dpanel.wide { grid-column:span 2; } }
 
-.panel { background:var(--paper); border:1px solid var(--line-soft); border-radius:20px; padding:14px 16px 16px; }
-.panel-h { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:12px; }
-.panel-h h3 { margin:0; font-size:14.5px; font-weight:680; color:var(--ink); }
-.panel-h p { margin:2px 0 0; font-size:11.5px; color:var(--ink-3); }
-.panel-b { min-height:60px; }
+.dpanel { background:var(--paper); border:1px solid var(--line-soft); border-radius:20px; padding:14px 16px 16px; }
+.dpanel-h { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.dpanel-h h3 { margin:0; font-size:14.5px; font-weight:680; color:var(--ink); }
+.dpanel-h p { margin:2px 0 0; font-size:11.5px; color:var(--ink-3); }
+.dpanel-b { min-height:60px; }
 .chart-none { padding:18px 2px; font-size:12.5px; color:var(--ink-3); }
 
 .chart { width:100%; height:auto; display:block; color:var(--ink); }
@@ -3774,3 +3774,120 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
 }
 .lightbox-x:hover { background:rgba(255,255,255,.24); }
 @media (prefers-reduced-motion: reduce) { .lightbox { animation:none; } }
+
+/* ════════════════════════════════════════════════════════════
+   THE DESKTOP TAKES THE WHOLE WINDOW
+
+   Kontour grew out of a phone, and the desktop layout it grew
+   into kept the phone's habit: one centred column with the page
+   showing down both sides. On a workshop PC that is a monitor
+   two thirds wasted — the board can only show four columns, the
+   tables truncate, and the cards sit three abreast on a screen
+   that would take five.
+
+   So from the rail's width up, the content is the window. The
+   spine becomes the full width beside the rail and the gutters
+   grow with it — a margin, not a column — so nothing is ever
+   glued to the edge of the glass.
+   ════════════════════════════════════════════════════════════ */
+
+@media (min-width:900px) {
+  :root { --content-w:100%; --gutter:26px; }
+
+  .screen > *, .floor, .topbar-in, .sec { max-width:none; }
+  .floor { padding:22px var(--gutter) calc(var(--safe-b) + 96px); }
+  .sec { padding:26px var(--gutter) 0; }
+  .hero { padding-left:var(--gutter); padding-right:var(--gutter); }
+  .topbar { padding-left:var(--gutter); padding-right:var(--gutter); }
+
+  /* Given the width, the grids stop being two or three fixed
+     columns and simply fill the row. */
+  .grid2 { grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); }
+  .kpis  { grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); }
+  .vgrid { grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); }
+
+  /* The figure cards spread to fill the row rather than multiply
+     into a strip of eight nobody reads the end of: auto-fit makes
+     a track per card and lets each one take its share. */
+  .statcards { grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); }
+
+  /* The dark hero band goes full bleed, but what is written on it
+     does not: three figures spread across a metre of glass are
+     three figures nobody reads together. */
+  .hero-bar, .stat-row { max-width:1040px; margin-inline:auto; }
+
+  /* A button is the size of what it says, not the size of the
+     window. Full-width is a phone idiom — there it is the thumb's
+     target; here it is a metre of empty pill. */
+  .floor > .btn, .sec > .btn { max-width:420px; }
+}
+
+@media (min-width:1280px) {
+  :root { --content-w:100%; --gutter:32px; }
+  .sec { padding:30px var(--gutter) 0; }
+  /* The board shows every stage at once rather than scrolling. */
+  .board { grid-auto-columns:minmax(240px, 1fr); overflow-x:visible; }
+  .cgrid { grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); }
+  .panels { grid-template-columns:repeat(3, 1fr); }
+}
+
+@media (min-width:1600px) {
+  :root { --content-w:100%; --gutter:38px; }
+  .sec { padding:34px var(--gutter) 0; }
+  .floor { padding-left:var(--gutter); padding-right:var(--gutter); }
+  /* Only the reading matter stays a column: a paragraph set 1500
+     pixels wide is a paragraph nobody finishes the line of. Lists,
+     boards, cards and tables take everything. */
+  .comingup, .sheet-lede { max-width:78ch; }
+}
+
+/* A day book at full width would set its amount a metre from its
+   party — a row you have to track across with a finger. The money
+   screens therefore keep a working column, and sit at the left of
+   it rather than centred, so the eye starts in the same place
+   whatever the window is doing. The stations do not: a card grid
+   and a board genuinely want the room. */
+@media (min-width:1280px) {
+  [data-section="phynance"] .sec > .list,
+  [data-section="phynance"] .daygroup,
+  [data-section="phynance"] .sec > .empty,
+  [data-section="commission"] .sec > .list { max-width:1120px; }
+}
+
+/* ── Filling the room, top to bottom ──────────────────────────
+   Widening the page exposed the other half of the same problem:
+   the board stopped at a fixed height with the bottom third of the
+   monitor empty under it, and a short analytics panel was stretched
+   into a tall box with a hole in it.
+
+   Two rules, and they pull in opposite directions on purpose. The
+   board is a workspace: it should reach the bottom of the screen
+   and scroll inside its own columns, so the pile-up at one stage is
+   read against the height of the window. A panel is a statement:
+   it should be exactly as tall as what it says, and sit at the top
+   of its row rather than being stretched to match its neighbour. */
+@media (min-width:900px) {
+  /* Only a screen that is holding a board becomes a full-height
+     column; every other screen keeps flowing as it did. */
+  .floor:has(.board) {
+    display:flex; flex-direction:column; height:100%;
+    /* Every other screen reserves a strip at the bottom so its last
+       row can be scrolled out from under the floating button. A
+       board does not scroll — its columns do — so that strip is
+       just a bare inch of page. */
+    padding-bottom:calc(var(--safe-b) + 26px);
+  }
+  /* Takes the room left under the headings, and never less than a
+     usable column — on a short window the page scrolls instead. */
+  .floor > .board { flex:1 1 auto; min-height:380px; }
+  .bcol { height:100%; }
+  /* The cap moves off the body and onto the column: the body now
+     takes whatever height the window gives the board. */
+  .bcol-b { max-height:none; flex:1 1 auto; min-height:0; overflow-y:auto; }
+
+  /* A panel is as tall as its contents. */
+  .panels { align-items:start; }
+
+  /* Five bars on a metre of panel should be bars, not pencils. */
+  .bar { max-width:58px; }
+}

@@ -19,11 +19,13 @@ const TONES = ['quote', 'prod', 'sub', 'qc', 'ship', 'done'];
 export function chartTone(i) { return TONES[i % TONES.length]; }
 
 /** A trend: points is [{ label, value }]. */
-export function lineChart(points, { height = 190, money = false } = {}) {
+export function lineChart(points, { height = 230, money = false } = {}) {
   if (!points.length) return '<div class="chart-none">Nothing to plot yet</div>';
-  const w = 640;
+  const w = 900;
   const h = height;
-  const padL = 44; const padR = 14; const padT = 22; const padB = 26;
+  // The last label is centred on its point, so the right pad has
+  // to be half a label wide or the month is clipped at the edge.
+  const padL = 46; const padR = 46; const padT = 22; const padB = 26;
   const max = Math.max(1, ...points.map((p) => p.value));
   const step = points.length > 1 ? (w - padL - padR) / (points.length - 1) : 0;
   const x = (i) => padL + step * i;
@@ -38,8 +40,7 @@ export function lineChart(points, { height = 190, money = false } = {}) {
   }).join('');
 
   return `
-    <svg class="chart chart-line" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img"
-         aria-label="Trend chart">
+    <svg class="chart chart-line" viewBox="0 0 ${w} ${h}" role="img" aria-label="Trend chart">
       <defs>
         <linearGradient id="chfill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="currentColor" stop-opacity=".22"/>
