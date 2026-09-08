@@ -3977,3 +3977,17 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
 .qa-row.on { border-color:var(--ink); box-shadow:0 0 0 1px var(--ink); }
 .qa-tick { color:var(--in); display:grid; place-items:center; flex:none; }
 .plist[data-people] { display:flex; flex-direction:column; gap:7px; max-height:44vh; overflow-y:auto; margin-bottom:14px; }
+
+/* The corner button on a station row: the exception on the left,
+   the next step on the right, as on every other card. */
+.qcrow-acts { display:flex; align-items:center; gap:8px; flex:none; flex-wrap:wrap; justify-content:flex-end; }
+.bigcard-act {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:7px 0; border-top:1px solid var(--line-soft);
+}
+.bigcard-act:first-child { border-top:0; }
+.bigcard-act-n {
+  flex:1; min-width:0; font-size:12px; font-weight:600; color:var(--ink-2);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.bigcard-act .nextbtn { margin-left:0; }
