@@ -12,20 +12,19 @@
  */
 
 import { icon } from '../icons.js';
-import { on, esc, openSheet, toast, confirmSheet, field, haptic } from '../ui.js';
+import { on, esc, openSheet, toast, confirmSheet, field } from '../ui.js';
 import {
-  orderGroups, STAGES, stationOf, addLine, updateLine, deleteLine,
+  orderGroups, stageLabel, addLine, updateLine, deleteLine,
 } from '../orders.js';
 import { dmy, todayISO, inr } from '../format.js';
 import * as subs from '../subs.js';
 import { openItemBoard, stateChip } from './piecework.js';
 import { lineThumb } from './thumbs.js';
+import { nextButton, wireNext } from './nextstep.js';
+import { openQuickAssign } from './quickassign.js';
+import { toneOf } from './viewkit.js';
 
 const TRADES = ['drawings', 'metal', 'wood', 'upholstery', 'marble', 'hardware', 'package'];
-
-const TINT = {
-  inproduction: 'prod', qc: 'qc', shipping: 'ship', archive: 'done',
-};
 
 /**
  * Every piece under one MR number, each with its stage and the
@@ -63,21 +62,14 @@ export function openOrder(mrNo, onChanged = () => {}) {
       };
 
       // Delegated, so the markup can be replaced under them freely.
-      on(root, '[data-stage]', (e, b) => {
-        updateLine(b.dataset.stage, { stage: b.value });
-        haptic(8);
-        toast('Moved to ' + b.options[b.selectedIndex].text);
-        repaint();
-      });
+      // The one thing that happens next to a piece, from its corner.
+      wireNext(root, repaint);
 
-      root.addEventListener('change', (e) => {
-        const t = e.target;
-        if (!t.dataset || !t.dataset.vendor) return;
-        const [id, trade] = t.dataset.vendor.split('|');
-        const line = find().lines.find((l) => l.id === id);
-        if (!line) return;
-        updateLine(id, { vendors: { ...(line.vendors || {}), [trade]: t.value.trim() } });
-        onChanged();
+      // Adding a maker never replaces one: a piece commonly carries
+      // three, and each is its own commissioning.
+      on(root, '[data-assignpiece]', (e, b) => {
+        const line = (find() || { lines: [] }).lines.find((l) => l.id === b.dataset.assignpiece);
+        if (line) openQuickAssign(line, repaint);
       });
 
       on(root, '[data-delpiece]', async (e, b) => {
@@ -90,11 +82,6 @@ export function openOrder(mrNo, onChanged = () => {}) {
         deleteLine(b.dataset.delpiece);
         toast('Removed');
         repaint();
-      });
-
-      on(root, '[data-sendout]', async (e, b) => {
-        const { openAssign } = await import('./assignwork.js');
-        openAssign({ mrNo, onDone: repaint });
       });
 
       on(root, '[data-openwo]', async (e, b) => {
@@ -121,12 +108,24 @@ export function openOrder(mrNo, onChanged = () => {}) {
   return h;
 }
 
-/* A piece carries three kinds of fact, and they are not equally
-   busy: what it is (read, rarely), where it has got to (changed
-   often), and who is making it (changed once, checked often). So
-   the stage sits open at the top and the rest folds away. */
+/* A piece card carries what somebody standing in front of the piece
+   needs, and nothing else: what it is, what it is made of, who is
+   making it, and the one thing that happens to it next.
+
+   The stage used to be a dropdown of seven options, six of which
+   were wrong. It is a pill now — a statement of where the piece is
+   — and the button in the bottom right corner is the only way it
+   moves. See views/nextstep.js for what that button does at each
+   stage.
+
+   The seven free-text vendor boxes are gone with it. Who is making
+   a piece is a real record now: a person, a trade, a work order, a
+   rate. One piece can carry several, because it usually does —
+   metal to one man, upholstery to another, packing to a third — so
+   the list grows and "Add sub-contractor" never replaces what is
+   already there. Names typed into the old boxes are still shown,
+   as a line of text, so nothing off the original sheets is lost. */
 function pieceHTML(l) {
-  const tint = TINT[stationOf(l.stage)] || 'prod';
   const specs = [
     l.dims && ['Dimensions', l.dims],
     l.upholstery && ['Upholstery', [l.upholstery.name, l.upholstery.length].filter(Boolean).join(' · ')],
@@ -135,50 +134,77 @@ function pieceHTML(l) {
     l.others && ['Other', [l.others.type, l.others.finish].filter(Boolean).join(' · ')],
   ].filter((x) => x && x[1]);
 
+  const tone = toneOf(l.stage);
+
   return `
-    <section class="piece t-${tint}">
+    <section class="piece t-${tone}">
       <div class="piece-top">
         ${lineThumb(l)}
         <div class="piece-id">
           <div class="piece-n">${esc(l.name)}</div>
           ${l.specs ? `<p class="piece-spec">${esc(l.specs)}</p>` : ''}
         </div>
-        <span class="prow-qty">×${l.qty || 1}</span>
+        <div class="piece-mark">
+          <span class="pill sm ${l.stage === 'delivered' ? 'in' : 'mut'}">${esc(stageLabel(l.stage))}</span>
+          <span class="prow-qty">×${l.qty || 1}</span>
+        </div>
       </div>
 
-      <label class="piece-stage">
-        <span>Stage</span>
-        <select class="control flush" data-stage="${esc(l.id)}">
-          <option value="pending" ${l.stage === 'pending' ? 'selected' : ''}>Pending</option>
-          ${STAGES.map((s) => `<option value="${s.key}" ${l.stage === s.key ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}
-        </select>
-      </label>
-
       ${specs.length ? `
-        <details class="qdisc tight">
-          <summary>${icon('chevR', 15)}<span class="qdisc-t">Specification</span></summary>
-          <dl class="piece-specs">
-            ${specs.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
-          </dl>
-        </details>` : ''}
+        <dl class="piece-specs">
+          ${specs.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
+        </dl>` : ''}
 
-      <details class="qdisc tight">
-        <summary>${icon('chevR', 15)}<span class="qdisc-t">Sub-contractors</span>
-          <span class="qdisc-v">${namedCount(l)}</span></summary>
-        <div class="piece-vendors">
-          ${TRADES.map((t) => `
-            <label class="qpair">
-              <span class="qpair-l">${t[0].toUpperCase()}${t.slice(1)}</span>
-              <input class="control flush" data-vendor="${esc(l.id)}|${t}"
-                     value="${esc(cleanVendor(l.vendors && l.vendors[t]))}" placeholder="—">
-            </label>`).join('')}
-        </div>
-        ${commissionedHTML(l)}
-        <button class="mini" data-sendout="${esc(l.id)}">${icon('plus', 13)} Commission this piece</button>
-      </details>
+      ${makersHTML(l)}
 
-      <button class="mini danger-txt" data-delpiece="${esc(l.id)}">${icon('trash', 13)} Remove piece</button>
+      <div class="piece-foot">
+        <button class="mini danger-txt" data-delpiece="${esc(l.id)}">${icon('trash', 13)} Remove piece</button>
+        ${nextButton(l)}
+      </div>
     </section>`;
+}
+
+/* Who is making it. Every assignment is a row — the person, what
+   they are doing, how their part is going and what it is worth —
+   and tapping one opens that piece's board, where the rate is set
+   and the photographs of their work live.
+
+   A piece nobody has been given yet says so plainly rather than
+   showing an empty list. */
+function makersHTML(l) {
+  const items = subs.itemsForOrderLine(l.id);
+  const named = TRADES
+    .map((t) => [t, cleanVendor(l.vendors && l.vendors[t])])
+    .filter(([t, v]) => v && !items.some((it) => it.trade === t));
+
+  return `
+    <div class="makers">
+      <div class="makers-h">
+        <span class="makers-t">Sub-contractors</span>
+        <button class="mini" data-assignpiece="${esc(l.id)}">${icon('plus', 13)} Add sub-contractor</button>
+      </div>
+
+      ${items.length ? `
+        <div class="makers-list">
+          ${items.map((it) => {
+            const wo = subs.getWorkOrder(it.woId);
+            const person = wo && subs.getSub(wo.subId);
+            if (!wo || !person) return '';
+            return `
+              <button class="maker" data-openitem="${esc(it.id)}">
+                <span class="maker-n">${esc(person.name)}</span>
+                <span class="maker-tr">${esc(subs.TRADE_LABELS[it.trade] || it.trade || 'Trade not set')}</span>
+                <span class="maker-st">${stateChip(it)}</span>
+                <span class="maker-v num">${it.rate > 0 ? esc(inr(subs.itemAmount(it))) : 'rate to agree'}</span>
+              </button>`;
+          }).join('')}
+        </div>` : `
+        <p class="makers-none">Nobody assigned yet</p>`}
+
+      ${named.length ? `
+        <p class="makers-old">On the original sheet: ${named
+          .map(([t, v]) => `${esc(subs.TRADE_LABELS[t] || t)} — ${esc(v)}`).join(' · ')}</p>` : ''}
+    </div>`;
 }
 
 /* "NA" is what the sheet wrote in a column that did not apply. It
@@ -187,34 +213,6 @@ function pieceHTML(l) {
 function cleanVendor(v) {
   const s = String(v || '').trim();
   return s.toUpperCase() === 'NA' ? '' : s;
-}
-
-/* What has actually been commissioned against this piece, and for how
-   much. The names above are free text — who is meant to make it — and
-   this is the money side: a numbered work order at an agreed rate.
-   Kept beside them because the two answer the same question at
-   different levels of commitment. */
-function commissionedHTML(l) {
-  const items = subs.itemsForOrderLine(l.id);
-  if (!items.length) return '';
-  return `
-    <div class="piece-commissioned">
-      ${items.map((it) => {
-        const wo = subs.getWorkOrder(it.woId);
-        const s = wo && subs.getSub(wo.subId);
-        if (!wo || !s) return '';
-        return `
-          <button class="qpair as-row" data-openitem="${esc(it.id)}">
-            <span class="qpair-l">${esc(s.name)}${it.trade ? ` · ${esc(subs.TRADE_LABELS[it.trade] || it.trade)}` : ''}</span>
-            <span class="qpair-v">${stateChip(it)} ${esc(wo.no)} · ${it.rate > 0 ? esc(inr(subs.itemAmount(it))) : 'no rate'}</span>
-          </button>`;
-      }).join('')}
-    </div>`;
-}
-
-function namedCount(l) {
-  const n = TRADES.filter((t) => cleanVendor(l.vendors && l.vendors[t])).length;
-  return n ? `${n} named` : 'none yet';
 }
 
 /* ── Adding a piece ────────────────────────────────────────────
