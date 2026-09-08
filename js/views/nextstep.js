@@ -27,6 +27,8 @@ import { icon } from '../icons.js';
 import { esc, toast, haptic } from '../ui.js';
 import { updateLine, getLine, stageLabel } from '../orders.js';
 import { openQuickAssign } from './quickassign.js';
+import * as quotes from '../quotes.js';
+import * as subs from '../subs.js';
 
 /* stage → the one thing that happens next.
  *
@@ -126,4 +128,91 @@ export function runNext(lineId, refresh = () => {}) {
   updateLine(line.id, { stage: step.to });
   toast(`${line.name || 'Piece'} · ${step.said}`);
   refresh();
+}
+
+
+/* ── The same idea, one step earlier ───────────────────────────
+   A quotation is the piece before it is a piece, and it moves the
+   same way: it is written, it goes out, and the client says yes or
+   no. Three states, and at each of them exactly one thing is
+   waiting to happen — so the card carries the same button.
+ *
+ * Accepting is the one step that reaches into the rest of the app
+ * (it books the job and opens the pieces in production), so the
+ * button opens the approval form rather than doing it silently.
+ * Declining is the other answer, not the expected one, and stays
+ * under the row's "⋯" where it was. */
+const QUOTE_STEPS = {
+  draft: { label: 'Mark as sent', said: 'With the client' },
+  sent:  { label: 'Client approved', form: true },
+};
+
+export function quoteNextButton(q, size = '') {
+  const step = q && QUOTE_STEPS[q.status];
+  if (!step) {
+    const st = (quotes.STATUS[q && q.status] || quotes.STATUS.draft);
+    return `<span class="nextbtn done ${esc(size)}">${icon('check', 13)} ${esc(st.label)}</span>`;
+  }
+  return `
+    <button class="nextbtn ${esc(size)}" data-qnext="${esc(q.id)}" aria-label="${esc(step.label)}">
+      ${esc(step.label)} ${icon('chevR', 14)}
+    </button>`;
+}
+
+/* ── And one level down ────────────────────────────────────────
+   A commissioned piece with a sub-contractor is waiting on one
+   verdict: their part is done, or it is not. Approving is the step
+   — it is what releases the piece to QC once everyone
+   commissioned on it has said the same — so it is the button.
+   Sending work back has to be said in words and photographs, so it
+   stays inside the piece board where those live. */
+export function itemNextButton(it, size = '') {
+  if (!it) return '';
+  if ((it.state || 'working') === 'approved') {
+    return `<span class="nextbtn done ${esc(size)}">${icon('check', 13)} Approved</span>`;
+  }
+  return `
+    <button class="nextbtn ${esc(size)}" data-inext="${esc(it.id)}" aria-label="Approve their part">
+      Approve part ${icon('chevR', 14)}
+    </button>`;
+}
+
+/* One handler for the two of them, alongside the pieces', so a
+   screen wires "what happens next" once however many kinds of card
+   it is showing. `ctx` is only needed where a form has to be able
+   to send you somewhere afterwards. */
+export function wireNextAll(root, refresh = () => {}, ctx = null) {
+  wireNext(root, refresh);
+
+  root.addEventListener('click', async (e) => {
+    const q = e.target.closest('[data-qnext]');
+    if (q && root.contains(q)) {
+      e.preventDefault(); e.stopPropagation();
+      haptic(10);
+      const quote = quotes.getQuote(q.dataset.qnext);
+      if (!quote) return;
+      if (quote.status === 'draft') {
+        quotes.setStatus(quote.id, 'sent');
+        toast(`${quotes.quoteName(quote)} · with the client`);
+        refresh();
+        return;
+      }
+      const { openAccept } = await import('./quotelist.js');
+      openAccept(quote.id, ctx || { refresh });
+      return;
+    }
+
+    const i = e.target.closest('[data-inext]');
+    if (i && root.contains(i)) {
+      e.preventDefault(); e.stopPropagation();
+      haptic(10);
+      const item = subs.getItem(i.dataset.inext);
+      if (!item) return;
+      subs.setItemState(item.id, 'approved', { text: 'Approved from the board' });
+      // syncLineStage has just decided whether the piece can move on:
+      // it goes to QC only once every commissioning on it is approved.
+      toast(`${item.name || 'Piece'} · their part is approved`);
+      refresh();
+    }
+  });
 }
