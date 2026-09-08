@@ -50,7 +50,7 @@ export function openWorkOrder(woId, { onDone } = {}) {
           const img = photoFor(it);
           return `
             <button class="prow" data-item="${esc(it.id)}">
-              <span class="thumb">${img ? `<img src="${esc(img)}" alt="">` : ''}</span>
+              <span class="thumb${img ? ' zoom' : ''}"${img ? ` data-zoom="${esc(it.name || 'Piece')}"` : ''}>${img ? `<img src="${esc(img)}" alt="${esc(it.name || '')}">` : ''}</span>
               <span class="prow-txt">
                 <span class="prow-t">${esc(it.name || 'Untitled piece')}</span>
                 <span class="prow-s">${esc([it.mrNo, it.dims, it.qty > 1 ? `Qty ${it.qty}` : '', it.delivery ? `due ${dmy(it.delivery)}` : ''].filter(Boolean).join(' · '))}</span>
@@ -127,7 +127,7 @@ function openItem(itemId, refresh) {
     title: it.name || 'Piece',
     body: `
       <div class="sheet-body">
-        ${img ? `<div class="photo-wide"><img src="${esc(img)}" alt=""></div>` : ''}
+        ${img ? `<div class="photo-wide zoom" data-zoom="${esc(it.name || 'Piece')}"><img src="${esc(img)}" alt="${esc(it.name || '')}"></div>` : ''}
 
         ${field('Rate', `<input class="inp num" data-f="rate" inputmode="decimal" value="${it.rate || ''}" placeholder="0">`,
           'What this sub-contractor quoted for their work on this piece. Leave blank if no rate has been agreed.')}

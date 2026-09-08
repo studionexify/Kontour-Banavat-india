@@ -97,6 +97,71 @@ export function openSheet({ title = '', body = '', dark = false, full = false, w
   return handle;
 }
 
+/* ── The picture, full screen ──────────────────────────────────
+   Every line item in this business is recognised by its photograph
+   rather than its description — "the console" means nothing until
+   you see which console. So a thumbnail is never the whole of it:
+   tapping one has to give you the picture at the size you can
+   actually judge a finish from.
+
+   It joins the same stack as a sheet, so the back button and a tap
+   outside close the picture before they close whatever it was
+   opened from. Nothing else about the screen underneath moves. */
+export function openLightbox(src, caption = '') {
+  if (!src) return null;
+  const root = $('#sheet-root');
+  const box = el(`
+    <div class="lightbox" role="dialog" aria-modal="true" aria-label="${esc(caption || 'Photograph')}">
+      <button class="lightbox-x" data-lb-close aria-label="Close">${icon('close', 22)}</button>
+      <figure class="lightbox-fig">
+        <img src="${esc(src)}" alt="${esc(caption)}">
+        ${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}
+      </figure>
+    </div>`);
+
+  root.appendChild(box);
+  document.body.style.overflow = 'hidden';
+
+  const handle = {
+    el: box,
+    close() {
+      if (handle._closed) return;
+      handle._closed = true;
+      box.classList.add('closing');
+      setTimeout(() => box.remove(), 180);
+      const i = stack.indexOf(handle);
+      if (i >= 0) stack.splice(i, 1);
+      // Only the last thing on the stack hands scrolling back.
+      if (!stack.length) document.body.style.overflow = '';
+      document.removeEventListener('keydown', onKey);
+    },
+  };
+
+  function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); handle.close(); } }
+  document.addEventListener('keydown', onKey);
+
+  // Anywhere on the dark ground, including beside the picture.
+  box.addEventListener('click', handle.close);
+  stack.push(handle);
+  return handle;
+}
+
+/* One handler for the whole app: anything carrying data-zoom opens
+   its own <img> full screen. Views therefore only have to draw a
+   thumbnail — none of them wires a viewer of its own. */
+export function bindZoom(scope = document) {
+  scope.addEventListener('click', (e) => {
+    const hit = e.target.closest('[data-zoom]');
+    if (!hit) return;
+    const img = hit.matches('img') ? hit : hit.querySelector('img');
+    if (!img || !img.getAttribute('src')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    haptic();
+    openLightbox(img.getAttribute('src'), hit.dataset.zoom || img.alt || '');
+  });
+}
+
 export function closeTopSheet() {
   if (stack.length) { stack[stack.length - 1].close(); return true; }
   return false;

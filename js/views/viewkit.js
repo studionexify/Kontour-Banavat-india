@@ -178,10 +178,11 @@ export function board(columns) {
     </div>`;
 }
 
-/** One card on the board. */
-export function boardCard({ id, title, sub = '', meta = [], tone = 'wait', pill = '', flag = '' }) {
+/** One card on the board. `media` is the piece's own photograph. */
+export function boardCard({ id, title, sub = '', meta = [], tone = 'wait', pill = '', flag = '', media = '' }) {
   return `
     <article class="bcard t-${esc(tone)}" data-open="${esc(id)}" tabindex="0" role="button">
+      ${media ? `<div class="bcard-img">${media}</div>` : ''}
       <div class="bcard-t">${esc(title)}</div>
       ${sub ? `<div class="bcard-s">${esc(sub)}</div>` : ''}
       ${meta.length ? `<div class="bcard-m">${meta.map((m) => `<span>${esc(m)}</span>`).join('')}</div>` : ''}

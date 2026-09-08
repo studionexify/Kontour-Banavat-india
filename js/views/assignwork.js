@@ -123,7 +123,7 @@ function pickLines(mrNo, subId, onDone) {
             const img = photoFor({ orderLineId: l.id, mrNo: l.mrNo, name: l.name });
             return `
               <button class="prow pick" data-line="${esc(l.id)}">
-                <span class="thumb">${img ? `<img src="${esc(img)}" alt="">` : ''}</span>
+                <span class="thumb${img ? ' zoom' : ''}"${img ? ` data-zoom="${esc(l.name || 'Piece')}"` : ''}>${img ? `<img src="${esc(img)}" alt="${esc(l.name || '')}">` : ''}</span>
                 <span class="prow-txt">
                   <span class="prow-t">${esc(l.name || 'Untitled piece')}</span>
                   <span class="prow-s">${esc([l.dims, l.qty > 1 ? `Qty ${l.qty}` : '', l.deliveryDate ? `due ${dmy(l.deliveryDate)}` : ''].filter(Boolean).join(' · '))}</span>
@@ -259,7 +259,7 @@ function rates(subId, lines, group, onDone) {
             const img = photoFor({ orderLineId: l.id, mrNo: l.mrNo, name: l.name });
             return `
               <div class="prow rate-row">
-                <span class="thumb">${img ? `<img src="${esc(img)}" alt="">` : ''}</span>
+                <span class="thumb${img ? ' zoom' : ''}"${img ? ` data-zoom="${esc(l.name || 'Piece')}"` : ''}>${img ? `<img src="${esc(img)}" alt="${esc(l.name || '')}">` : ''}</span>
                 <span class="prow-txt">
                   <span class="prow-t">${esc(l.name || 'Untitled piece')}</span>
                   <span class="prow-s">${esc([l.dims, `Qty ${l.qty || 1}`].filter(Boolean).join(' · '))}</span>

@@ -3687,3 +3687,90 @@ body.nav-open .nav-scrim { opacity:1; visibility:visible; pointer-events:auto; }
     transform:translate(-50%, -48%) scale(.98); opacity:0;
   }
 }
+
+/* ════════════════════════════════════════════════════════════
+   THE PICTURE AGAINST THE LINE
+   (js/views/thumbs.js, ui.openLightbox)
+
+   Nothing here is recognised by its description. Every list of
+   pieces therefore carries the photograph beside the words, at one
+   of three sizes — dense row, standard, card — and every one of
+   them opens full screen when it is tapped.
+   ════════════════════════════════════════════════════════════ */
+
+.pthumb {
+  flex:none; display:block; position:relative; padding:0;
+  width:62px; height:62px; border-radius:13px; overflow:hidden;
+  border:1px solid var(--line); background:var(--tea-soft);
+  cursor:zoom-in; transition:transform var(--t-fast) ease, box-shadow var(--t-fast) ease;
+}
+.pthumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.pthumb.sm { width:46px; height:46px; border-radius:11px; }
+.pthumb.lg { width:100%; height:104px; border-radius:11px; }
+.pthumb.empty {
+  display:grid; place-items:center; color:var(--ink-3);
+  cursor:default; border-style:dashed;
+}
+/* The magnifier only appears where there is something to magnify,
+   and only on a pointer that can hover — on a phone it would just
+   be sitting on top of the picture. */
+.pthumb-z {
+  position:absolute; right:4px; bottom:4px; width:20px; height:20px;
+  border-radius:50%; display:grid; place-items:center;
+  background:rgba(20,19,15,.62); color:#fff; opacity:0;
+  transition:opacity var(--t-fast) ease;
+}
+@media (hover:hover) and (pointer:fine) {
+  .pthumb:hover { transform:scale(1.03); box-shadow:0 8px 20px -12px rgba(0,0,0,.5); }
+  .pthumb:hover .pthumb-z { opacity:1; }
+}
+.pthumb:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+
+/* An order's pieces, across the top of its card. */
+.cover { display:grid; grid-template-columns:repeat(auto-fit, minmax(0, 1fr)); gap:6px; position:relative; }
+.cover-more {
+  position:absolute; right:6px; bottom:6px; padding:2px 8px; border-radius:999px;
+  background:rgba(20,19,15,.7); color:#fff; font-size:11px; font-weight:700;
+}
+
+/* A board card leads with its picture. */
+.bcard-img { margin:-2px 0 8px; }
+
+/* The rows are already flex with a gap of their own, so a thumbnail
+   only has to be the first child — nothing else about them moves. */
+
+/* Images that were already on screen before this — a work order's
+   row, a piece board's header — become zoomable rather than being
+   redrawn. */
+.zoom { cursor:zoom-in; }
+
+/* ── Full screen ───────────────────────────────────────────────
+   Above everything, including a centred sheet, because it is opened
+   from inside one. A tap anywhere on the ground closes it. */
+.lightbox {
+  position:fixed; inset:0; z-index:300;
+  background:rgba(8,7,5,.92);
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  display:grid; place-items:center; padding:24px;
+  animation:fade .18s ease;
+  cursor:zoom-out;
+}
+.lightbox.closing { opacity:0; transition:opacity .18s ease; }
+.lightbox-fig { margin:0; display:flex; flex-direction:column; align-items:center; gap:12px; max-width:100%; max-height:100%; }
+.lightbox-fig img {
+  max-width:min(96vw, 1400px); max-height:82vh;
+  width:auto; height:auto; object-fit:contain;
+  border-radius:8px; background:#fff;
+  box-shadow:0 30px 80px -30px rgba(0,0,0,.9);
+}
+.lightbox-fig figcaption {
+  color:rgba(255,255,255,.82); font-size:13.5px; text-align:center;
+  max-width:60ch;
+}
+.lightbox-x {
+  position:absolute; top:16px; right:16px; width:42px; height:42px;
+  border-radius:50%; border:0; display:grid; place-items:center;
+  background:rgba(255,255,255,.14); color:#fff; cursor:pointer;
+}
+.lightbox-x:hover { background:rgba(255,255,255,.24); }
+@media (prefers-reduced-motion: reduce) { .lightbox { animation:none; } }

@@ -78,9 +78,10 @@ export function sectionHead(title, rightHTML = '') {
    The stripe down the left is the station's colour — the only thing
    that changes between screens, so a card is recognisable as the
    same order all the way down the line. */
-export function orderCard({ mrNo, client, meta, pill, pillTone, tint, id, flag = '' }) {
+export function orderCard({ mrNo, client, meta, pill, pillTone, tint, id, flag = '', thumb = '' }) {
   return `
     <article class="ocard${tint ? ` t-${tint}` : ''}" data-open="${esc(id)}" tabindex="0" role="button">
+      ${thumb || ''}
       <div class="ocard-main">
         <div class="ocard-t">${esc(client || mrNo)}</div>
         <div class="ocard-m">

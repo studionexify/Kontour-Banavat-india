@@ -25,6 +25,7 @@ import { todayISO, fyOf, dmy } from '../format.js';
 import { pageHead, statCards, sectionHead, orderCard, nothingHere } from './chrome.js';
 import { openOrder } from './orderdetail.js';
 import { seedingAllowed } from '../shopsync.js';
+import { orderImage, thumb } from './thumbs.js';
 import { lineChart, donutChart, barChart, meterList } from './charts.js';
 import { STAGES, lines as allLines } from '../orders.js';
 import { monthTotals, jobs, jobSummary } from '../store.js';
@@ -117,6 +118,7 @@ function row(g, late) {
   if (g.deliveryDate) meta.push(`${late ? 'was due' : 'due'} ${dmy(g.deliveryDate)}`);
   return orderCard({
     id: g.mrNo, mrNo: g.mrNo, client: g.client, meta,
+    thumb: thumb(orderImage(g), g.client || g.mrNo, 'sm'),
     tint: late ? 'sub' : 'prod',
     pill: late ? 'Overdue' : stageLabel(g.stage),
     pillTone: late ? 'out' : 'warn',
