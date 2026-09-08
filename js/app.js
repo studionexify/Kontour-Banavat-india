@@ -1,7 +1,7 @@
 /* app.js — boot, PIN gate, routing, tab bar. */
 
 import { icon } from './icons.js';
-import { $, on, toast, closeTopSheet, sheetCount, haptic } from './ui.js';
+import { $, on, toast, closeTopSheet, sheetCount, haptic, bindZoom } from './ui.js';
 import { biometricEnabled, verifyBiometric } from './biometric.js';
 import { load, hasPin, checkPin, device, onChange, purgeCashData } from './store.js';
 import { openEntrySheet } from './views/entry.js';
@@ -35,6 +35,7 @@ import { startShopSync, resetShopSync } from './shopsync.js';
 import { load as loadQuotes, onChange as onQuotesChange, fixHashtagNumbers, attachImportedPhotos } from './quotes.js';
 import { markHTML, hasLogo } from './brand.js';
 import { openSignIn, openChooseOrg } from './views/signin.js';
+import { loadArchive } from './subphoto.js';
 
 /* ── Nav ───────────────────────────────────────────────────────
    Kontour is the production unit, and the rail is the line itself,
@@ -590,6 +591,17 @@ function start() {
   const defaultRoute = mobile ? 'home' : 'dashboard';
   const fromHash = (location.hash || '').replace('#/', '');
   show(VIEWS[fromHash] ? fromHash : defaultRoute);
+
+  /* A thumbnail anywhere in the app — in a list, on a card, inside a
+     sheet — opens its picture full screen. One handler on the
+     document, because every screen draws thumbnails and none of them
+     should have to wire a viewer. */
+  bindZoom(document);
+
+  /* The scanned photographs out of the original PDF quotations, so a
+     piece whose quotation is not on this device still shows its
+     picture. One fetch, cached, and it fails quietly offline. */
+  loadArchive();
 
   // Back button closes a sheet before it leaves the app.
   window.addEventListener('popstate', () => {

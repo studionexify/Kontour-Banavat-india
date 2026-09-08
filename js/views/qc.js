@@ -23,6 +23,7 @@ import { openDesignSheet } from './library.js';
 import * as subs from '../subs.js';
 import { openItemBoard, stateChip, capturePhotos, photosFor } from './piecework.js';
 import { photos, blobURL } from '../db.js';
+import { lineThumb } from './thumbs.js';
 import { pickImage, shrink } from '../photos.js';
 import { uid } from '../store.js';
 import { orderGroups } from '../orders.js';
@@ -149,6 +150,7 @@ function qcRow(l) {
   ].filter(Boolean);
   return `
     <article class="prow qcrow" data-open="${esc(l.mrNo)}" tabindex="0" role="button">
+      ${lineThumb(l, 'sm')}
       <span class="prow-txt">
         <span class="prow-t">${esc(l.name)}${back.length ? ' <span class="pill warn sm">RECHECK</span>' : ''}</span>
         <span class="prow-s">${esc(bits.join(' · '))}</span>

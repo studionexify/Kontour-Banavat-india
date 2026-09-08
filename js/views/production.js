@@ -22,6 +22,7 @@ import { openOrder, openPieceSheet } from './orderdetail.js';
 import {
   viewToggle, wireViewToggle, board, boardCard, timeline, toneOf,
 } from './viewkit.js';
+import { lineThumb, lineImage, orderImage, thumb } from './thumbs.js';
 
 let query = '';
 
@@ -127,6 +128,10 @@ function pieceBoard(groups) {
       const late = l.deliveryDate && l.deliveryDate < todayISO();
       return boardCard({
         id: l.mrNo,
+        // Only where there is a picture: an empty frame is worth its
+        // space in a list, where it keeps the rows the same height,
+        // and not on a card, where it is just a hole.
+        media: lineImage(l) ? lineThumb(l, 'lg') : '',
         title: l.name || 'Untitled piece',
         sub: `${l.mrNo}${l.client ? ` · ${l.client}` : ''}`,
         meta: [l.qty > 1 ? `Qty ${l.qty}` : '', l.deliveryDate ? `due ${dmy(l.deliveryDate)}` : ''].filter(Boolean),
@@ -192,6 +197,7 @@ function card(g, late) {
   if (g.deliveryDate) meta.push(`due ${dmy(g.deliveryDate)}`);
   return orderCard({
     id: g.mrNo, mrNo: g.mrNo, client: g.client, meta,
+    thumb: thumb(orderImage(g), g.client || g.mrNo, 'sm'),
     tint: late ? 'sub' : 'prod',
     pill: late ? 'Overdue' : stageLabel(g.stage),
     pillTone: late ? 'out' : 'warn',

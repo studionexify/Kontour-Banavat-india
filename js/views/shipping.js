@@ -29,6 +29,7 @@ import { addEntry } from '../store.js';
 import { pageHead, statCards, searchBar, nothingHere, sectionHead } from './chrome.js';
 import { wire } from './production.js';
 import { viewToggle, wireViewToggle, cardGrid, bigCard } from './viewkit.js';
+import { lineThumb, coverStrip } from './thumbs.js';
 
 let query = '';
 
@@ -138,6 +139,9 @@ function orderShipCard(mrNo, group) {
     tone: late ? 'sub' : waiting ? 'ship' : 'done',
     pill: waiting ? `${waiting} to despatch` : 'All despatched',
     pillTone: waiting ? 'warn' : 'in',
+    // The pieces themselves, so the card is recognisable across the
+    // room the way the order is on the floor.
+    media: coverStrip({ lines: group }),
     stats: [
       { label: 'Pieces', value: group.length },
       { label: 'Despatched', value: group.length - waiting },
@@ -176,6 +180,7 @@ function pieceRow(l) {
   ].filter(Boolean);
   return `
     <article class="prow shiprow" data-open="${esc(l.mrNo)}" tabindex="0" role="button">
+      ${lineThumb(l, 'sm')}
       <span class="prow-txt">
         <span class="prow-t">${esc(l.name || 'Untitled piece')}</span>
         <span class="prow-s">${esc(bits.join(' · '))}</span>

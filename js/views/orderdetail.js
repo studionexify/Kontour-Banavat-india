@@ -19,6 +19,7 @@ import {
 import { dmy, todayISO, inr } from '../format.js';
 import * as subs from '../subs.js';
 import { openItemBoard, stateChip } from './piecework.js';
+import { lineThumb } from './thumbs.js';
 
 const TRADES = ['drawings', 'metal', 'wood', 'upholstery', 'marble', 'hardware', 'package'];
 
@@ -137,6 +138,7 @@ function pieceHTML(l) {
   return `
     <section class="piece t-${tint}">
       <div class="piece-top">
+        ${lineThumb(l)}
         <div class="piece-id">
           <div class="piece-n">${esc(l.name)}</div>
           ${l.specs ? `<p class="piece-spec">${esc(l.specs)}</p>` : ''}

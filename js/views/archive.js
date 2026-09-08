@@ -21,6 +21,7 @@ import { openQuoteDoc } from './quotedoc.js';
 import { downloadQuotePdf } from '../quotepdf.js';
 import { createQuoteTable } from './quotetable.js';
 import { viewToggle, wireViewToggle, cardGrid, bigCard } from './viewkit.js';
+import { coverStrip, orderImage, thumb } from './thumbs.js';
 import { linesByMr } from '../orders.js';
 
 let tab = 'orders';    // 'orders' | 'quotes'
@@ -185,6 +186,7 @@ function orderArchiveCard(g) {
     tone: 'done',
     pill: 'Delivered',
     pillTone: 'in',
+    media: coverStrip(g),
     stats: [
       { label: 'Pieces', value: g.lines.length },
       { label: 'Delivered', value: g.deliveryDate ? dayLabel(g.deliveryDate) : '—' },
@@ -204,6 +206,7 @@ function orderRow(g) {
   if (g.deliveryDate) meta.push(`delivered ${dmy(g.deliveryDate)}`);
   return orderCard({
     id: g.mrNo, mrNo: g.mrNo, client: g.client, meta,
+    thumb: thumb(orderImage(g), g.client || g.mrNo, 'sm'),
     tint: 'done', pill: 'Delivered', pillTone: 'in',
   });
 }

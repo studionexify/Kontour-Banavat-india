@@ -95,7 +95,7 @@ export function openItemBoard(itemId, onDone) {
 
     sheet.querySelector('.sheet-body').innerHTML = `
       <div class="piece-head">
-        ${img ? `<img class="piece-img" src="${esc(img)}" alt="">`
+        ${img ? `<img class="piece-img zoom" data-zoom="${esc(cur.name || 'Piece')}" src="${esc(img)}" alt="${esc(cur.name || '')}">`
               : `<span class="piece-img ph">${icon('box', 26)}</span>`}
         <div class="piece-meta">
           <div class="piece-t">${esc(cur.name || 'Untitled piece')}</div>
@@ -127,7 +127,7 @@ export function openItemBoard(itemId, onDone) {
       const host = sheet.querySelector(`[data-shots="${row.id}"]`);
       if (!host) continue;
       const recs = await photosFor(row.photoIds);
-      host.innerHTML = recs.map((r) => `<img class="logshot" src="${esc(blobURL(r))}" alt="">`).join('');
+      host.innerHTML = recs.map((r) => `<img class="logshot zoom" data-zoom="Photograph" src="${esc(blobURL(r))}" alt="">`).join('');
     }
   };
 
@@ -198,7 +198,7 @@ function openVerdict(it, verdict) {
           shots = [...shots, ...ids];
           const recs = await photosFor(shots);
           sheet.querySelector('[data-strip]').innerHTML = recs
-            .map((r) => `<img class="logshot" src="${esc(blobURL(r))}" alt="">`).join('');
+            .map((r) => `<img class="logshot zoom" data-zoom="Photograph" src="${esc(blobURL(r))}" alt="">`).join('');
           toast(`${ids.length} photograph${ids.length === 1 ? '' : 's'} added`);
         });
 
