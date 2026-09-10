@@ -44,22 +44,72 @@ export function textWidth(str, size, bold = false) {
   return (total * size) / 1000;
 }
 
+/* Where a line may break inside a word.
+   A browser breaks after a hyphen that joins two words — "stress-free."
+   sets as "stress-" and then "free." — and after a dash. It never
+   breaks between a hyphen and the number it belongs to, so
+   "+91-9773048267" stays whole. Matching that is what keeps the file
+   and the preview of it wrapping in the same places. */
+const DASHES = '-\u2010\u2013\u2014';
+
+export function breakUnits(word) {
+  const text = String(word);
+  const out = [];
+  let start = 0;
+  for (let i = 0; i < text.length - 1; i += 1) {
+    if (DASHES.indexOf(text[i]) < 0) continue;
+    const next = text[i + 1];
+    // Not inside a run of dashes, and not before the digits a hyphen
+    // is holding together.
+    if (DASHES.indexOf(next) >= 0 || (text[i] === '-' && next >= '0' && next <= '9')) continue;
+    out.push(text.slice(start, i + 1));
+    start = i + 1;
+  }
+  out.push(text.slice(start));
+  return out;
+}
+
+/* A piece too wide for its column, cut where it stops fitting. The
+   last resort, and the same one `overflow-wrap: anywhere` gives the
+   preview — an overhang would print across the next column. */
+function cut(text, width, measure) {
+  const out = [];
+  let start = 0;
+  while (start < text.length) {
+    let end = start + 1;
+    while (end < text.length && measure(text.slice(start, end + 1)) <= width) end += 1;
+    out.push(text.slice(start, end));
+    start = end;
+  }
+  return out.length ? out : [text];
+}
+
 /* Greedy word wrap, given a way to measure a candidate line. Always
-   returns at least one line, and never drops a word that is wider
-   than the column — it goes on a line of its own and overhangs,
-   which reads better than vanishing. */
+   returns at least one line. */
 function greedy(str, width, measure) {
   const out = [];
   for (const para of String(str == null ? '' : str).split('\n')) {
     const words = para.split(/\s+/).filter(Boolean);
     if (!words.length) { out.push(''); continue; }
+
+    // Each piece knows whether a space goes before it: the pieces a
+    // hyphen splits a word into join back up with nothing between.
+    const pieces = [];
+    words.forEach((word, w) => {
+      breakUnits(word).forEach((unit, u) => pieces.push({ text: unit, space: w > 0 && u === 0 }));
+    });
+
     let line = '';
-    for (const word of words) {
-      const next = line ? `${line} ${word}` : word;
-      if (measure(next) <= width || !line) line = next;
-      else { out.push(line); line = word; }
+    for (const piece of pieces) {
+      const joined = line ? `${line}${piece.space ? ' ' : ''}${piece.text}` : piece.text;
+      if (measure(joined) <= width) { line = joined; continue; }
+      if (line) { out.push(line); }
+      if (measure(piece.text) <= width) { line = piece.text; continue; }
+      const parts = cut(piece.text, width, measure);
+      for (let i = 0; i < parts.length - 1; i += 1) out.push(parts[i]);
+      line = parts[parts.length - 1];
     }
-    out.push(line);
+    if (line) out.push(line);
   }
   return out.length ? out : [''];
 }
@@ -184,6 +234,33 @@ export function readJpeg(bytes) {
   return null;
 }
 
+/* The pair of faces a document sets type in — its own subsets, or
+   PDF's Helvetica when it carries none. */
+function buildFaces(fonts) {
+  return fonts && fonts.regular && fonts.bold
+    ? { regular: embeddedFace(fonts.regular, 'F1'), bold: embeddedFace(fonts.bold, 'F2') }
+    : { regular: helveticaFace(false), bold: helveticaFace(true) };
+}
+
+/**
+ * A way to measure and wrap text in a pair of faces, without a
+ * document to draw it into.
+ *
+ * This exists for the preview. No two text engines break a line in
+ * quite the same place — Chrome measures a run of Montserrat about
+ * 0.2% narrower than these advance widths do, and Safari differently
+ * again — so a preview that wraps its own text will always disagree
+ * with the file somewhere. Given the same measurer, it cannot.
+ */
+export function measurer(fonts = null) {
+  const faces = buildFaces(fonts);
+  const faceFor = (bold) => (bold ? faces.bold : faces.regular);
+  return {
+    width: (str, size = 10, bold = false) => faceFor(bold).width(String(str == null ? '' : str), size),
+    wrap: (str, width, size = 10, bold = false) => greedy(str, width, (line) => faceFor(bold).width(line, size)),
+  };
+}
+
 /**
  * A document being written. Coordinates are the ones people think in
  * — x from the left, y from the *top* — and flipped to PDF's own
@@ -197,9 +274,7 @@ export function createPdf({ size = A4, fonts = null } = {}) {
   const images = [];
   let ops = [];
 
-  const faces = fonts && fonts.regular && fonts.bold
-    ? { regular: embeddedFace(fonts.regular, 'F1'), bold: embeddedFace(fonts.bold, 'F2') }
-    : { regular: helveticaFace(false), bold: helveticaFace(true) };
+  const faces = buildFaces(fonts);
   const faceFor = (bold) => (bold ? faces.bold : faces.regular);
 
   const doc = {

@@ -25,7 +25,7 @@
  * told which happened so it can say so.
  */
 
-import { createPdf, dataUriToBytes, readJpeg, LETTER } from './pdf.js';
+import { createPdf, dataUriToBytes, readJpeg, breakUnits, measurer, LETTER } from './pdf.js';
 import MONTSERRAT_REGULAR from './fonts/montserrat-regular.js';
 import MONTSERRAT_BOLD from './fonts/montserrat-bold.js';
 import { quoteTotals, lineAmount, lineGst, jobValueFor, settings, termRuns } from './quotes.js';
@@ -70,6 +70,36 @@ const baseline = (top, size = SIZE) => top + size * ASCENT;
 const centred = (top, rowH, h) => top + (rowH - h) / 2;
 
 const PAD = 1.8;                    // the gap between a cell's rule and its text
+
+const FACES = { regular: MONTSERRAT_REGULAR, bold: MONTSERRAT_BOLD };
+/* Every line in this document is broken by this one measurer —
+   including the lines the on-screen copy shows, which reads them
+   through DOC below rather than letting the browser wrap its own
+   text. Two engines never break a line in quite the same place. */
+const TYPE = measurer(FACES);
+
+/**
+ * What the preview needs to set the document the way the file sets
+ * it: the same faces, the same body size, and the width of the text
+ * inside any span of columns. Exported rather than copied, so the
+ * two cannot drift apart.
+ */
+export const DOC = {
+  faces: FACES,
+  size: SIZE,
+  /** The text width inside a cell spanning columns `a` to `b`. */
+  width: (a, b) => span(a, b) - PAD * 2,
+  /** The text width of a block that runs the whole page. */
+  page: BODY - PAD * 2,
+  col: {
+    SR, IMG, NAME, DESC, DIM, RATE, QTY, TOTAL, END,
+  },
+  /** Lines, in this document's own face, for text in a plain cell. */
+  lines: (text, width, bold = false) => TYPE.wrap(text, width, SIZE, bold),
+  /** The same for a clause, hanging under its dash and keeping the
+      weights of the values filled into it. */
+  clause: (runs, width) => hangRuns(TYPE, runs, width),
+};
 
 /* ── Ink ────────────────────────────────────────────────────────
    Four greys, each with a job: the letterhead rule and the payment
@@ -274,7 +304,7 @@ function render(quote, photos, logo = null) {
 
   // The address is the one field that runs long, so its cell is three
   // rows deep whatever it holds and grows past that if it has to.
-  const addressLines = doc.wrap(quote.client?.shippingAddress || '-', span(NAME, DIM) - PAD * 2, SIZE);
+  const addressLines = TYPE.wrap(quote.client?.shippingAddress || '-', DOC.width(NAME, DIM), SIZE);
   const addressH = Math.max(PANEL_ROW * 3, 2.53 + addressLines.length * lineH());
 
   const panelTop = y;
@@ -350,12 +380,12 @@ function render(quote, photos, logo = null) {
 
   lines.forEach((l, i) => {
     const photo = photos.get(l.id);
-    const nameLines = doc.wrap(l.name || 'Item', span(NAME, DESC) - PAD * 2, SIZE);
-    const descLines = doc.wrap(
+    const nameLines = TYPE.wrap(l.name || 'Item', DOC.width(NAME, DESC), SIZE);
+    const descLines = TYPE.wrap(
       [l.description || '', l.finish ? `- Finish: ${l.finish}` : ''].filter(Boolean).join('\n'),
-      span(DESC, DIM) - PAD * 2, SIZE,
+      DOC.width(DESC, DIM), SIZE,
     );
-    const dimLines = doc.wrap(l.dims || '', span(DIM, RATE) - PAD * 2, SIZE, true);
+    const dimLines = TYPE.wrap(l.dims || '', DOC.width(DIM, RATE), SIZE, true);
     // The photograph fits a square the width of its column, so every
     // one down the page reads at the same scale whatever shape it is.
     const slot = span(IMG, NAME);
@@ -393,7 +423,7 @@ function render(quote, photos, logo = null) {
      left, the sub-totals on the right, both ending at the same rule. */
   const payClauses = String(quote.paymentTerms || '')
     .split('\n').map((c) => c.trim()).filter(Boolean)
-    .flatMap((c) => hang(doc, c, span(SR, RATE) - PAD * 2));
+    .flatMap((c) => hang(TYPE, c, DOC.width(SR, RATE)));
   const ladder = [
     [t.discount ? 'Total' : 'Sub - Total', money(t.sub), false],
     ...(t.discount ? [
@@ -499,7 +529,7 @@ function render(quote, photos, logo = null) {
      read as one thing, so they are set as one — on a page of their
      own, away from the figures, and last, because that is where a
      reader ends up. */
-  const clauses = termRuns(quote).flatMap((runs) => hangRuns(doc, runs, span(SR, END) - PAD * 2));
+  const clauses = termRuns(quote).flatMap((runs) => hangRuns(TYPE, runs, DOC.page));
   const paragraphs = String(s.note || '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
 
   if (clauses.length || paragraphs.length) turnPage();
@@ -523,7 +553,7 @@ function render(quote, photos, logo = null) {
     cell('Note Please', SR, END, y, { bold: true });
     y += 10;
     for (const para of paragraphs) {
-      const wrapped = doc.wrap(para, BODY - PAD * 2, SIZE);
+      const wrapped = TYPE.wrap(para, DOC.page, SIZE);
       needRoom(wrapped.length * lineH());
       wrapped.forEach((ln, i) => cell(ln, SR, END, y + i * lineH()));
       y += (wrapped.length + 1) * lineH();
@@ -536,15 +566,19 @@ function render(quote, photos, logo = null) {
 /* Word wrap that keeps its weights. Runs are broken into words first,
    each remembering which run it came from, so a bold value that
    straddles a line break stays bold on both halves — and so the lead
-   time can print bold inside a sentence that wraps around it. */
-function wrapRuns(doc, runs, width, size = SIZE) {
+   time can print bold inside a sentence that wraps around it. The
+   pieces a hyphen splits a word into are words here too, on the same
+   terms as everywhere else — see breakUnits in pdf.js. */
+function wrapRuns(type, runs, width, size = SIZE) {
   const words = [];
   let gap = false;
   for (const run of runs) {
     for (const part of String(run.text || '').split(/(\s+)/)) {
       if (!part) continue;
       if (/^\s+$/.test(part)) { gap = true; continue; }
-      words.push({ text: part, bold: Boolean(run.bold), gap });
+      breakUnits(part).forEach((unit, u) => {
+        words.push({ text: unit, bold: Boolean(run.bold), gap: gap && u === 0 });
+      });
       gap = false;
     }
   }
@@ -553,8 +587,8 @@ function wrapRuns(doc, runs, width, size = SIZE) {
   let line = [];
   let used = 0;
   for (const word of words) {
-    const lead = line.length && word.gap ? doc.width(' ', size, word.bold) : 0;
-    const w = doc.width(word.text, size, word.bold);
+    const lead = line.length && word.gap ? type.width(' ', size, word.bold) : 0;
+    const w = type.width(word.text, size, word.bold);
     if (line.length && used + lead + w > width) {
       lines.push(line);
       line = [{ ...word, gap: false }];
@@ -571,13 +605,13 @@ function wrapRuns(doc, runs, width, size = SIZE) {
 /* A clause set as "- text", with anything that wraps aligned under
    the text rather than under the dash. Returns one entry per printed
    line: the weighted pieces on it, and the indent it hangs at. */
-function hangRuns(doc, runs, width) {
+function hangRuns(type, runs, width) {
   const dash = '- ';
-  const indent = doc.width(dash, SIZE);
+  const indent = type.width(dash, SIZE);
   const body = runs.map((r, i) => (i === 0
     ? { ...r, text: String(r.text || '').replace(/^[-–•]\s*/, '') }
     : r));
-  return wrapRuns(doc, body, width - indent).map((line, i) => ({
+  return wrapRuns(type, body, width - indent).map((line, i) => ({
     indent: i === 0 ? 0 : indent,
     runs: (i === 0 ? [{ text: dash, bold: false }] : [])
       .concat(line.map((w) => ({ text: (w.gap ? ' ' : '') + w.text, bold: w.bold }))),
@@ -585,8 +619,8 @@ function hangRuns(doc, runs, width) {
 }
 
 /** The same, for a clause that is all one weight. */
-function hang(doc, clause, width) {
-  return hangRuns(doc, [{ text: clause, bold: false }], width);
+function hang(type, clause, width) {
+  return hangRuns(type, [{ text: clause, bold: false }], width);
 }
 
 /** The one-line message that rides along with a shared quotation. */

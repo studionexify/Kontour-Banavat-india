@@ -28,7 +28,7 @@
 
 import { icon } from '../icons.js';
 import { openSheet, esc, on, toast, haptic } from '../ui.js';
-import { shareQuotePdf, downloadQuotePdf } from '../quotepdf.js';
+import { shareQuotePdf, downloadQuotePdf, DOC } from '../quotepdf.js';
 import {
   getQuote, quoteTotals, quoteName, lineAmount, lineGst, settings, termRuns, jobValueFor,
 } from '../quotes.js';
@@ -313,7 +313,7 @@ export function docHTML(q) {
             ${panelRow('Client Name', q.client.name)}
             ${panelRow('Contact Number', q.client.phone || '-')}
             ${q.client.email ? panelRow('Email', q.client.email) : ''}
-            <tr class="addr"><th>Shipping Address:</th><td>${multiline(q.client.shippingAddress || '-')}</td></tr>
+            <tr class="addr"><th>Shipping Address:</th><td>${setText(q.client.shippingAddress || '-', DOC.width(DOC.col.NAME, DOC.col.DIM))}</td></tr>
           </tbody>
         </table>
         <table class="doc-panel when">
@@ -353,9 +353,9 @@ export function docHTML(q) {
               <td class="c-img">${l.photo
                 ? `<button class="doc-img-btn" data-zoom="${esc(l.photo)}" data-zoom-caption="${esc(l.name)}" aria-label="Enlarge photograph"><img src="${esc(l.photo)}" alt=""></button>`
                 : ''}</td>
-              <td class="c-name">${esc(l.name)}</td>
-              <td class="c-desc">${multiline([l.description || '', l.finish ? `- Finish: ${l.finish}` : ''].filter(Boolean).join('\n'))}</td>
-              <td class="c-dim">${multiline(l.dims)}</td>
+              <td class="c-name">${setText(l.name || 'Item', DOC.width(DOC.col.NAME, DOC.col.DESC))}</td>
+              <td class="c-desc">${setText([l.description || '', l.finish ? `- Finish: ${l.finish}` : ''].filter(Boolean).join('\n'), DOC.width(DOC.col.DESC, DOC.col.DIM))}</td>
+              <td class="c-dim">${setText(l.dims || '', DOC.width(DOC.col.DIM, DOC.col.RATE), true)}</td>
               <td class="c-rate">${inr(l.unitPrice)}</td>
               <td class="c-qty">${l.kind === 'lump' ? 1 : l.qty}</td>
               <td class="c-amt">${inr(lineAmount(l))}${perLineGst
@@ -367,7 +367,7 @@ export function docHTML(q) {
       <div class="doc-band">
         <section class="doc-pay">
           <h2>Payment Terms</h2>
-          ${clauses(String(q.paymentTerms || '').split('\n').map((c) => [{ text: c }]))}
+          ${clauses(String(q.paymentTerms || '').split('\n').map((c) => [{ text: c }]), DOC.width(DOC.col.SR, DOC.col.RATE))}
         </section>
         <table class="doc-ladder">
           <tbody>
@@ -383,7 +383,7 @@ export function docHTML(q) {
           ${(ship.length ? ship : [{ label: '—', amount: 0 }]).map((sx, i) => `
             <tr>
               <td class="c-sr">${i + 1}</td>
-              <td>${esc(sx.label || 'Shipping')}</td>
+              <td>${setText(sx.label || 'Shipping', DOC.width(DOC.col.IMG, DOC.col.RATE))}</td>
               <td class="c-amt">${inr(sx.amount)}</td>
             </tr>`).join('')}
         </tbody>
@@ -423,7 +423,7 @@ export function docHTML(q) {
       ${terms.length ? `
         <section class="doc-terms" data-fresh-page>
           <h2>Terms &amp; Conditions</h2>
-          ${clauses(terms)}
+          ${clauses(terms, DOC.page)}
           <p class="doc-aster">*Terms and conditions apply.</p>
         </section>` : ''}
 
@@ -431,31 +431,45 @@ export function docHTML(q) {
       <section class="doc-note"${terms.length ? '' : ' data-fresh-page'}>
         <h2>Note Please</h2>
         ${String(s.note).split(/\n{2,}/).map((p) => p.trim()).filter(Boolean)
-          .map((p) => `<p>${esc(p)}</p>`).join('')}
+          .map((p) => `<p>${setText(p, DOC.page)}</p>`).join('')}
       </section>` : ''}
     </article>
   </div>`;
+}
+
+/* ── Setting the text ───────────────────────────────────────────
+   The lines are broken by js/quotepdf.js, not by the browser, and
+   handed here already divided. No two text engines break a line in
+   quite the same place — Chrome measures a run of Montserrat about
+   0.2% narrower than the font's own advance widths do — so a preview
+   left to wrap its own text disagrees with the file somewhere, always.
+   These come out identical by construction.
+
+   They are still ordinary wrapping text, joined by <br> rather than
+   held with `white-space: pre`: if some browser ever did measure a
+   line wider than its column, it would re-break that one line rather
+   than push the page out sideways. */
+function setText(text, width, bold = false) {
+  return DOC.lines(text, width, bold).map(esc).join('<br>');
+}
+
+/* A clause, hanging under its dash, with the values this quotation
+   filled in still bold across a line break. */
+function setClause(runs, width) {
+  const lines = DOC.clause(runs, width).map((line) => line.runs
+    .map((r) => (r.bold ? `<b>${esc(r.text)}</b>` : esc(r.text)))
+    .join(''));
+  return `<p class="doc-clause">${lines.join('<br>')}</p>`;
 }
 
 function panelRow(label, value) {
   return `<tr><th>${esc(label)}:</th><td>${esc(value || '')}</td></tr>`;
 }
 
-function multiline(text) {
-  return String(text || '').split('\n').map(esc).join('<br>');
-}
-
-/* A clause per line, set as "- text" with anything that wraps hanging
-   under the text — and the values this quotation filled in set bold,
-   the way the printed document sets them. */
-function clauses(runsPerClause) {
+/* Every clause in a block, each broken where the file breaks it. */
+function clauses(runsPerClause, width) {
   return (runsPerClause || [])
     .filter((runs) => runs.some((r) => String(r.text || '').trim()))
-    .map((runs) => {
-      const body = runs.map((r, i) => {
-        const text = i === 0 ? String(r.text).replace(/^[-–•]\s*/, '') : String(r.text);
-        return r.bold ? `<b>${esc(text)}</b>` : esc(text);
-      }).join('');
-      return `<p class="doc-clause">- ${body}</p>`;
-    }).join('');
+    .map((runs) => setClause(runs, width))
+    .join('');
 }
