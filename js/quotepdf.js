@@ -504,11 +504,12 @@ function render(quote, photos, logo = null) {
     `Bank: ${s.bank.bank}`, `A/C Name: ${s.bank.name}`, `A/C Number: ${s.bank.account}`,
     `IFSC: ${s.bank.ifsc}`, `Branch: ${s.bank.branch}`,
   ].filter((v) => !/:\s*$/.test(v));
-  /* No GSTIN and no company name here, because the issued document
-     has neither: the client's copy carries where to write, where to
-     mail and where to call, and the registration lives on the
-     invoice that follows it. */
+  /* GSTIN heads the block, above the address: it is who the business
+     is on paper, and a client's accounts want it off the quotation
+     rather than off the invoice that follows. No company name, though
+     — the mark in the letterhead has already said it. */
   const contact = [
+    s.company.gstin ? `GSTIN: ${s.company.gstin}` : '',
     s.company.address ? `Address: ${s.company.address}` : '',
     s.company.email ? `Email: ${s.company.email}` : '',
     s.company.phone ? `Phone: ${s.company.phone}` : '',
