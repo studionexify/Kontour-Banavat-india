@@ -6,9 +6,9 @@
  * eight columns that every table on the page snaps to. Boxed client
  * and date panels under the letterhead, a black-banded item table,
  * payment terms beside the sub-total ladder, shipping, then the three
- * grand-total cells, the bank and contact blocks, and the standing
- * terms. The note to the client always begins a fresh page, because
- * it always has.
+ * grand-total cells and the bank and contact blocks. The standing
+ * terms and the note to the client close the document together, on a
+ * page of their own.
  *
  * The grid is the whole trick. GRID holds the eight column edges as
  * fractions of the text width, measured off the issued document, and
@@ -493,13 +493,18 @@ function render(quote, photos, logo = null) {
   contact.forEach((ln, i) => cell(ln, RATE, END, y + (i + 2) * lineH()));
   y += detailsH + 25.7;
 
-  /* ── The standing terms ──
-     Kept whole: a page that cannot hold all of them starts them
-     overleaf rather than splitting the block in two. */
+  /* ── The closing page ──
+     The standing terms and then the note, together, overleaf. What a
+     client is asked to accept and what they are asked to understand
+     read as one thing, so they are set as one — on a page of their
+     own, away from the figures, and last, because that is where a
+     reader ends up. */
   const clauses = termRuns(quote).flatMap((runs) => hangRuns(doc, runs, span(SR, END) - PAD * 2));
+  const paragraphs = String(s.note || '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+
+  if (clauses.length || paragraphs.length) turnPage();
+
   if (clauses.length) {
-    const termsH = 10.4 + (clauses.length + 1) * lineH();
-    if (termsH <= FOOT - TOP) needRoom(termsH);
     cell('Terms & Conditions', SR, END, y, { bold: true });
     y += 10.4;
     for (const piece of clauses) {
@@ -509,16 +514,15 @@ function render(quote, photos, logo = null) {
     }
     y += lineH();
     cell('*Terms and conditions apply.', SR, END, y);
+    y += lineH() + 25.7;
   }
 
-  /* ── The note ──
-     Always overleaf. It is the last thing the client reads, and it
-     has never shared a page with the figures. */
-  if (s.note) {
-    turnPage();
-    cell('Note Please', SR, END, y + 1.1, { bold: true });
-    y += 1.1 + 10;
-    for (const para of String(s.note).split(/\n{2,}/).map((p) => p.trim()).filter(Boolean)) {
+  if (paragraphs.length) {
+    // A heading never ends a page on its own.
+    needRoom(10 + lineH());
+    cell('Note Please', SR, END, y, { bold: true });
+    y += 10;
+    for (const para of paragraphs) {
       const wrapped = doc.wrap(para, BODY - PAD * 2, SIZE);
       needRoom(wrapped.length * lineH());
       wrapped.forEach((ln, i) => cell(ln, SR, END, y + i * lineH()));

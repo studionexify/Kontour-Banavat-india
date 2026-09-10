@@ -2384,9 +2384,9 @@ select.control { padding-right:34px; background-position:right 13px center; back
 .doc-aster { margin:calc(7.8 * var(--pt)) 0 0; }
 
 /* ── The note ──
-   Always its own sheet — paginate() gives it one. It is the last
-   thing the client reads and it has never shared a page with the
-   figures. */
+   Under the standing terms on the closing page paginate() gives the
+   two of them, away from the figures. */
+.doc-note { margin-top:calc(25.7 * var(--pt)); }
 .doc-note h2 { margin-bottom:calc(2.2 * var(--pt)); }
 .doc-note p { margin:calc(7.8 * var(--pt)) 0 0; }
 .doc-note p:first-of-type { margin-top:0; }

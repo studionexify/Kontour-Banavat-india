@@ -2,7 +2,8 @@
  *
  * A preview of the file, not a screen of its own: the same Letter
  * sheet, the same 0.7in margin, the same eight-column grid, the same
- * Montserrat, and the same pages in the same order.
+ * Montserrat, and the same pages in the same order — down to the
+ * closing page, where the standing terms and the note sit together.
  * Every measurement lives in styles.css, in points, beside the ones
  * js/quotepdf.js draws with; if the two ever disagree the preview is
  * lying about what gets sent.
@@ -280,6 +281,9 @@ export function docHTML(q) {
   const ship = (q.shipping || []).filter((sx) => Number(sx.amount) > 0 || sx.label);
   const perLineGst = q.gstMode === 'lineitem' && t.taxed;
   const decided = q.status === 'accepted';
+  /* The terms open the closing page and the note follows them on it —
+     unless there are no terms, in which case the note opens it. */
+  const terms = termRuns(q).filter((runs) => runs.some((r) => String(r.text || '').trim()));
 
   const ladder = [
     [t.discount ? 'Total' : 'Sub - Total', inr(t.sub), false],
@@ -416,14 +420,15 @@ export function docHTML(q) {
         </section>
       </div>
 
-      <section class="doc-terms">
-        <h2>Terms &amp; Conditions</h2>
-        ${clauses(termRuns(q))}
-        <p class="doc-aster">*Terms and conditions apply.</p>
-      </section>
+      ${terms.length ? `
+        <section class="doc-terms" data-fresh-page>
+          <h2>Terms &amp; Conditions</h2>
+          ${clauses(terms)}
+          <p class="doc-aster">*Terms and conditions apply.</p>
+        </section>` : ''}
 
     ${s.note ? `
-      <section class="doc-note" data-fresh-page>
+      <section class="doc-note"${terms.length ? '' : ' data-fresh-page'}>
         <h2>Note Please</h2>
         ${String(s.note).split(/\n{2,}/).map((p) => p.trim()).filter(Boolean)
           .map((p) => `<p>${esc(p)}</p>`).join('')}
