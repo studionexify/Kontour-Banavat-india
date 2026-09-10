@@ -1,9 +1,23 @@
 /* quotepdf.js — the quotation as a file you can hand to a client.
  *
- * Laid out in the same order as the printed document and the on-screen
- * one: who it is for, what is being supplied, what it comes to, then
- * the boilerplate. The figures come from quoteTotals, the same call the
- * other two use, so the three can never disagree.
+ * This is a redraw of the document the business has always issued —
+ * the one built by hand in a spreadsheet — down to its grid: Letter
+ * paper, a 0.7in margin on all four sides, Montserrat throughout, and
+ * eight columns that every table on the page snaps to. Boxed client
+ * and date panels under the letterhead, a black-banded item table,
+ * payment terms beside the sub-total ladder, shipping, then the three
+ * grand-total cells and the bank and contact blocks. The standing
+ * terms and the note to the client close the document together, on a
+ * page of their own.
+ *
+ * The grid is the whole trick. GRID holds the eight column edges as
+ * fractions of the text width, measured off the issued document, and
+ * every table is drawn between two of them — which is why the client
+ * panel, the Dimensions column, the payment box and the Sub Total A
+ * cell all line up down the page.
+ *
+ * The figures come from quoteTotals, the same call the on-screen
+ * document and the totals bar use, so the three can never disagree.
  *
  * Sharing goes through the Web Share API where the device has it —
  * which on a phone is the WhatsApp sheet, the thing this is actually
@@ -11,25 +25,110 @@
  * told which happened so it can say so.
  */
 
-import { createPdf, wrapText, dataUriToBytes, readJpeg, A4 } from './pdf.js';
-import { quoteTotals, lineAmount, lineGst, jobValueFor, settings, renderTerms } from './quotes.js';
-import { dmy } from './format.js';
+import { createPdf, dataUriToBytes, readJpeg, breakUnits, measurer, LETTER } from './pdf.js';
+import MONTSERRAT_REGULAR from './fonts/montserrat-regular.js';
+import MONTSERRAT_BOLD from './fonts/montserrat-bold.js';
+import { quoteTotals, lineAmount, lineGst, jobValueFor, settings, termRuns } from './quotes.js';
+import { docMark } from './brand.js';
+import { dmyLong, inrWhole as money } from './format.js';
 
-const M = 42;                       // page margin
-const RIGHT = A4.w - M;
+/* ── The page ───────────────────────────────────────────────── */
+
+const PAGE = LETTER;
+const M = 50.4;                     // 0.7in, and the same on all four sides
+const RIGHT = PAGE.w - M;
 const BODY = RIGHT - M;
-const FOOT_LIMIT = A4.h - 58;       // where a page has to break
+const TOP = 54;
+const FOOT = PAGE.h - M;            // where a page has to break
 
-/* WinAnsi has no ₹, so money is spelled. Grouping stays Indian —
-   1,20,000 not 120,000 — because that is how the figure is read. */
-function money(n) {
-  const v = Math.round(Number(n) || 0);
-  const s = Math.abs(v).toString();
-  const last3 = s.slice(-3);
-  const rest = s.slice(0, -3);
-  const grouped = rest ? `${rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${last3}` : last3;
-  return `${v < 0 ? '-' : ''}Rs. ${grouped}`;
-}
+/* The eight columns, as fractions of the text width. Every rule and
+   every cell edge on the page is one of these, which is what keeps
+   the panels, the item columns and the totals in one grid. */
+const GRID = [0, 0.067795, 0.167796, 0.297115, 0.515856, 0.665385, 0.763059, 0.878356, 1]
+  .map((f) => M + f * BODY);
+
+// Named for what sits in them, so the drawing code reads as the table.
+const SR = 0, IMG = 1, NAME = 2, DESC = 3, DIM = 4, RATE = 5, QTY = 6, TOTAL = 7, END = 8;
+
+const x = (col) => GRID[col];
+const span = (a, b) => GRID[b] - GRID[a];
+
+/* ── Type ───────────────────────────────────────────────────────
+   Montserrat's own ascender and descender, so a line of text can be
+   placed by its top edge — which is how a cell centres its contents
+   — rather than by a baseline nobody can see. */
+const SIZE = 6.4;                   // the document's body size
+const TITLE = 23;
+const GRAND_LABEL = 7.7;
+const GRAND_TOTAL = 9;
+const ASCENT = 0.968;
+const LINE = 1.219;
+
+const lineH = (size = SIZE) => size * LINE;
+const baseline = (top, size = SIZE) => top + size * ASCENT;
+/** The top edge that centres a block of `h` inside a row of `rowH`. */
+const centred = (top, rowH, h) => top + (rowH - h) / 2;
+
+const PAD = 1.8;                    // the gap between a cell's rule and its text
+
+const FACES = { regular: MONTSERRAT_REGULAR, bold: MONTSERRAT_BOLD };
+/* Every line in this document is broken by this one measurer —
+   including the lines the on-screen copy shows, which reads them
+   through DOC below rather than letting the browser wrap its own
+   text. Two engines never break a line in quite the same place. */
+const TYPE = measurer(FACES);
+
+/**
+ * What the preview needs to set the document the way the file sets
+ * it: the same faces, the same body size, and the width of the text
+ * inside any span of columns. Exported rather than copied, so the
+ * two cannot drift apart.
+ */
+export const DOC = {
+  faces: FACES,
+  size: SIZE,
+  /** The text width inside a cell spanning columns `a` to `b`. */
+  width: (a, b) => span(a, b) - PAD * 2,
+  /** The text width of a block that runs the whole page. */
+  page: BODY - PAD * 2,
+  col: {
+    SR, IMG, NAME, DESC, DIM, RATE, QTY, TOTAL, END,
+  },
+  /** Lines, in this document's own face, for text in a plain cell. */
+  lines: (text, width, bold = false) => TYPE.wrap(text, width, SIZE, bold),
+  /** The same for a clause, hanging under its dash and keeping the
+      weights of the values filled into it. */
+  clause: (runs, width) => hangRuns(TYPE, runs, width),
+};
+
+/* ── Ink ────────────────────────────────────────────────────────
+   Four greys, each with a job: the letterhead rule and the payment
+   box; the hairlines round the client panel and the shipping rows;
+   the heavier edge on the totals; and the band behind a shaded row. */
+const RULE = 0.263;
+const HAIR = 0.718;
+const EDGE = 0.4;
+const BAND = 0.937;
+
+const HAIRLINE = 0.5;
+const EDGELINE = 1;
+
+/* ── Rows ───────────────────────────────────────────────────── */
+
+const PANEL_ROW = 10.33;            // one row of the client and date panels
+const HEAD_ROW = 10.82;             // the black band over the items
+const ITEM_MIN = 80.7;              // an item row is never shorter than this
+const ITEM_PAD = 8;
+const SHIP_HEAD = 11.32;
+const SHIP_ROW = 13.53;
+const GRAND_HEAD = 12.3;
+const GRAND_ROW = 25.09;
+
+/* Money is inrWhole from format.js, imported as money above — the
+   one the preview uses too, so the two documents can never print
+   different figures. ₹ is in the embedded subset, so it prints as
+   itself rather than being spelled "Rs." the way the work order,
+   set in Helvetica, still has to. */
 
 /* ── Photographs ────────────────────────────────────────────────
    Item photographs are captured through photos.js, which already
@@ -37,14 +136,15 @@ function money(n) {
    the bytes out of the data URI and handing them to the writer
    untouched. Anything else, or anything far larger than the slot it
    will occupy, goes through a canvas first: a 3000px photograph in a
-   40pt box is several megabytes nobody can WhatsApp.
+   51pt box is several megabytes nobody can WhatsApp.
 
-   THUMB_PX is the longest edge kept, generous against the ~46pt slot
+   THUMB_PX is the longest edge kept, generous against the ~51pt slot
    so the image still holds up if the PDF is printed or zoomed. */
 const THUMB_PX = 220;
-/* The mark is small and square in the letterhead, so a much smaller
-   target than a line photo is plenty and keeps the file light. */
-const LOGO_PX = 120;
+/* The mark prints in a 44pt square, so 400px is around 650dpi — and
+   it is also exactly what js/doc-mark.js ships, which means the
+   ordinary document places it without touching a canvas at all. */
+const LOGO_PX = 200;
 
 function reencode(uri, maxPx = THUMB_PX) {
   return new Promise((resolve) => {
@@ -100,28 +200,30 @@ async function prepareImages(lines) {
   return ready;
 }
 
-/** Reads the uploaded mark as-is, if it already is a JPEG small
-    enough to place directly — the same fast path a line photo gets,
-    and for the same reason: it costs no await. */
+/** The letterhead mark, if it is already a JPEG small enough to place
+    directly — which the shipped one is, so the ordinary document
+    costs no await here. */
 function readLogoDirect() {
-  const uri = settings().logo;
+  const uri = docMark();
   if (!uri) return null;
   const direct = readJpeg(dataUriToBytes(uri));
   return (direct && Math.max(direct.w, direct.h) <= LOGO_PX * 2) ? direct : null;
 }
 
-/** The uploaded mark, ready to place — re-encoded through a canvas
-    when it is not already a small JPEG, since settings().logo can in
+/** The letterhead mark, ready to place — re-encoded through a canvas
+    when it is not already a small JPEG, since an uploaded logo can in
     principle be any format a browser can decode. */
 async function prepareLogo() {
-  const uri = settings().logo;
-  if (!uri) return null;
-  return readLogoDirect() || reencode(uri, LOGO_PX);
+  if (!docMark()) return null;
+  return readLogoDirect() || reencode(docMark(), LOGO_PX);
 }
 
+/** What the client's copy is called. Named the way these have always
+    been named: "Quotation - C142 VS Studio.pdf". */
 export function quoteFileName(q) {
-  const client = String(q.client?.name || 'client').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-');
-  return `MR-${q.mrNo}${client ? `-${client}` : ''}.pdf`;
+  const client = String((q.client && q.client.name) || '')
+    .replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return `Quotation - ${q.mrNo}${client ? ` ${client}` : ''}.pdf`;
 }
 
 /** The whole quotation as a PDF blob. Async only because a photograph
@@ -134,57 +236,100 @@ export async function quotePdfBlob(quote) {
   return render(quote, photos, logo);
 }
 
-/* Banavat India's own blue, wherever the company name prints. */
-const BRAND_BLUE = [0.122, 0.247, 0.561];
-
 /** The document itself, drawn from a quote and its prepared photos. */
 function render(quote, photos, logo = null) {
   const s = settings();
   const t = quoteTotals(quote);
   const lines = quote.lines || [];
-  const ship = (quote.shipping || []).filter((x) => Number(x.amount) > 0 || x.label);
-  const doc = createPdf();
-  let y = M;
+  const ship = (quote.shipping || []).filter((sx) => Number(sx.amount) > 0 || sx.label);
+  const doc = createPdf({ size: PAGE, fonts: { regular: MONTSERRAT_REGULAR, bold: MONTSERRAT_BOLD } });
+  let y = TOP;
 
-  /* ── Letterhead: mark + name in blue on the left, QUOTATION big on
-     the right, one row and a rule under it — how it actually prints,
-     not the fuller boxed layout the early mockups used. ── */
-  let nameX = M;
-  if (logo) {
-    const box = doc.image(logo, M, y - 4, 24, 24);
-    if (box) nameX = M + 24 + 8;
+  /* ── Drawing, in the terms the document is described in ────── */
+
+  const turnPage = () => { doc.addPage(); y = TOP; };
+  /* Turns the page for something that will not fit on what is left
+     of this one — unless this one is already empty, in which case
+     nothing taller than a page ever would fit and a blank sheet in
+     front of it helps nobody. */
+  const needRoom = (need) => {
+    if (y + need <= FOOT || y <= TOP) return false;
+    turnPage();
+    return true;
+  };
+
+  /** A line of text placed inside a column, by the column's rules. */
+  const cell = (str, a, b, top, { align = 'left', bold = false, size = SIZE, gray = 0 } = {}) => {
+    if (str == null || str === '') return;
+    if (align === 'center') {
+      doc.text(str, x(a), baseline(top, size), { size, bold, gray, align: 'center', width: span(a, b) });
+    } else if (align === 'right') {
+      doc.text(str, x(b) - PAD, baseline(top, size), { size, bold, gray, align: 'right' });
+    } else {
+      doc.text(str, x(a) + PAD, baseline(top, size), { size, bold, gray });
+    }
+  };
+
+  const hline = (a, b, at, gray, weight) => doc.line(x(a), at, x(b), at, { gray, weight });
+  const vline = (col, top, bottom, gray, weight) => doc.line(x(col), top, x(col), bottom, { gray, weight });
+
+  /** The rules of a table: every row edge across, every column edge down. */
+  const gridOf = (cols, rows, gray, weight) => {
+    for (const at of rows) hline(cols[0], cols[cols.length - 1], at, gray, weight);
+    for (const col of cols) vline(col, rows[0], rows[rows.length - 1], gray, weight);
+  };
+
+  /* ── Letterhead ──
+     QUOTATION set large on the left, the mark square on the right,
+     and a heavy rule under both. */
+  if (logo) doc.image(logo, RIGHT - 44.3, y, 44.3, 44.3);
+  doc.text('QUOTATION', M + PAD, baseline(y + 1, TITLE), { size: TITLE, bold: true });
+  y += 45;
+  doc.line(M, y, RIGHT, y, { gray: RULE, weight: 1.5 });
+  y += PANEL_ROW;
+
+  /* ── Who it is for, and when ──
+     Two boxed panels on one row: the client on the left across four
+     columns, the dates on the right across the last three. */
+  const who = [
+    ['Client Name:', quote.client?.name || '-'],
+    ['Contact Number:', quote.client?.phone || '-'],
+    ...(quote.client?.email ? [['Email:', quote.client.email]] : []),
+  ];
+  const when = [
+    ['Quoted Date:', quote.date ? dmyLong(quote.date) : '-'],
+    ['MR #:', quote.mrNo],
+    ['Valid till:', quote.validUntil ? dmyLong(quote.validUntil) : '-'],
+  ];
+
+  // The address is the one field that runs long, so its cell is three
+  // rows deep whatever it holds and grows past that if it has to.
+  const addressLines = TYPE.wrap(quote.client?.shippingAddress || '-', DOC.width(NAME, DIM), SIZE);
+  const addressH = Math.max(PANEL_ROW * 3, 2.53 + addressLines.length * lineH());
+
+  const panelTop = y;
+  let row = panelTop;
+  for (const [label, value] of who) {
+    cell(label, SR, NAME, centred(row, PANEL_ROW, lineH()), { bold: true });
+    cell(value, NAME, DIM, centred(row, PANEL_ROW, lineH()));
+    row += PANEL_ROW;
   }
-  doc.text(s.company.name || 'Banavat India', nameX, y + 12, { size: 15, bold: true, rgb: BRAND_BLUE });
-  doc.text('QUOTATION', RIGHT, y + 14, { size: 20, bold: true, align: 'right', gray: 0.07 });
-  y += 30;
-  doc.line(M, y, RIGHT, y, { gray: 0.2, weight: 1.4 });
-  y += 16;
-  doc.text(`MR # ${quote.mrNo}`, RIGHT, y + 2, { size: 10, align: 'right', gray: 0.35 });
-  y += 14;
+  cell('Shipping Address:', SR, NAME, row + 1.35, { bold: true });
+  addressLines.forEach((ln, i) => cell(ln, NAME, DIM, row + 1.35 + i * lineH()));
+  const whoRows = [panelTop];
+  for (let i = 0; i < who.length; i += 1) whoRows.push(panelTop + (i + 1) * PANEL_ROW);
+  whoRows.push(row + addressH);
+  gridOf([SR, NAME, DIM], whoRows, HAIR, HAIRLINE);
 
-  /* ── Who and when, two columns ── */
-  const colB = M + BODY / 2 + 10;
-  const pairs = [
-    ['Client', quote.client?.name || '-'],
-    ['Contact', quote.client?.phone || '-'],
-    ...(quote.client?.email ? [['Email', quote.client.email]] : []),
-    ['Delivery', quote.client?.shippingAddress || '-'],
-  ];
-  const dates = [
-    ['Quoted', quote.date ? dmy(quote.date) : '-'],
-    ['Valid till', quote.validUntil ? dmy(quote.validUntil) : '-'],
-    ['GST', t.taxed ? `${quote.gstRate}%` : 'Not applicable'],
-  ];
-  const metaTop = y;
-  pairs.forEach(([k, v], i) => {
-    doc.text(`${k}`, M, metaTop + i * 15, { size: 9, gray: 0.5 });
-    doc.text(v, M + 62, metaTop + i * 15, { size: 10, bold: k === 'Client', gray: 0.1 });
+  when.forEach(([label, value], i) => {
+    const top = centred(panelTop + i * PANEL_ROW, PANEL_ROW, lineH());
+    cell(label, RATE, TOTAL, top, { bold: true, align: 'right' });
+    cell(value, TOTAL, END, top, { align: 'right' });
   });
-  dates.forEach(([k, v], i) => {
-    doc.text(`${k}`, colB, metaTop + i * 15, { size: 9, gray: 0.5 });
-    doc.text(v, colB + 62, metaTop + i * 15, { size: 10, gray: 0.1 });
-  });
-  y = metaTop + Math.max(pairs.length, dates.length) * 15 + 12;
+  gridOf([RATE, TOTAL, END], when.map((_, i) => panelTop + i * PANEL_ROW).concat(panelTop + when.length * PANEL_ROW),
+    HAIR, HAIRLINE);
+
+  y = Math.max(row + addressH, panelTop + when.length * PANEL_ROW);
 
   // A quotation approved at a different figure, or with GST kept out
   // of the job value, is worth saying on the document that goes out —
@@ -194,217 +339,288 @@ function render(quote, photos, logo = null) {
     const note = quote.approvedTotal != null
       ? `Approved at ${money(jobValueFor(quote))} (quoted at ${money(t.total)})${quote.jobExcludesGst ? ', excluding GST' : ''}.`
       : 'Approved excluding GST.';
-    doc.text(note, M, y + 8, { size: 9, bold: true, gray: 0.15 });
-    y += 20;
+    y += 6;
+    cell(note, SR, END, y, { bold: true });
+    y += lineH();
   }
 
-  /* ── Items ──
-     Photograph, name + spec, dimensions, rate, qty, and either one
-     amount column or three — amount, GST, line total — when the
-     quotation is set to show tax per line rather than as one figure
-     under the sub-total. The image column only takes its width when
-     something on the quotation actually has a photograph, so a
-     quotation of plain lines prints across the full page.
+  y += 10.1;
 
-     The description wraps, so a row's height is whatever its tallest
-     cell needs, and a row that would cross the foot moves to a new
-     page whole rather than splitting mid-description. */
-  const anyPhoto = lines.some((l) => photos.has(l.id));
-  const lineItemGst = quote.gstMode === 'lineitem' && t.taxed;
-  const imgW = anyPhoto ? 58 : 0;
-
-  // Right-aligned columns, positioned by their right edge and laid
-  // out from RIGHT leftward: each step reserves that column's own
-  // width before leaving a gap for the next one — skipping the
-  // column's own width here is what let AMOUNT and QTY print on top
-  // of each other the first time this was written. Rate and Qty
-  // always sit just before the Amount; GST and Line Total exist only
-  // when the quotation is set to show tax per line, and sit after it.
-  const GAP = 8;
-  const W = { rate: 54, qty: 28, amt: 60, gst: 52, lineTotal: 62 };
-  let edge = RIGHT;
-  const lineTotalRight = edge;
-  if (lineItemGst) edge -= W.lineTotal + GAP;
-  const gstRight = edge;
-  if (lineItemGst) edge -= W.gst + GAP;
-  const amtRight = edge;
-  edge -= W.amt + GAP;
-  const qtyRight = edge;
-  edge -= W.qty + GAP;
-  const rateRight = edge;
-  edge -= W.rate + GAP;
-
-  // Five numeric columns and a photograph leave too little of a
-  // portrait page for a *sixth* text column: Dimensions folds into
-  // the item's own column, as one more wrapped line under the
-  // description, rather than being squeezed into a sliver that
-  // collides with the numbers next to it.
-  const foldDims = lineItemGst;
-
-  const C = {
-    sr: M,
-    img: M + 20,
-    name: M + 20 + imgW + (anyPhoto ? 8 : 0),
+  /* ── The items ──
+     One black band of column titles and then the rows, with no rules
+     between them: the photograph, the name and the description carry
+     the eye down the page on their own. */
+  const itemsHead = () => {
+    doc.fill(M, y, BODY, HEAD_ROW, 0);
+    const top = centred(y, HEAD_ROW, lineH());
+    const white = { bold: true, gray: 1 };
+    cell('Sr. No.', SR, IMG, top, white);
+    cell('Image', IMG, NAME, top, { ...white, align: 'center' });
+    cell('Name', NAME, DESC, top, white);
+    cell('Description', DESC, DIM, top, white);
+    cell('Dimensions', DIM, RATE, top, { ...white, align: 'center' });
+    cell('Unit Price', RATE, QTY, top, { ...white, align: 'center' });
+    cell('Quantity', QTY, TOTAL, top, { ...white, align: 'center' });
+    cell('Total', TOTAL, END, top, { ...white, align: 'right' });
+    y += HEAD_ROW;
   };
-  C.dim = foldDims ? 0 : C.name + (anyPhoto ? 132 : 176);
-  const nameW = (foldDims ? edge : C.dim) - C.name - 8;
-  const dimW = foldDims ? 0 : edge - C.dim - 8;
-
-  const header = () => {
-    doc.fill(M, y, BODY, 20, 0.93);
-    doc.text('#', C.sr + 4, y + 14, { size: 9, bold: true, gray: 0.3 });
-    doc.text(foldDims ? 'ITEM (WITH DIMENSIONS)' : 'ITEM', C.name, y + 14, { size: 9, bold: true, gray: 0.3 });
-    if (!foldDims) doc.text('DIMENSIONS', C.dim, y + 14, { size: 9, bold: true, gray: 0.3 });
-    doc.text('RATE', rateRight, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
-    doc.text('QTY', qtyRight, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
-    doc.text(lineItemGst ? 'SUB-TOTAL' : 'TOTAL', amtRight, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
-    if (lineItemGst) {
-      doc.text(`GST`, gstRight, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
-      doc.text('TOTAL', lineTotalRight, y + 14, { size: 9, bold: true, align: 'right', gray: 0.3 });
-    }
-    y += 20;
-  };
-  header();
+  itemsHead();
 
   if (!lines.length) {
-    doc.text('No items on this quotation yet.', M + 4, y + 14, { size: 10, gray: 0.5 });
-    y += 26;
+    cell('No items on this quotation yet.', SR, END, y + ITEM_PAD, { gray: 0.45 });
+    y += ITEM_PAD * 2 + lineH();
   }
+
+  /* Per-line GST is a setting on the quotation, not a shape the
+     printed document has ever had — so the tax still prints once, in
+     the ladder, and the line only notes its own share under the
+     amount. The figures are the same either way: quoteTotals does
+     not branch on it. */
+  const perLineGst = quote.gstMode === 'lineitem' && t.taxed;
 
   lines.forEach((l, i) => {
     const photo = photos.get(l.id);
-    const nameLines = wrapText(l.name || 'Item', nameW, 10, true);
-    const descLines = l.description ? wrapText(l.description, nameW, 9) : [];
-    // Folded in, a dimension string prints as "Dim: 38 x 1 x 58"" so
-    // it still reads as its own fact rather than a second description.
-    const foldedDimLines = foldDims && l.dims ? wrapText(`Dim: ${l.dims}`, nameW, 9) : [];
-    const dimLines = foldDims ? [] : (l.dims ? wrapText(l.dims, dimW, 9) : []);
-    const rowH = Math.max(
-      nameLines.length * 13 + descLines.length * 11 + foldedDimLines.length * 11 + (l.finish ? 11 : 0),
-      dimLines.length * 11,
-      photo ? imgW : 18,
-    ) + 12;
+    const nameLines = TYPE.wrap(l.name || 'Item', DOC.width(NAME, DESC), SIZE);
+    const descLines = TYPE.wrap(
+      [l.description || '', l.finish ? `- Finish: ${l.finish}` : ''].filter(Boolean).join('\n'),
+      DOC.width(DESC, DIM), SIZE,
+    );
+    const dimLines = TYPE.wrap(l.dims || '', DOC.width(DIM, RATE), SIZE, true);
+    // The photograph fits a square the width of its column, so every
+    // one down the page reads at the same scale whatever shape it is.
+    const slot = span(IMG, NAME);
+    const photoH = photo ? photo.h * slot / Math.max(photo.w, photo.h) : 0;
 
-    if (y + rowH > FOOT_LIMIT) { doc.addPage(); y = M; header(); }
+    const tall = Math.max(
+      photoH,
+      nameLines.length * lineH(),
+      descLines.length * lineH(),
+      dimLines.length * lineH(),
+    );
+    const rowH = Math.max(ITEM_MIN, tall + ITEM_PAD * 2);
 
-    // A fixed square, never stretched to the row's own height — a
-    // row with more description text is taller, but every photograph
-    // down the column still reads at the same size as the rest.
-    if (photo) doc.image(photo, C.img, y + 5, imgW, imgW);
+    if (needRoom(rowH)) itemsHead();
 
-    let ty = y + 12;
-    doc.text(String(i + 1), C.sr + 4, ty, { size: 9, gray: 0.45 });
-    for (const ln of nameLines) { doc.text(ln, C.name, ty, { size: 10, bold: true, gray: 0.1 }); ty += 13; }
-    if (l.finish) { doc.text(l.finish, C.name, ty, { size: 9, gray: 0.45 }); ty += 11; }
-    for (const ln of descLines) { doc.text(ln, C.name, ty, { size: 9, gray: 0.4 }); ty += 11; }
-    for (const ln of foldedDimLines) { doc.text(ln, C.name, ty, { size: 9, gray: 0.4 }); ty += 11; }
+    if (photo) doc.image(photo, x(IMG), centred(y, rowH, photoH), slot, photoH);
 
-    let dy = y + 12;
-    for (const ln of dimLines) { doc.text(ln, C.dim, dy, { size: 9, gray: 0.35 }); dy += 11; }
-
-    const amt = lineAmount(l);
-    doc.text(money(l.unitPrice), rateRight, y + 12, { size: 10, align: 'right', gray: 0.15 });
-    doc.text(String(l.kind === 'lump' ? 1 : l.qty), qtyRight, y + 12, { size: 10, align: 'right', gray: 0.15 });
-    doc.text(money(amt), amtRight, y + 12, { size: 10, bold: !lineItemGst, align: 'right', gray: lineItemGst ? 0.15 : 0.05 });
-    if (lineItemGst) {
-      const gst = lineGst(l, quote);
-      doc.text(money(gst), gstRight, y + 12, { size: 10, align: 'right', gray: 0.15 });
-      doc.text(money(amt + gst), lineTotalRight, y + 12, { size: 10, bold: true, align: 'right', gray: 0.05 });
+    const one = centred(y, rowH, lineH());
+    cell(String(i + 1), SR, IMG, one, { align: 'center' });
+    nameLines.forEach((ln, n) => cell(ln, NAME, DESC, centred(y, rowH, nameLines.length * lineH()) + n * lineH()));
+    descLines.forEach((ln, n) => cell(ln, DESC, DIM, centred(y, rowH, descLines.length * lineH()) + n * lineH()));
+    dimLines.forEach((ln, n) => cell(ln, DIM, RATE, centred(y, rowH, dimLines.length * lineH()) + n * lineH(), { align: 'center', bold: true }));
+    cell(money(l.unitPrice), RATE, QTY, one, { align: 'right' });
+    cell(String(l.kind === 'lump' ? 1 : l.qty), QTY, TOTAL, one, { align: 'center' });
+    cell(money(lineAmount(l)), TOTAL, END, one, { align: 'right' });
+    if (perLineGst) {
+      cell(`+ ${money(lineGst(l, quote))} GST`, TOTAL, END, one + lineH(), { align: 'right', gray: 0.45 });
     }
 
     y += rowH;
-    doc.line(M, y, RIGHT, y, { gray: 0.86 });
   });
 
-  /* ── The ladder, in the order it prints: tax inside Sub Total A,
-        shipping added after it as Sub Total B. ── */
+  /* ── Payment terms, and the ladder beside them ──
+     One row across the page: the terms boxed top and bottom on the
+     left, the sub-totals on the right, both ending at the same rule. */
+  const payClauses = String(quote.paymentTerms || '')
+    .split('\n').map((c) => c.trim()).filter(Boolean)
+    .flatMap((c) => hang(TYPE, c, DOC.width(SR, RATE)));
   const ladder = [
     [t.discount ? 'Total' : 'Sub - Total', money(t.sub), false],
     ...(t.discount ? [
       ['Discount', `-${money(t.discount)}`, false],
       ['Sub-Total', money(t.afterDiscount), false],
     ] : []),
-    ...(t.taxed ? [[`GST (${quote.gstRate}%)${lineItemGst ? ' — as above' : ''}`, money(t.gst), false]] : []),
-    ['Sub Total A', money(t.subA), false],
-    ...ship.map((x) => [x.label || 'Shipping', money(x.amount), false]),
-    ['Sub Total B', money(t.subB), false],
+    ...(t.taxed ? [[`GST (${quote.gstRate}%)`, money(t.gst), false]] : []),
+    ['Sub Total A', money(t.subA), true],
   ];
-  const ladderH = ladder.length * 15 + 34;
-  if (y + ladderH > FOOT_LIMIT) { doc.addPage(); y = M; }
-  y += 14;
 
-  const sumX = RIGHT - 210;
-  ladder.forEach(([k, v]) => {
-    doc.text(k, sumX, y + 10, { size: 9.5, gray: 0.4 });
-    doc.text(v, RIGHT, y + 10, { size: 9.5, align: 'right', gray: 0.15 });
-    y += 15;
+  const payH = payClauses.length ? 4.2 + (payClauses.length + 1) * lineH() + 4.9 : 0;
+  const ladderH = ladder.length * HEAD_ROW;
+  needRoom(Math.max(payH, ladderH));
+
+  if (payClauses.length) {
+    hline(SR, RATE, y, RULE, HAIRLINE);
+    cell('Payment Terms', SR, RATE, y + 4.2, { bold: true });
+    payClauses.forEach((piece, i) => {
+      doc.runs(piece.runs, x(SR) + PAD + piece.indent, baseline(y + 4.2 + (i + 1) * lineH()), { size: SIZE });
+    });
+    hline(SR, RATE, y + payH, RULE, HAIRLINE);
+  }
+
+  ladder.forEach(([label, value, strong], i) => {
+    const top = y + i * HEAD_ROW;
+    if (strong) doc.fill(x(RATE), top, span(RATE, END), HEAD_ROW, BAND);
+    const line = centred(top, HEAD_ROW, lineH());
+    cell(label, RATE, TOTAL, line, { bold: strong });
+    cell(value, TOTAL, END, line, { align: 'right', bold: strong });
   });
-  y += 4;
-  doc.fill(sumX - 12, y, RIGHT - sumX + 12, 26, 0.93);
-  doc.text('TOTAL', sumX, y + 17, { size: 10, bold: true, gray: 0.2 });
-  doc.text(money(t.total), RIGHT - 6, y + 17, { size: 12, bold: true, align: 'right', gray: 0 });
-  y += 38;
+  gridOf([RATE, TOTAL, END], ladder.map((_, i) => y + i * HEAD_ROW).concat(y + ladderH), EDGE, EDGELINE);
 
-  /* ── Boilerplate ── */
-  /* Clauses break one at a time rather than the block moving whole:
-     eight terms that do not fit in the remaining third of a page used
-     to leave that third blank and start again overleaf. A clause is
-     never split across pages, and a heading never ends one. */
-  const block = (title, body) => {
-    if (!body || !String(body).trim()) return;
-    const clauses = String(body).split('\n').map((x) => x.trim()).filter(Boolean);
-    if (!clauses.length) return;
+  y += Math.max(payH, ladderH) + 20.2;
 
-    const firstH = wrapText(clauses[0].replace(/^[-–•]\s*/, ''), BODY - 12, 9).length * 11 + 3;
-    if (y + 18 + firstH > FOOT_LIMIT) { doc.addPage(); y = M; }
-    doc.text(title.toUpperCase(), M, y + 10, { size: 9, bold: true, gray: 0.35 });
-    y += 18;
+  /* ── Shipping ──
+     Its own small table, because Sub Total B is quoted apart from the
+     goods and is the one figure a client asks about twice. */
+  const shipRows = ship.length ? ship : [{ label: '—', amount: 0 }];
+  needRoom(SHIP_HEAD + SHIP_ROW);
+  doc.fill(M, y, BODY, SHIP_HEAD, BAND);
+  const shipHeadTop = centred(y, SHIP_HEAD, lineH());
+  cell('Sr. No.', SR, IMG, shipHeadTop, { bold: true });
+  cell('Shipping', IMG, RATE, shipHeadTop, { bold: true, align: 'center' });
+  cell('Sub Total B', RATE, END, shipHeadTop, { bold: true, align: 'center' });
+  gridOf([SR, IMG, RATE, END], [y, y + SHIP_HEAD], EDGE, EDGELINE);
+  y += SHIP_HEAD;
 
-    for (const ln of clauses) {
-      const wrapped = wrapText(ln.replace(/^[-–•]\s*/, ''), BODY - 12, 9);
-      const h = wrapped.length * 11 + 3;
-      if (y + h > FOOT_LIMIT) { doc.addPage(); y = M; }
-      doc.text('-', M, y + 8, { size: 9, gray: 0.5 });
-      wrapped.forEach((w, i) => { doc.text(w, M + 12, y + 8 + i * 11, { size: 9, gray: 0.25 }); });
-      y += h;
+  shipRows.forEach((sx, i) => {
+    needRoom(SHIP_ROW);
+    const top = centred(y, SHIP_ROW, lineH());
+    cell(String(i + 1), SR, IMG, top, { align: 'center' });
+    cell(sx.label || 'Shipping', IMG, RATE, top, { align: 'center' });
+    cell(money(sx.amount), RATE, END, top, { align: 'center' });
+    gridOf([SR, IMG, RATE, END], [y, y + SHIP_ROW], HAIR, HAIRLINE);
+    y += SHIP_ROW;
+  });
+
+  y += 20.4;
+
+  /* ── What it comes to ── */
+  needRoom(GRAND_HEAD + GRAND_ROW);
+  doc.fill(M, y, BODY, GRAND_HEAD, 0);
+  const grandHeadTop = centred(y, GRAND_HEAD, lineH(GRAND_LABEL));
+  cell('Sub Total A', SR, DESC, grandHeadTop, { bold: true, gray: 1, align: 'center', size: GRAND_LABEL });
+  cell('Sub Total B', DESC, RATE, grandHeadTop, { bold: true, gray: 1, align: 'center', size: GRAND_LABEL });
+  cell('Total', RATE, END, grandHeadTop, { bold: true, gray: 1, align: 'center', size: GRAND_LABEL });
+
+  const grandBody = y + GRAND_HEAD;
+  cell(money(t.subA), SR, DESC, centred(grandBody, GRAND_ROW, lineH()), { align: 'center' });
+  cell(money(t.subB), DESC, RATE, centred(grandBody, GRAND_ROW, lineH()), { align: 'center' });
+  cell(money(t.total), RATE, END, centred(grandBody, GRAND_ROW, lineH(GRAND_TOTAL)),
+    { align: 'center', bold: true, size: GRAND_TOTAL });
+  gridOf([SR, DESC, RATE, END], [y, grandBody, grandBody + GRAND_ROW], 0, EDGELINE);
+  y = grandBody + GRAND_ROW + 53.1;
+
+  /* ── Where to pay, and who to ask ── */
+  const bank = [
+    `Bank: ${s.bank.bank}`, `A/C Name: ${s.bank.name}`, `A/C Number: ${s.bank.account}`,
+    `IFSC: ${s.bank.ifsc}`, `Branch: ${s.bank.branch}`,
+  ].filter((v) => !/:\s*$/.test(v));
+  /* No GSTIN and no company name here, because the issued document
+     has neither: the client's copy carries where to write, where to
+     mail and where to call, and the registration lives on the
+     invoice that follows it. */
+  const contact = [
+    s.company.address ? `Address: ${s.company.address}` : '',
+    s.company.email ? `Email: ${s.company.email}` : '',
+    s.company.phone ? `Phone: ${s.company.phone}` : '',
+    s.company.website ? `Website: ${s.company.website}` : '',
+  ].filter(Boolean);
+
+  const detailsH = (Math.max(bank.length, contact.length) + 2) * lineH();
+  needRoom(detailsH);
+  cell('Banking Details', SR, DIM, y, { bold: true });
+  cell('Contact Details', RATE, END, y, { bold: true });
+  bank.forEach((ln, i) => cell(ln, SR, DIM, y + (i + 2) * lineH()));
+  contact.forEach((ln, i) => cell(ln, RATE, END, y + (i + 2) * lineH()));
+  y += detailsH + 25.7;
+
+  /* ── The closing page ──
+     The standing terms and then the note, together, overleaf. What a
+     client is asked to accept and what they are asked to understand
+     read as one thing, so they are set as one — on a page of their
+     own, away from the figures, and last, because that is where a
+     reader ends up. */
+  const clauses = termRuns(quote).flatMap((runs) => hangRuns(TYPE, runs, DOC.page));
+  const paragraphs = String(s.note || '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+
+  if (clauses.length || paragraphs.length) turnPage();
+
+  if (clauses.length) {
+    cell('Terms & Conditions', SR, END, y, { bold: true });
+    y += 10.4;
+    for (const piece of clauses) {
+      needRoom(lineH());
+      doc.runs(piece.runs, x(SR) + PAD + piece.indent, baseline(y), { size: SIZE });
+      y += lineH();
     }
+    y += lineH();
+    cell('*Terms and conditions apply.', SR, END, y);
+    y += lineH() + 25.7;
+  }
+
+  if (paragraphs.length) {
+    // A heading never ends a page on its own.
+    needRoom(10 + lineH());
+    cell('Note Please', SR, END, y, { bold: true });
     y += 10;
-  };
-
-  block('Payment terms', quote.paymentTerms);
-  block('Terms & conditions', renderTerms(quote));
-  // The asterisk belongs to the clauses above it, so it sits with
-  // them — at the end of the document it either collided with the
-  // note or cost a whole page to itself.
-  doc.text('*Terms and conditions apply.', M, y - 2, { size: 8, gray: 0.5 });
-  y += 10;
-
-  const bankText = [
-    `Bank: ${s.bank.bank}`, `A/C Name: ${s.bank.name}`,
-    `A/C Number: ${s.bank.account}`, `IFSC: ${s.bank.ifsc}`, `Branch: ${s.bank.branch}`,
-  ].filter((x) => !/:\s*$/.test(x)).join('\n');
-  const contactText = [
-    s.company.name, s.company.gstin ? `GSTIN: ${s.company.gstin}` : '',
-    s.company.address, s.company.email, s.company.phone, s.company.website,
-  ].filter(Boolean).join('\n');
-
-  if (y + 96 > FOOT_LIMIT) { doc.addPage(); y = M; }
-  doc.line(M, y, RIGHT, y, { gray: 0.8 });
-  y += 16;
-  doc.text('BANKING DETAILS', M, y + 8, { size: 9, bold: true, gray: 0.35 });
-  doc.text('CONTACT', colB, y + 8, { size: 9, bold: true, gray: 0.35 });
-  y += 18;
-  const bankEnd = doc.paragraph(bankText, M, y + 8, BODY / 2 - 20, { size: 9, leading: 1.3, gray: 0.3 });
-  const contactEnd = doc.paragraph(contactText, colB, y + 8, BODY / 2 - 20, { size: 9, leading: 1.3, gray: 0.3 });
-  y = Math.max(bankEnd, contactEnd) + 6;
-
-  if (s.note) {
-    if (y + 60 > FOOT_LIMIT) { doc.addPage(); y = M; }
-    doc.text('NOTE', M, y + 8, { size: 9, bold: true, gray: 0.35 });
-    y = doc.paragraph(String(s.note).replace(/\n{2,}/g, '\n'), M, y + 22, BODY, { size: 9, gray: 0.3 }) + 4;
+    for (const para of paragraphs) {
+      const wrapped = TYPE.wrap(para, DOC.page, SIZE);
+      needRoom(wrapped.length * lineH());
+      wrapped.forEach((ln, i) => cell(ln, SR, END, y + i * lineH()));
+      y += (wrapped.length + 1) * lineH();
+    }
   }
 
   return doc.blob();
+}
+
+/* Word wrap that keeps its weights. Runs are broken into words first,
+   each remembering which run it came from, so a bold value that
+   straddles a line break stays bold on both halves — and so the lead
+   time can print bold inside a sentence that wraps around it. The
+   pieces a hyphen splits a word into are words here too, on the same
+   terms as everywhere else — see breakUnits in pdf.js. */
+function wrapRuns(type, runs, width, size = SIZE) {
+  const words = [];
+  let gap = false;
+  for (const run of runs) {
+    for (const part of String(run.text || '').split(/(\s+)/)) {
+      if (!part) continue;
+      if (/^\s+$/.test(part)) { gap = true; continue; }
+      breakUnits(part).forEach((unit, u) => {
+        words.push({ text: unit, bold: Boolean(run.bold), gap: gap && u === 0 });
+      });
+      gap = false;
+    }
+  }
+
+  const lines = [];
+  let line = [];
+  let used = 0;
+  for (const word of words) {
+    const lead = line.length && word.gap ? type.width(' ', size, word.bold) : 0;
+    const w = type.width(word.text, size, word.bold);
+    if (line.length && used + lead + w > width) {
+      lines.push(line);
+      line = [{ ...word, gap: false }];
+      used = w;
+    } else {
+      line.push(line.length ? word : { ...word, gap: false });
+      used += lead + w;
+    }
+  }
+  if (line.length) lines.push(line);
+  return lines;
+}
+
+/* A clause set as "- text", with anything that wraps aligned under
+   the text rather than under the dash. Returns one entry per printed
+   line: the weighted pieces on it, and the indent it hangs at. */
+function hangRuns(type, runs, width) {
+  const dash = '- ';
+  const indent = type.width(dash, SIZE);
+  const body = runs.map((r, i) => (i === 0
+    ? { ...r, text: String(r.text || '').replace(/^[-–•]\s*/, '') }
+    : r));
+  return wrapRuns(type, body, width - indent).map((line, i) => ({
+    indent: i === 0 ? 0 : indent,
+    runs: (i === 0 ? [{ text: dash, bold: false }] : [])
+      .concat(line.map((w) => ({ text: (w.gap ? ' ' : '') + w.text, bold: w.bold }))),
+  }));
+}
+
+/** The same, for a clause that is all one weight. */
+function hang(type, clause, width) {
+  return hangRuns(type, [{ text: clause, bold: false }], width);
 }
 
 /** The one-line message that rides along with a shared quotation. */
@@ -440,7 +656,7 @@ export async function downloadQuotePdf(quote) {
 export async function shareQuotePdf(quote) {
   const name = quoteFileName(quote);
   const { ready, needs } = collectPhotos(quote.lines || []);
-  const logo = settings().logo ? readLogoDirect() : undefined;   // undefined: no logo at all, nothing to wait on
+  const logo = docMark() ? readLogoDirect() : undefined;   // undefined: no mark at all, nothing to wait on
   // Nothing to decode means nothing to await, so the share sheet is
   // still opening on the same tap that asked for it.
   const blob = (needs.length || logo === null) ? await quotePdfBlob(quote) : render(quote, ready, logo);

@@ -14,6 +14,17 @@ export function inr(n) {
   return '₹' + num(n);
 }
 
+/**
+ * The same figure as the quotation prints it: whole rupees, never
+ * paise. A quotation is agreed in rupees and the issued documents
+ * have always rounded to them — and because the PDF and the preview
+ * both come through here, the two can never show different money.
+ */
+export function inrWhole(n) {
+  const v = Math.round(Number(n) || 0);
+  return `${v < 0 ? '-' : ''}₹${NF0.format(Math.abs(v))}`;
+}
+
 /** Compact for tight spots: 561388 -> "5.61 L", 24500180 -> "2.45 Cr" */
 export function inrShort(n) {
   const v = Math.abs(Number(n) || 0);
@@ -65,6 +76,14 @@ export function dmy(iso) {
   const d = fromISO(iso);
   const p = (x) => String(x).padStart(2, '0');
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+/** "19 Aug 2026" — how a date reads on the quotation, where the
+    month is spelled so a client never has to work out which number
+    is the day. */
+export function dmyLong(iso) {
+  const d = fromISO(iso);
+  return `${String(d.getDate()).padStart(2, '0')} ${MON[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 /** "19 Aug" or "19 Aug 2025" when it is not the current year */
