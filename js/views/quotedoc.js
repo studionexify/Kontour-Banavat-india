@@ -412,6 +412,7 @@ export function docHTML(q) {
         <section>
           <h2>Contact Details</h2>
           <p>
+            ${s.company.gstin ? `GSTIN: ${esc(s.company.gstin)}<br>` : ''}
             Address: ${esc(s.company.address)}<br>
             Email: ${esc(s.company.email)}<br>
             Phone: ${esc(s.company.phone)}<br>
