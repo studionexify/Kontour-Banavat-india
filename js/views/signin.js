@@ -12,7 +12,7 @@
 import { esc, toast } from '../ui.js';
 import {
   signIn, signUp, sendPasswordReset, signOut,
-  myOrgs, createOrg, setCurrentOrg, currentUser,
+  myOrgs, setCurrentOrg, currentUser, requestToJoin, myJoinRequest,
 } from '../auth.js';
 import { adoptLocalData, sync as syncLedger } from '../cloud.js';
 import { adoptLocalQuotes } from '../quotesync.js';
@@ -213,7 +213,7 @@ async function chooseOrg(root, done) {
   }
 
   if (orgs.length === 1) return enter(orgs[0], done);
-  if (orgs.length === 0) return nameBooks(root, done);
+  if (orgs.length === 0) return waitingRoom(root, done);
 
   const user = currentUser();
   root.innerHTML = shell(`
@@ -236,18 +236,44 @@ async function chooseOrg(root, done) {
   });
 }
 
-/** First person in: there are no books yet, so name them. */
-function nameBooks(root, done) {
+/**
+ * No org yet and no invite waiting: this account has to ask, and an
+ * owner or admin decides — see 0007_join_requests.sql. Three states
+ * of the same screen: not yet asked, asked and waiting, or declined.
+ * Nothing here ever hands out an org of one's own any more; that is
+ * the whole point of closing this door the way 0005 had to reopen it.
+ */
+async function waitingRoom(root, done) {
+  let existing = null;
+  try {
+    existing = await myJoinRequest();
+  } catch {
+    // Offline, or the request table could not be reached. Falls
+    // through to the ask-to-join form, which will hit the same error
+    // and say so, rather than showing a silent blank screen here.
+  }
+
+  if (existing && existing.status === 'pending') return waiting(root, done);
+  if (existing && existing.status === 'rejected') return declined(root, done);
+  return askToJoin(root, done);
+}
+
+function askToJoin(root, done) {
+  const user = currentUser();
   root.innerHTML = shell(`
-    <p class="gate-sub">Name your books to finish setting up</p>
+    <p class="gate-sub">Ask Banavat India for access</p>
     <form class="auth-form" novalidate>
       <label class="auth-f">
-        <span>Business name</span>
-        <input class="control dark" name="name" value="Banavat India" required>
+        <span>Your name</span>
+        <input class="control dark" name="name" autocomplete="name" placeholder="Veer Chaudhary">
       </label>
       <div class="auth-err" data-err hidden></div>
-      <button class="btn" type="submit">Create books</button>
+      <button class="btn" type="submit">Request access</button>
     </form>
+    <p class="qb-hint" style="color:var(--pine-200)">
+      Signed in as ${esc(user ? user.email : '')}. An owner or admin
+      has to approve this before you can see anything.
+    </p>
     <div class="auth-alt"><button data-out>Sign out</button></div>`);
 
   const form = root.querySelector('form');
@@ -257,17 +283,47 @@ function nameBooks(root, done) {
     ev.preventDefault();
     const btn = form.querySelector('button');
     btn.disabled = true;
-    btn.textContent = 'Creating…';
+    btn.textContent = 'Asking…';
     try {
-      const org = await createOrg(new FormData(form).get('name'));
-      await enter({ id: org.id, name: org.name, role: 'owner' }, done);
+      await requestToJoin(new FormData(form).get('name'));
+      await waiting(root, done);
     } catch (e) {
       errBox.textContent = friendly(e);
       errBox.hidden = false;
       btn.disabled = false;
-      btn.textContent = 'Create books';
+      btn.textContent = 'Request access';
     }
   });
+
+  root.querySelector('[data-out]').addEventListener('click', async () => {
+    await signOut(); mode = 'in'; paint(root, done);
+  });
+}
+
+function waiting(root, done) {
+  root.innerHTML = shell(`
+    <p class="gate-sub">Waiting for approval</p>
+    <p class="qb-hint" style="color:var(--pine-200)">
+      Banavat India has not decided on your request yet. There is
+      nothing more to do here — check back later, or try again now.
+    </p>
+    <button class="btn" data-retry>Check again</button>
+    <div class="auth-alt"><button data-out>Sign out</button></div>`);
+
+  root.querySelector('[data-retry]').addEventListener('click', () => chooseOrg(root, done));
+  root.querySelector('[data-out]').addEventListener('click', async () => {
+    await signOut(); mode = 'in'; paint(root, done);
+  });
+}
+
+function declined(root, done) {
+  root.innerHTML = shell(`
+    <p class="gate-sub err">Your request was declined</p>
+    <p class="qb-hint" style="color:var(--pine-200)">
+      If this is unexpected, ask Banavat India directly — an owner or
+      admin can reconsider from Settings.
+    </p>
+    <div class="auth-alt"><button data-out>Sign out</button></div>`);
 
   root.querySelector('[data-out]').addEventListener('click', async () => {
     await signOut(); mode = 'in'; paint(root, done);
