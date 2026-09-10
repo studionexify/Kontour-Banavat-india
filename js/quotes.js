@@ -389,15 +389,51 @@ export function leadTimeRangeText(days, span = 5) {
   return `${n}–${n + span} business days`;
 }
 
-/* Fills {{fabricRate}} and {{leadTime}} in the standing terms from
-   whatever this particular quotation says. */
-export function renderTerms(quote) {
+/* What this quotation fills into its standing terms. */
+function termFills(quote) {
   const s = state.settings;
   const rate = Number(quote && quote.fabricRate != null ? quote.fabricRate : s.fabricRate) || 0;
   const lead = (quote && quote.leadTime) || s.leadTime || '';
-  return String(s.terms || '')
-    .replace(/\{\{fabricRate\}\}/g, `₹${rate.toLocaleString('en-IN')}`)
-    .replace(/\{\{leadTime\}\}/g, lead);
+  return [
+    ['{{fabricRate}}', `₹${rate.toLocaleString('en-IN')}`],
+    ['{{leadTime}}', lead],
+  ];
+}
+
+/* Fills {{fabricRate}} and {{leadTime}} in the standing terms from
+   whatever this particular quotation says. */
+export function renderTerms(quote) {
+  let out = String(state.settings.terms || '');
+  for (const [token, value] of termFills(quote)) out = out.split(token).join(value);
+  return out;
+}
+
+/**
+ * The same terms, but as the document sets them: one array of
+ * `{ text, bold }` pieces per clause, with the values this quotation
+ * filled in marked bold. The lead time is the reason — it is the one
+ * number a client comes back to, and every issued quotation has set
+ * it in bold inside its sentence.
+ */
+export function termRuns(quote) {
+  const fills = termFills(quote);
+  return String(state.settings.terms || '')
+    .split('\n').map((c) => c.trim()).filter(Boolean)
+    .map((clause) => {
+      let runs = [{ text: clause, bold: false }];
+      for (const [token, value] of fills) {
+        runs = runs.flatMap((run) => {
+          if (run.bold || !run.text.includes(token)) return [run];
+          const out = [];
+          run.text.split(token).forEach((part, i) => {
+            if (i) out.push({ text: value, bold: true });
+            if (part) out.push({ text: part, bold: false });
+          });
+          return out;
+        });
+      }
+      return runs.filter((r) => r.text);
+    });
 }
 
 /* Two calendar months from the quoted date, which is what every

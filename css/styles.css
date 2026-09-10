@@ -2171,126 +2171,227 @@ select.control { padding-right:34px; background-position:right 13px center; back
 /* ════════════════════════════════════════════════════════════
    THE QUOTATION DOCUMENT
 
-   A faithful rendering of what the client receives: the same
-   header pairs, the same eight columns, the same totals ladder
-   with shipping added after the tax. It is set on white with a
-   serif-free, plain hierarchy because it is a business document
-   that gets printed, not a screen that gets browsed — the app's
-   own theme deliberately stops at its edge.
+   Not a screen — a preview of the file, drawn to the same grid
+   the PDF is drawn to. Everything below is in points, through
+   --pt, because the printed document is specified in points:
+   Letter paper, a 0.7in margin on all four sides, Montserrat at
+   6.4pt, and eight columns whose edges every table snaps to. If
+   a number here disagrees with one in js/quotepdf.js, the two
+   documents have drifted apart and this is the copy that is
+   wrong.
+
+   The page never scrolls sideways and no table inside it does
+   either: the columns are percentages of a fixed-layout table,
+   so a long description wraps rather than pushing the page out.
+   On a narrow screen the whole sheet is scaled down to fit — see
+   fitPages() in views/quotedoc.js — which is the only honest way
+   to show a Letter page on a phone.
    ════════════════════════════════════════════════════════════ */
 
-/* Deliberately not responsive: this is a preview of the exported
-   file, not a screen of its own, so it holds one true size — roughly
-   A4 at 96dpi, the same proportions the PDF and the print output
-   already use — on every device. A phone gets it exactly as small as
-   a phone screen makes an A4 page look, scrolling and pinch-zooming
-   to read it, rather than a reflowed layout that never matches what
-   actually gets downloaded or shared. */
 .doc-scroll {
   background:var(--k-100); padding:16px;
-  overflow:auto; -webkit-overflow-scrolling:touch;
+  overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch;
 }
 
-.doc {
+/* The sheets, and the scale that fits them to the screen. The outer
+   box is the size the document is *painted* at and clips to it; the
+   inner one is a full-size 816px page that happens to be drawn
+   small. Keeping them apart is what stops a phone from finding a
+   page's worth of empty room off the right-hand edge. */
+.doc-fit {
+  box-sizing:content-box; margin:0 auto; padding:6px; overflow:hidden;
+}
+.doc-fit-in { width:816px; transform-origin:top left; }
+.doc-sheets { display:flex; flex-direction:column; gap:16px; }
+
+.doc-page {
+  --pt:1.3333px;
+  --ink:#000;
+  --rule:#434343;              /* the letterhead rule, and the payment box */
+  --hair:#B7B7B7;              /* the client panel and the shipping rows */
+  --edge:#666666;              /* the heavier edge on the totals */
+  --band:#EFEFEF;              /* behind a shaded row */
+
+  box-sizing:border-box;
+  width:calc(612 * var(--pt));
+  min-height:calc(792 * var(--pt));
+  padding:calc(54 * var(--pt)) calc(50.4 * var(--pt)) calc(50.4 * var(--pt));
   background:#FFFFFF;
-  color:#111113;
-  width:794px;
-  margin:0 auto;
-  padding:34px 32px 40px;
-  border-radius:6px;
+  color:var(--ink);
+  font-family:'Kontour Montserrat', ui-sans-serif, system-ui, sans-serif;
+  font-size:calc(6.4 * var(--pt));
+  line-height:1.219;
   box-shadow:var(--e2);
-  font-size:12px;
-  line-height:1.5;
 }
 
+/* ── Letterhead ── */
+.doc-head {
+  display:flex; align-items:flex-start; justify-content:space-between;
+  box-sizing:border-box;
+  height:calc(45 * var(--pt));
+  border-bottom:calc(1.5 * var(--pt)) solid var(--rule);
+}
 .doc-title {
-  margin:0 0 22px;
-  font-size:20px; font-weight:700; letter-spacing:2.5px;
-  text-align:center; text-transform:uppercase;
+  margin:0; font-size:calc(23 * var(--pt)); font-weight:700;
+  letter-spacing:-.01em; text-transform:uppercase;
+}
+.doc-mark { flex:none; width:calc(44.3 * var(--pt)); height:calc(44.3 * var(--pt)); object-fit:contain; }
+
+/* ── Who it is for, and when ── */
+.doc-panels { display:flex; justify-content:space-between; margin-top:calc(10.35 * var(--pt)); }
+.doc-panel { border-collapse:collapse; table-layout:fixed; }
+.doc-panel.who  { width:51.5856%; }
+.doc-panel.when { width:33.4615%; }
+.doc-panel th, .doc-panel td {
+  height:calc(10.33 * var(--pt));
+  padding:calc(1.35 * var(--pt)) calc(1.8 * var(--pt));
+  border:calc(.5 * var(--pt)) solid var(--hair);
+  font-weight:400; text-align:left; vertical-align:middle;
+  overflow-wrap:anywhere;
+}
+.doc-panel th { font-weight:700; }
+.doc-panel.who  th { width:32.53%; }
+.doc-panel.when th { width:63.65%; }
+.doc-panel.when th, .doc-panel.when td { text-align:right; }
+/* The address is the one field that runs long, so its cell is
+   three rows deep whatever it holds. */
+.doc-panel .addr th, .doc-panel .addr td { height:calc(30.99 * var(--pt)); vertical-align:top; }
+
+.doc-stamp {
+  margin:calc(6 * var(--pt)) 0 0;
+  font-weight:700;
 }
 
-.doc-meta {
-  display:grid; grid-template-columns:1fr 1fr; gap:2px 40px;
-  margin-bottom:20px;
+/* ── The items ── */
+.doc-items { width:100%; table-layout:fixed; border-collapse:collapse; margin-top:calc(10.1 * var(--pt)); }
+.doc-items th {
+  height:calc(10.82 * var(--pt));
+  padding:0 calc(1.8 * var(--pt));
+  background:var(--ink); color:#FFFFFF; font-weight:700;
+  text-align:left; vertical-align:middle;
 }
-.doc-meta dl { margin:0; display:flex; flex-direction:column; gap:3px; }
-.doc-meta div { display:flex; gap:8px; }
-.doc-meta dt { margin:0; font-weight:700; flex:none; min-width:118px; }
-.doc-meta dd { margin:0; }
+.doc-items td {
+  height:calc(80.7 * var(--pt));
+  padding:calc(8 * var(--pt)) calc(1.8 * var(--pt));
+  vertical-align:middle; overflow-wrap:anywhere;
+}
+.doc-items .c-sr   { width:6.7795%;  text-align:center; }
+.doc-items .c-img  { width:10.0001%; padding-left:0; padding-right:0; }
+.doc-items .c-name { width:12.9319%; }
+.doc-items .c-desc { width:21.8741%; }
+.doc-items .c-dim  { width:14.9529%; text-align:center; font-weight:700; }
+.doc-items .c-rate { width:9.7674%;  text-align:right; }
+.doc-items .c-qty  { width:11.5297%; text-align:center; }
+.doc-items .c-amt  { width:12.1644%; text-align:right; }
+.doc-items thead .c-sr   { text-align:left; }
+.doc-items thead .c-img  { text-align:center; padding:0 calc(1.8 * var(--pt)); }
+.doc-items thead .c-dim,
+.doc-items thead .c-rate,
+.doc-items thead .c-qty  { text-align:center; }
+.doc-items thead .c-amt  { text-align:right; }
+.doc-items thead .c-dim  { font-weight:700; }
 
-.doc-tablewrap { overflow-x:auto; margin-bottom:16px; }
-
-.doc-table {
-  width:100%; border-collapse:collapse;
-  font-size:11.5px;
-}
-.doc-table th, .doc-table td {
-  border:1px solid #C9C9CF;
-  padding:7px 8px;
-  vertical-align:top;
-  text-align:left;
-}
-.doc-table th {
-  background:#F1F1F3; font-weight:700;
-  font-size:11px; letter-spacing:.2px;
-  white-space:nowrap;
-}
-.doc-table .c-sr { width:46px; text-align:center; }
-/* The photograph is what a furniture quotation is actually looked at
-   for, so its column is sized to show the piece, not to fit a table:
-   wider than the rest, and square rather than however tall the
-   original happened to be, so a row of different photos still reads
-   as one grid down the column. */
-.doc-table .c-img { width:104px; padding:6px; }
+/* The photograph is what a furniture quotation is actually looked
+   at for, so it takes the whole of its column — and the same
+   square every other one down the page gets, whatever shape the
+   original was. */
 .doc-img-btn {
-  display:block; width:100%; aspect-ratio:1; padding:0; border:0;
-  border-radius:6px; overflow:hidden; cursor:zoom-in; background:#F1F1F3;
+  display:block; width:100%; padding:0; border:0; background:none; cursor:zoom-in;
 }
-.doc-img-btn img { width:100%; height:100%; object-fit:cover; display:block; }
-.doc-img-ph {
-  display:flex; align-items:center; justify-content:center;
-  aspect-ratio:1; border-radius:6px; color:#B7B7BE;
-  background:#F7F7F8; border:1px dashed #D8D8DC;
+.doc-img-btn img {
+  display:block; width:100%; max-height:calc(51.2 * var(--pt));
+  object-fit:contain;
 }
-.doc-table .c-name { min-width:130px; font-weight:600; }
-.doc-table .c-desc { min-width:210px; }
-.doc-table .c-dim { min-width:130px; white-space:nowrap; }
-.doc-table .c-num { text-align:right; white-space:nowrap; }
-.doc-fin { display:block; font-weight:400; color:#55555E; margin-top:2px; }
-.doc-empty { text-align:center; color:#8A8A93; padding:16px; }
+.doc-line-gst { display:block; color:#6A6A72; }
+.doc-empty { text-align:center; color:#8A8A93; }
 
-.doc-split {
-  display:grid; grid-template-columns:1fr; gap:18px;
-  margin-bottom:16px;
+/* ── Payment terms, and the ladder beside them ── */
+.doc-band { display:flex; align-items:flex-start; }
+.doc-pay {
+  flex:0 0 66.5385%; box-sizing:border-box;
+  padding:calc(4.2 * var(--pt)) calc(1.8 * var(--pt)) calc(4.9 * var(--pt));
+  border-top:calc(.5 * var(--pt)) solid var(--rule);
+  border-bottom:calc(.5 * var(--pt)) solid var(--rule);
 }
-@media (min-width:640px) { .doc-split { grid-template-columns:1.4fr 1fr; } }
-
-.doc-terms-pay h2, .doc-block h2 {
-  margin:0 0 7px; font-size:12.5px; font-weight:700;
+.doc-pay h2 { margin:0; font-size:1em; font-weight:700; }
+.doc-ladder { flex:0 0 33.4615%; border-collapse:collapse; table-layout:fixed; }
+.doc-ladder th, .doc-ladder td {
+  height:calc(10.82 * var(--pt));
+  padding:0 calc(1.8 * var(--pt));
+  border:calc(1 * var(--pt)) solid var(--edge);
+  font-weight:400; vertical-align:middle;
 }
-.doc-terms-pay ul, .doc-block ul { margin:0; padding-left:16px; }
-.doc-terms-pay li, .doc-block li { margin-bottom:3px; }
-.doc-block p { margin:0 0 8px; }
-.doc-aster { font-style:italic; color:#55555E; }
+.doc-ladder th { width:63.65%; text-align:left; }
+.doc-ladder td { text-align:right; }
+.doc-ladder .a th, .doc-ladder .a td { background:var(--band); font-weight:700; }
 
-.doc-sums { align-self:start; }
-.doc-sum {
-  display:flex; justify-content:space-between; gap:16px;
-  padding:6px 9px; border:1px solid #C9C9CF; border-bottom:0;
+/* ── Shipping, and what it all comes to ── */
+.doc-ship  { width:100%; table-layout:fixed; border-collapse:collapse; margin-top:calc(20.2 * var(--pt)); }
+.doc-grand { width:100%; table-layout:fixed; border-collapse:collapse; margin-top:calc(20.4 * var(--pt)); }
+
+.doc-ship th {
+  height:calc(11.32 * var(--pt)); padding:0 calc(1.8 * var(--pt));
+  background:var(--band); border:calc(1 * var(--pt)) solid var(--edge);
+  font-weight:700; text-align:center; vertical-align:middle;
 }
-.doc-sum:last-child { border-bottom:1px solid #C9C9CF; }
-.doc-sum.a { background:#F1F1F3; font-weight:700; }
+.doc-ship td {
+  height:calc(13.53 * var(--pt)); padding:0 calc(1.8 * var(--pt));
+  border:calc(.5 * var(--pt)) solid var(--hair);
+  text-align:center; vertical-align:middle; overflow-wrap:anywhere;
+}
+.doc-ship .c-sr { width:6.7795%; }
+.doc-ship thead .c-sr { text-align:left; }
+.doc-ship .c-amt { width:33.4615%; }
 
-.doc-grand { margin-bottom:20px; }
-.doc-grand th, .doc-grand td { text-align:right; }
-.doc-total { font-weight:700; font-size:13.5px; }
+.doc-grand th {
+  height:calc(12.3 * var(--pt));
+  background:var(--ink); color:#FFFFFF; font-weight:700;
+  font-size:calc(7.7 * var(--pt)); text-align:center; vertical-align:middle;
+  border:calc(1 * var(--pt)) solid var(--ink);
+}
+.doc-grand td {
+  height:calc(25.09 * var(--pt));
+  border:calc(1 * var(--pt)) solid var(--ink);
+  text-align:center; vertical-align:middle;
+}
+.doc-grand .c-a { width:29.7115%; }
+.doc-grand .c-b { width:36.827%; }
+.doc-total { font-size:calc(9 * var(--pt)); font-weight:700; }
 
-.doc-block { margin-bottom:18px; break-inside:avoid; }
+/* ── Where to pay, who to ask, and the standing terms ── */
+.doc-details { display:flex; justify-content:space-between; margin-top:calc(53.1 * var(--pt)); }
+.doc-details section { flex:0 0 51.5856%; }
+.doc-details section + section { flex-basis:33.4615%; }
+.doc-details h2, .doc-terms h2, .doc-note h2 { margin:0; font-size:1em; font-weight:700; }
+.doc-details p { margin:calc(7.8 * var(--pt)) 0 0; }
+
+.doc-terms { margin-top:calc(25.7 * var(--pt)); }
+.doc-terms h2 { margin-bottom:calc(2.6 * var(--pt)); }
+.doc-clause {
+  margin:0;
+  padding-left:calc(4.122 * var(--pt));
+  text-indent:calc(-4.122 * var(--pt));
+}
+.doc-aster { margin:calc(7.8 * var(--pt)) 0 0; }
+
+/* ── The note ──
+   Always its own sheet. It is the last thing the client reads and
+   it has never shared a page with the figures. */
+.doc-page-note { padding-top:calc(55.1 * var(--pt)); }
+.doc-note h2 { margin-bottom:calc(2.2 * var(--pt)); }
+.doc-note p { margin:calc(7.8 * var(--pt)) 0 0; }
+.doc-note p:first-of-type { margin-top:0; }
 
 /* ── Print ───────────────────────────────────────────────────
    Everything the app puts around the document gets out of the
-   way, and the page prints as the page. */
+   way and the fit-to-screen scale is dropped. The margins move
+   from the sheet onto @page, because only the printer knows
+   where its own page breaks fall: a quotation long enough to run
+   over gets the same 0.7in on every page that way, where a fixed
+   sheet would give it to the first one and run the rest to the
+   paper's edge. The note still starts a page of its own. */
 @media print {
+  body.printing { background:#FFFFFF !important; }
   body.printing .app,
   body.printing .gate,
   body.printing .scrim,
@@ -2312,12 +2413,21 @@ select.control { padding-right:34px; background-position:right 13px center; back
     overflow:visible !important; height:auto !important;
     padding:0 !important; background:#fff !important;
   }
-  body.printing .doc {
-    box-shadow:none; border-radius:0; padding:0; max-width:none;
+  body.printing .doc-fit,
+  body.printing .doc-fit-in {
+    transform:none !important; overflow:visible !important; padding:0 !important;
+    width:auto !important; height:auto !important;
   }
-  .doc-table thead { display:table-header-group; }
-  .doc-table tr { break-inside:avoid; }
-  @page { margin:14mm; }
+  body.printing .doc-sheets { display:block; gap:0; }
+  body.printing .doc-page {
+    width:auto; min-height:0; padding:0; box-shadow:none;
+  }
+  body.printing .doc-page + .doc-page { break-before:page; }
+  .doc-items thead { display:table-header-group; }
+  .doc-items tr, .doc-ship tr, .doc-band, .doc-grand,
+  .doc-terms, .doc-details { break-inside:avoid; }
+  /* 54pt over, 50.4pt round the rest — the PDF's own margins. */
+  @page { size:letter; margin:0.75in 0.7in 0.7in; }
 }
 
 .qline-lump {
@@ -2355,24 +2465,6 @@ select.control { padding-right:34px; background-position:right 13px center; back
 /* The mark, wherever it appears. */
 .brand-mark { object-fit:contain; border-radius:6px; display:block; }
 
-/* Mark + company name in blue on the left, QUOTATION big on the
-   right, one row, a rule underneath — how the business's own
-   quotations actually print, not the boxed-mockup version. */
-.doc-head {
-  display:flex; align-items:center; gap:10px;
-  padding-bottom:14px; margin-bottom:18px;
-  border-bottom:2px solid #333;
-}
-.doc-logo { flex:none; object-fit:contain; }
-.doc-brand { flex:1; font-size:18px; font-weight:800; color:#1f3f8f; letter-spacing:.3px; }
-.doc-head .doc-title { flex:none; margin:0; text-align:right; }
-
-.doc-stamp {
-  margin:0 0 16px; padding:8px 12px;
-  border:1px solid #C9C9CF; border-left:3px solid #111113;
-  background:#F7F7F8; font-size:11.5px; font-weight:600;
-}
-.doc-stamp.ok { border-left-color:#0B6B45; background:#EFF7F2; color:#0B6B45; }
 
 /* A photograph, life-size in the room it opens in — everything else
    on the document is fine at a glance, this is the one thing worth a
