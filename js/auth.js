@@ -317,3 +317,49 @@ export async function setRole(userId, role, orgId = currentOrgId()) {
 export async function removeMember(userId, orgId = currentOrgId()) {
   return rest(`/memberships?org_id=eq.${orgId}&user_id=eq.${userId}`, { method: 'DELETE' });
 }
+
+/* ── The waiting room ──────────────────────────────────────────
+   Signing up with no invite waiting no longer hands out an org of
+   your own — see 0007_join_requests.sql. It asks instead, and an
+   owner or admin decides from Settings → People. */
+
+/** Asks to join the one set of books. Safe to call more than once —
+    a device that already asked just gets its existing request back. */
+export async function requestToJoin(fullName = '') {
+  const rows = await rest('/rpc/request_to_join', {
+    method: 'POST',
+    body: { p_full_name: fullName },
+  });
+  return Array.isArray(rows) ? rows[0] : rows;
+}
+
+/** This account's own request, if it has ever made one. */
+export async function myJoinRequest() {
+  const user = currentUser();
+  if (!user) return null;
+  const rows = await rest(`/join_requests?select=id,status,requested_at&user_id=eq.${user.id}&limit=1`);
+  return rows && rows.length ? rows[0] : null;
+}
+
+/** Everyone still waiting on an answer, for an admin to act on. */
+export async function pendingJoinRequests(orgId = currentOrgId()) {
+  return rest(`/join_requests?select=id,user_id,email,full_name,requested_at&org_id=eq.${orgId}&status=eq.pending&order=requested_at.asc`);
+}
+
+/** Approving both decides the request and opens the door: the
+    membership is a second, separate write because a decision and an
+    access grant are different things, and because memberships_write
+    already gates on the same is_admin() check this call needs. */
+export async function decideJoinRequest(id, { approve, userId, role = 'staff', orgId = currentOrgId() }) {
+  await rest(`/join_requests?id=eq.${id}`, {
+    method: 'PATCH',
+    body: { status: approve ? 'approved' : 'rejected' },
+  });
+  if (approve) {
+    await rest('/memberships', {
+      method: 'POST',
+      body: { org_id: orgId, user_id: userId, role },
+      headers: { prefer: 'resolution=merge-duplicates' },
+    });
+  }
+}

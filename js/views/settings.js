@@ -3,7 +3,7 @@
 
 import { icon } from '../icons.js';
 import {
-  settings as qSettings, updateSettings as updateQSettings, importHistory, decryptHistory,
+  settings as qSettings, updateSettings as updateQSettings, importHistory,
   quotes as allQuotes, ownerOrg,
   qcChecks, qcReasons, DEFAULT_QC_CHECKS, DEFAULT_QC_REASONS,
 } from '../quotes.js';
@@ -26,6 +26,7 @@ import { biometricAvailable, biometricEnabled, enrollBiometric, disableBiometric
 import {
   signedIn, currentUser, currentOrgId, myOrgs, myRole, canWrite, signOut,
   members, invite, pendingInvites, revokeInvite, setRole, removeMember,
+  pendingJoinRequests, decideJoinRequest,
 } from '../auth.js';
 import { sync, pendingCount, lastSyncError } from '../cloud.js';
 import { syncShop, lastSyncError as shopError, needsMigration } from '../shopsync.js';
@@ -1012,11 +1013,13 @@ function peopleSheet(ctx, back) {
       async function paint() {
         let list = [];
         let waiting = [];
+        let asking = [];
         let role = '';
         try {
           role = await myRole();
           list = await members() || [];
           waiting = await pendingInvites() || [];
+          if (['owner', 'admin'].includes(role)) asking = await pendingJoinRequests() || [];
         } catch (e) {
           body.innerHTML = `
             <div class="hint warn">Could not load the people on these books — ${esc(e.message)}</div>`;
@@ -1027,7 +1030,22 @@ function peopleSheet(ctx, back) {
         const me = currentUser();
 
         body.innerHTML = `
-          <p class="tray-lbl">On these books</p>
+          ${asking.length ? `
+            <p class="tray-lbl">Asking to join</p>
+            <div class="list">
+              ${asking.map((r) => `
+                <div class="row">
+                  <span class="row-ico">${icon('user', 18)}</span>
+                  <span class="row-txt">
+                    <span class="row-t">${esc(r.full_name || r.email)}</span>
+                    <span class="row-s">${esc(r.email)}</span>
+                  </span>
+                  <button class="pill in" data-approve="${esc(r.id)}">Approve</button>
+                  <button class="pill warn" data-reject="${esc(r.id)}">Decline</button>
+                </div>`).join('')}
+            </div>` : ''}
+
+          <p class="tray-lbl sp">On these books</p>
           <div class="list">
             ${list.map((m) => {
               const p = m.profiles || {};
@@ -1101,6 +1119,33 @@ function peopleSheet(ctx, back) {
         try {
           await revokeInvite(b.dataset.revoke);
           toast('Invite cancelled');
+          await paint();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+
+      on(root, '[data-approve]', async (e, b) => {
+        const req = (await pendingJoinRequests()).find((r) => r.id === b.dataset.approve);
+        if (!req) return;
+        try {
+          await decideJoinRequest(req.id, { approve: true, userId: req.user_id, role: 'staff' });
+          toast(`${req.email} can now sign in`);
+          await paint();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+
+      on(root, '[data-reject]', async (e, b) => {
+        const req = (await pendingJoinRequests()).find((r) => r.id === b.dataset.reject);
+        if (!req) return;
+        const ok = await confirmSheet({
+          title: 'Decline this request?',
+          message: `${req.email} will not be able to sign in to these books.`,
+          confirmLabel: 'Decline',
+          danger: true,
+        });
+        if (!ok) return;
+        try {
+          await decideJoinRequest(req.id, { approve: false, userId: req.user_id });
+          toast('Declined');
           await paint();
         } catch (err) { toast(err.message, 'err'); }
       });
@@ -1605,18 +1650,18 @@ async function logoSheet(ctx, back) {
 
 
 /* ── Quotation history ─────────────────────────────────────────
-   The backfill of what lived in the spreadsheet. Two ways in, both
-   ending in the same place.
+   The backfill of what lived in the spreadsheet, brought in from a
+   JSON file chosen on this device. There used to be a second way in —
+   a bundled, passphrase-encrypted copy — but a lost passphrase is
+   unrecoverable by design (that is the whole point of PBKDF2 + AES-GCM:
+   no back door, not even for the person who set it), so that path has
+   been removed rather than left to confuse whoever opens this sheet
+   next. The file is read entirely in the browser, so nothing in it
+   ever crosses the network on its way in.
 
-   The bundled copy is encrypted, because the records carry client
-   names, phone numbers and prices and the app is served publicly —
-   ciphertext can sit next to the app, the passphrase cannot. It is
-   decrypted in the browser, so the readable data never crosses the
-   network and never exists on any server but your own.
-
-   Safe to run more than once either way: matching is on number,
-   client, date and figures together, so nothing already here is
-   duplicated and nothing edited here is overwritten. */
+   Safe to run more than once: matching is on number, client, date and
+   figures together, so nothing already here is duplicated and nothing
+   edited here is overwritten. */
 async function historySheet(ctx, back) {
   openSheet({
     title: 'Quotation history',
@@ -1629,26 +1674,6 @@ async function historySheet(ctx, back) {
       /* Bound once. paint() only rewrites the panel above them, so
          nothing here is ever wired twice — two live handlers would
          mean two imports racing on the same click. */
-      on(root, '[data-decrypt]', async (e, b) => {
-        const pass = root.querySelector('[data-pass]').value.trim();
-        if (!pass) { toast('Enter the passphrase', 'err'); return; }
-        b.disabled = true;
-        /* Without crypto.subtle this runs in plain JavaScript on this
-           thread and takes a few seconds, so say so and let the browser
-           draw the message before the grind starts. */
-        const slow = !(globalThis.crypto && crypto.subtle && crypto.subtle.importKey);
-        b.textContent = slow ? 'Unlocking… this takes a few seconds' : 'Unlocking…';
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-        try {
-          done(await importHistory(await decryptHistory(pass)));
-        } catch (err) {
-          console.error('[kontour] import failed', err);
-          paint({ error: err.message || 'That file could not be opened' });
-        }
-        b.disabled = false;
-        b.textContent = 'Unlock and import';
-      });
-
       on(root, '[data-pick]', () => input.click());
       input.onchange = async () => {
         const file = input.files && input.files[0];
@@ -1684,14 +1709,6 @@ async function historySheet(ctx, back) {
                 || `${result.added} added${result.skipped ? `, ${result.skipped} already here` : ''}`)}</span>
             </div>` : ''}
 
-          <p class="tray-lbl">From the bundled history</p>
-          ${field('Passphrase',
-            `<input class="control" type="password" data-pass autocomplete="off"
-                    placeholder="four words and a number">`,
-            'Sent to you separately. The file ships encrypted and is opened on this device.')}
-          <button class="btn" data-decrypt>Unlock and import</button>
-
-          <p class="tray-lbl sp">Or from a file</p>
           <button class="btn sec sm" data-pick>Choose a JSON file</button>
 
           <p class="qb-hint">
