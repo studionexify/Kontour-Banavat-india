@@ -2202,6 +2202,10 @@ select.control { padding-right:34px; background-position:right 13px center; back
   box-sizing:content-box; margin:0 auto; padding:6px; overflow:hidden;
 }
 .doc-fit-in { width:816px; transform-origin:top left; }
+/* Measured, cut into pages and scaled before anyone sees it — hidden
+   rather than absent, so it holds its space instead of reflowing in
+   front of the reader. */
+.doc-fit-in.laying-out { visibility:hidden; }
 .doc-sheets { display:flex; flex-direction:column; gap:16px; }
 
 .doc-page {
@@ -2223,6 +2227,9 @@ select.control { padding-right:34px; background-position:right 13px center; back
   line-height:1.219;
   box-shadow:var(--e2);
 }
+/* A block that starts a page has no gap above it — paginate() does its
+   arithmetic on the same assumption. */
+.doc-page > :first-child { margin-top:0 !important; }
 
 /* ── Letterhead ── */
 .doc-head {
@@ -2296,12 +2303,14 @@ select.control { padding-right:34px; background-position:right 13px center; back
    square every other one down the page gets, whatever shape the
    original was. */
 .doc-img-btn {
-  display:block; width:100%; padding:0; border:0; background:none; cursor:zoom-in;
+  display:block; width:100%; height:calc(51.2 * var(--pt));
+  padding:0; border:0; background:none; cursor:zoom-in;
 }
-.doc-img-btn img {
-  display:block; width:100%; max-height:calc(51.2 * var(--pt));
-  object-fit:contain;
-}
+/* A fixed box rather than one the photograph's own shape decides:
+   the row is the same height either way, and a slot that does not
+   change when the image finally decodes is one paginate() can measure
+   before it has. */
+.doc-img-btn img { display:block; width:100%; height:100%; object-fit:contain; }
 .doc-line-gst { display:block; color:#6A6A72; }
 .doc-empty { text-align:center; color:#8A8A93; }
 
@@ -2375,9 +2384,9 @@ select.control { padding-right:34px; background-position:right 13px center; back
 .doc-aster { margin:calc(7.8 * var(--pt)) 0 0; }
 
 /* ── The note ──
-   Always its own sheet. It is the last thing the client reads and
-   it has never shared a page with the figures. */
-.doc-page-note { padding-top:calc(55.1 * var(--pt)); }
+   Always its own sheet — paginate() gives it one. It is the last
+   thing the client reads and it has never shared a page with the
+   figures. */
 .doc-note h2 { margin-bottom:calc(2.2 * var(--pt)); }
 .doc-note p { margin:calc(7.8 * var(--pt)) 0 0; }
 .doc-note p:first-of-type { margin-top:0; }

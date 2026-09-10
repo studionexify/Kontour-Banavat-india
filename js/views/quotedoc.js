@@ -2,15 +2,18 @@
  *
  * A preview of the file, not a screen of its own: the same Letter
  * sheet, the same 0.7in margin, the same eight-column grid, the same
- * Montserrat, and the same two pages — the quotation, then the note.
+ * Montserrat, and the same pages in the same order.
  * Every measurement lives in styles.css, in points, beside the ones
  * js/quotepdf.js draws with; if the two ever disagree the preview is
  * lying about what gets sent.
  *
- * Nothing here scrolls sideways. The item table is fixed-layout with
- * its columns set as percentages, so a long description wraps inside
- * its column instead of pushing the page out, and the sheet itself is
- * scaled down to whatever width the screen has — see fitPages().
+ * It breaks into pages where the file breaks — see paginate(), which
+ * measures the document and cuts it by the same rules quotepdf.js
+ * draws by. Nothing here scrolls sideways either: the item table is
+ * fixed-layout with its columns set as percentages, so a long
+ * description wraps inside its column instead of pushing the page
+ * out, and the sheets are scaled down to whatever width the screen
+ * has — see fitPages().
  *
  * It is also where a saved quotation is looked at: read-only, the
  * way the client sees it, with one Edit button rather than every
@@ -39,6 +42,99 @@ import { useDocFont } from '../docfont.js';
 const SHEET_PX = 816;
 const SHADOW = 6;               // room round the sheet for its own shadow
 
+/* ── Pagination ─────────────────────────────────────────────────
+   The preview breaks where the file breaks, by the same rules
+   js/quotepdf.js paginates with: the note always begins a page, an
+   item row is never cut in half, a table that runs over carries its
+   column titles onto the next page, and every other block moves
+   whole rather than splitting.
+
+   It works by measurement, not by guessing. docHTML lays the whole
+   document out as one long sheet; this reads back what each block
+   actually came to at 816px, then deals them into pages a Letter
+   sheet's worth at a time. Nothing here depends on the screen, so it
+   runs once — the fit-to-width scale on top of it is a separate,
+   cheaper thing that can re-run on every resize. */
+function paginate(inner) {
+  const measure = inner.querySelector('.doc-measure');
+  if (!measure) return;
+
+  const box = getComputedStyle(measure);
+  const limit = parseFloat(box.minHeight) - parseFloat(box.paddingTop) - parseFloat(box.paddingBottom);
+  if (!(limit > 0)) return;
+
+  // Measured first, all of it, while the document is still in one
+  // piece — heights read back after the cutting has started are
+  // heights of a half-built page.
+  const blocks = [...measure.children].map((el) => {
+    const b = {
+      el,
+      height: el.getBoundingClientRect().height,
+      gap: parseFloat(getComputedStyle(el).marginTop) || 0,
+      fresh: el.hasAttribute('data-fresh-page'),
+      rows: null,
+      head: 0,
+    };
+    if (el.hasAttribute('data-split-rows') && el.tBodies[0]) {
+      b.head = el.tHead ? el.tHead.getBoundingClientRect().height : 0;
+      b.rows = [...el.tBodies[0].rows].map((tr) => ({ tr, height: tr.getBoundingClientRect().height }));
+    }
+    return b;
+  });
+
+  const sheets = document.createElement('div');
+  sheets.className = 'doc-sheets';
+  let page = null;
+  let used = 0;
+
+  const turnPage = () => {
+    page = document.createElement('article');
+    page.className = 'doc-page';
+    sheets.appendChild(page);
+    used = 0;
+  };
+  // A block that starts a page loses its gap — see the :first-child
+  // rule in styles.css, which has to agree with this or the sums do
+  // not describe the page they are cutting.
+  const gapFor = (b) => (page.children.length ? b.gap : 0);
+  const fits = (need) => used + need <= limit;
+
+  turnPage();
+  for (const b of blocks) {
+    if (b.fresh && page.children.length) turnPage();
+
+    if (!b.rows) {
+      if (!fits(gapFor(b) + b.height) && page.children.length) turnPage();
+      used += gapFor(b) + b.height;
+      page.appendChild(b.el);
+      continue;
+    }
+
+    /* A split table becomes one table per page, each with its own
+       copy of the column titles — the same repeat the PDF draws. */
+    let body = null;
+    const startTable = () => {
+      const part = b.el.cloneNode(false);
+      if (b.el.tHead) part.appendChild(b.el.tHead.cloneNode(true));
+      body = document.createElement('tbody');
+      part.appendChild(body);
+      used += gapFor(b) + b.head;
+      page.appendChild(part);
+    };
+
+    const first = b.rows.length ? b.rows[0].height : 0;
+    if (!fits(gapFor(b) + b.head + first) && page.children.length) turnPage();
+    startTable();
+    for (const row of b.rows) {
+      if (!fits(row.height) && body.rows.length) { turnPage(); startTable(); }
+      used += row.height;
+      body.appendChild(row.tr);
+    }
+  }
+
+  inner.querySelector('.doc-sheets').replaceWith(sheets);
+}
+
 function fitPages(root) {
   const fit = root.querySelector('.doc-fit');
   const inner = root.querySelector('.doc-fit-in');
@@ -61,10 +157,6 @@ function fitPages(root) {
   };
 
   apply();
-  // Images arrive after the first paint and change the height.
-  for (const img of fit.querySelectorAll('img')) {
-    if (!img.complete) img.addEventListener('load', apply, { once: true });
-  }
   if (typeof ResizeObserver === 'undefined') {
     window.addEventListener('resize', apply);
     return () => window.removeEventListener('resize', apply);
@@ -77,9 +169,9 @@ function fitPages(root) {
 export function openQuoteDoc(id, { onSaved, review = false, onApprove } = {}) {
   const q = getQuote(id);
   if (!q) return;
-  useDocFont();
 
   let unfit = () => {};
+  let closed = false;
   const h = openSheet({
     title: quoteName(q),
     full: true,
@@ -92,7 +184,7 @@ export function openQuoteDoc(id, { onSaved, review = false, onApprove } = {}) {
     body: `
       <div class="qb">
         <div class="qb-scroll doc-scroll">
-          <div class="doc-fit"><div class="doc-fit-in">${docHTML(q)}</div></div>
+          <div class="doc-fit"><div class="doc-fit-in laying-out">${docHTML(q)}</div></div>
         </div>
         <footer class="qb-foot">
           <div class="qb-acts">
@@ -107,7 +199,18 @@ export function openQuoteDoc(id, { onSaved, review = false, onApprove } = {}) {
         </footer>
       </div>`,
     onMount(root) {
-      unfit = fitPages(root);
+      /* Laid out, then broken into pages, then scaled to the screen —
+         in that order, and only once the faces are ready, because a
+         document measured in the wrong font breaks in the wrong
+         places. It is hidden rather than absent until then, so it
+         holds its space and never reflows in front of the reader. */
+      const inner = root.querySelector('.doc-fit-in');
+      useDocFont().then(() => {
+        if (closed || !inner.isConnected) return;
+        paginate(inner);
+        inner.classList.remove('laying-out');
+        unfit = fitPages(root);
+      });
 
       if (review) {
         on(root, '[data-back]', () => h.close());
@@ -156,7 +259,7 @@ export function openQuoteDoc(id, { onSaved, review = false, onApprove } = {}) {
         setTimeout(done, 1500);
       });
     },
-    onClose() { unfit(); },
+    onClose() { closed = true; unfit(); },
   });
   return h;
 }
@@ -188,9 +291,13 @@ export function docHTML(q) {
     ['Sub Total A', inr(t.subA), true],
   ];
 
+  /* One sheet holding every block in one flow. paginate() measures it
+     and cuts it into as many pages as it actually takes; until then
+     this is what the reader would see if the script never ran, which
+     is the whole document, in order, on one long page. */
   return `
   <div class="doc-sheets">
-    <article class="doc-page">
+    <article class="doc-page doc-measure">
       <header class="doc-head">
         <h1 class="doc-title">Quotation</h1>
         ${markHTML({ size: 59, className: 'doc-mark', src: docMark() })}
@@ -222,7 +329,7 @@ export function docHTML(q) {
         <p class="doc-stamp">Approved${q.approvedTotal != null
           ? ` at ${inr(jobValueFor(q))} (quoted at ${inr(t.total)})` : ''}${q.jobExcludesGst ? ', excluding GST' : ''}.</p>` : ''}
 
-      <table class="doc-items">
+      <table class="doc-items" data-split-rows>
         <thead>
           <tr>
             <th class="c-sr">Sr. No.</th>
@@ -266,7 +373,7 @@ export function docHTML(q) {
         </table>
       </div>
 
-      <table class="doc-ship">
+      <table class="doc-ship" data-split-rows>
         <thead><tr><th class="c-sr">Sr. No.</th><th>Shipping</th><th class="c-amt">Sub Total B</th></tr></thead>
         <tbody>
           ${(ship.length ? ship : [{ label: '—', amount: 0 }]).map((sx, i) => `
@@ -314,16 +421,14 @@ export function docHTML(q) {
         ${clauses(termRuns(q))}
         <p class="doc-aster">*Terms and conditions apply.</p>
       </section>
-    </article>
 
     ${s.note ? `
-      <article class="doc-page doc-page-note">
-        <section class="doc-note">
-          <h2>Note Please</h2>
-          ${String(s.note).split(/\n{2,}/).map((p) => p.trim()).filter(Boolean)
-            .map((p) => `<p>${esc(p)}</p>`).join('')}
-        </section>
-      </article>` : ''}
+      <section class="doc-note" data-fresh-page>
+        <h2>Note Please</h2>
+        ${String(s.note).split(/\n{2,}/).map((p) => p.trim()).filter(Boolean)
+          .map((p) => `<p>${esc(p)}</p>`).join('')}
+      </section>` : ''}
+    </article>
   </div>`;
 }
 
