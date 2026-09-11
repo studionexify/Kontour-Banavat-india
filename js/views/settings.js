@@ -20,12 +20,12 @@ import { inr } from '../format.js';
 import { photos, humanBytes, pickImage, shrink, toBase64 } from '../photos.js';
 import { exportBackup, readBackupFile } from '../export.js';
 import { status, connectDrive, disconnectDrive, driveConfigured, syncPending, sharedDrive } from '../sync.js';
-import { cloudConfigured } from '../config.js';
+import { cloudConfigured, accountLabel, cleanUsername, isOwnerEmail } from '../config.js';
 import { PROVIDERS, providerOf, defaultModel, isCustomModel } from '../models.js';
 import { biometricAvailable, biometricEnabled, enrollBiometric, disableBiometric } from '../biometric.js';
 import {
   signedIn, currentUser, currentOrgId, myOrgs, myRole, canWrite, signOut,
-  members, invite, pendingInvites, revokeInvite, setRole, removeMember,
+  members, createStaffAccount, setStaffPassword, deleteStaffAccount, setRole,
 } from '../auth.js';
 import { sync, pendingCount, lastSyncError } from '../cloud.js';
 import { syncShop, lastSyncError as shopError, needsMigration } from '../shopsync.js';
@@ -992,7 +992,7 @@ async function whoAmI() {
     // Offline, or the session has lapsed. The screen still draws; it
     // just cannot say what this account may do until the next sync.
   }
-  return { email: user ? user.email : '', role, orgName };
+  return { email: user ? accountLabel(user.email) : '', role, orgName };
 }
 
 function peopleLabel(who) {
@@ -1011,20 +1011,20 @@ function peopleSheet(ctx, back) {
 
       async function paint() {
         let list = [];
-        let waiting = [];
         let role = '';
         try {
           role = await myRole();
           list = await members() || [];
-          waiting = await pendingInvites() || [];
         } catch (e) {
           body.innerHTML = `
             <div class="hint warn">Could not load the people on these books — ${esc(e.message)}</div>`;
           return;
         }
 
-        const admin = ['owner', 'admin'].includes(role);
         const me = currentUser();
+        // Only the owner makes accounts: there is one owner of these
+        // books, and everyone else is someone they let in.
+        const owner = role === 'owner' && isOwnerEmail(me && me.email);
 
         body.innerHTML = `
           <p class="tray-lbl">On these books</p>
@@ -1032,37 +1032,34 @@ function peopleSheet(ctx, back) {
             ${list.map((m) => {
               const p = m.profiles || {};
               const isMe = me && m.user_id === me.id;
+              const handle = accountLabel(p.email || '');
               return `
-                <button class="row" ${admin && !isMe ? `data-person="${esc(m.user_id)}"` : ''}>
+                <button class="row" ${owner && !isMe ? `data-person="${esc(m.user_id)}"` : ''}>
                   <span class="row-ico">${icon('user', 18)}</span>
                   <span class="row-txt">
-                    <span class="row-t">${esc(p.full_name || p.email || 'Member')}${isMe ? ' (you)' : ''}</span>
-                    <span class="row-s">${esc(p.email || '')}</span>
+                    <span class="row-t">${esc(p.full_name || handle || 'Member')}${isMe ? ' (you)' : ''}</span>
+                    <span class="row-s">${esc(handle)}</span>
                   </span>
                   <span class="pill ${m.role === 'viewer' ? 'mut' : 'in'}">${esc(m.role)}</span>
                 </button>`;
             }).join('')}
           </div>
 
-          ${waiting.length ? `
-            <p class="tray-lbl sp">Invited, not signed up yet</p>
-            <div class="list">
-              ${waiting.map((i) => `
-                <div class="row">
-                  <span class="row-ico">${icon('mail', 18)}</span>
-                  <span class="row-txt">
-                    <span class="row-t">${esc(i.email)}</span>
-                    <span class="row-s">Joins as ${esc(i.role)} when they sign up</span>
-                  </span>
-                  ${admin ? `<button class="pill warn" data-revoke="${esc(i.id)}">Cancel</button>` : ''}
-                </div>`).join('')}
-            </div>` : ''}
-
-          ${admin ? `
-            <p class="tray-lbl sp">Invite someone</p>
+          ${owner ? `
+            <p class="tray-lbl sp">Create an account</p>
             <div class="field">
-              <input class="control" data-email type="email" inputmode="email"
-                     placeholder="them@banavat-india.com" autocomplete="off">
+              <label>Their name</label>
+              <input class="control" data-name placeholder="Veer Chaudhary" autocomplete="off">
+            </div>
+            <div class="field">
+              <label>Username</label>
+              <input class="control" data-user placeholder="veer" autocomplete="off"
+                     autocapitalize="none" autocorrect="off" spellcheck="false">
+            </div>
+            <div class="field">
+              <label>Password</label>
+              <input class="control" data-pass type="text" placeholder="At least 8 characters"
+                     autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
             </div>
             <div class="field">
               <label>They can</label>
@@ -1072,37 +1069,39 @@ function peopleSheet(ctx, back) {
                 <option value="viewer">Only read the books</option>
               </select>
             </div>
-            <button class="btn sm" data-invite>Send invite</button>
+            <button class="btn sm" data-make>Create account</button>
             <div class="hint">
-              An invite works whether or not they already have an account. If
-              they do, they get access straight away; if not, the moment they
-              sign up with that email.
+              No email, no invite to accept: tell them the username and
+              password and they can sign in on any device. The password is
+              shown here so you can write it down — after this only you can
+              change it, from their row above.
             </div>`
-          : `<div class="hint sp">Only an owner or admin can invite people or change what someone can do.</div>`}
+          : `<div class="hint sp">Only the owner can create accounts or change what someone can do.</div>`}
         `;
       }
 
-      on(root, '[data-invite]', async () => {
-        const email = root.querySelector('[data-email]').value.trim();
+      on(root, '[data-make]', async () => {
+        const nameEl = root.querySelector('[data-name]');
+        const userEl = root.querySelector('[data-user]');
+        const passEl = root.querySelector('[data-pass]');
+        const username = cleanUsername(userEl.value);
+        const password = passEl.value;
         const r = root.querySelector('[data-role]').value;
-        if (!email || !email.includes('@')) return toast('Enter their email address', 'warn');
+
+        if (username.length < 3) {
+          return toast('A username is at least 3 letters or digits', 'warn');
+        }
+        if (password.length < 8) return toast('Passwords are at least 8 characters', 'warn');
+
         try {
-          await invite(email, r);
-          toast(`${email} invited`);
+          await createStaffAccount({
+            username, password, fullName: nameEl.value.trim(), role: r,
+          });
+          toast(`${username} can sign in now`);
           await paint();
         } catch (e) {
-          // A second invite to the same address hits the unique index
-          // rather than creating a duplicate.
-          toast(/duplicate|unique/i.test(e.message) ? 'They have already been invited' : e.message, 'err');
+          toast(e.message, 'err');
         }
-      });
-
-      on(root, '[data-revoke]', async (e, b) => {
-        try {
-          await revokeInvite(b.dataset.revoke);
-          toast('Invite cancelled');
-          await paint();
-        } catch (err) { toast(err.message, 'err'); }
       });
 
       on(root, '[data-person]', async (e, b) => {
@@ -1118,11 +1117,15 @@ function peopleSheet(ctx, back) {
 
 function personSheet(m, back) {
   const p = m.profiles || {};
+  const handle = accountLabel(p.email || '');
   return openSheet({
-    title: p.full_name || p.email || 'Member',
+    title: p.full_name || handle || 'Member',
     body: `
       <div class="sheet-body">
-        <p class="tray-lbl">What they can do</p>
+        <p class="tray-lbl">Signs in as</p>
+        <div class="hint">${esc(handle)}</div>
+
+        <p class="tray-lbl sp">What they can do</p>
         <div class="list">
           ${['admin', 'staff', 'viewer'].map((r) => `
             <button class="row" data-set="${r}">
@@ -1134,32 +1137,56 @@ function personSheet(m, back) {
               ${m.role === r ? `<span class="pill in">now</span>` : ''}
             </button>`).join('')}
         </div>
+
         ${m.role === 'owner'
           ? `<div class="hint sp">The owner's access cannot be changed here.</div>`
-          : `<button class="btn danger sm" data-remove>Remove from these books</button>
-             <div class="hint">Their entries stay in the books. They lose access on their next sync.</div>`}
+          : `<p class="tray-lbl sp">New password</p>
+             <div class="field">
+               <input class="control" data-pass type="text" placeholder="At least 8 characters"
+                      autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+             </div>
+             <button class="btn sm" data-pw>Set password</button>
+             <div class="hint">
+               They have no email to reset from, so this is how a forgotten
+               password is put right. They stay signed in on the devices they
+               are already on.
+             </div>
+
+             <button class="btn danger sm sp" data-remove>Remove from these books</button>
+             <div class="hint">Their entries stay in the books. The account stops working at once.</div>`}
       </div>`,
-    onMount(root, handle) {
+    onMount(root, handle2) {
       on(root, '[data-set]', async (e, b) => {
         try {
           await setRole(m.user_id, b.dataset.set);
           toast('Updated');
-          handle.close();
+          handle2.close();
           await back();
         } catch (err) { toast(err.message, 'err'); }
       });
+
+      on(root, '[data-pw]', async () => {
+        const pass = root.querySelector('[data-pass]').value;
+        if (pass.length < 8) return toast('Passwords are at least 8 characters', 'warn');
+        try {
+          await setStaffPassword(m.user_id, pass);
+          toast('Password set — tell them the new one');
+          root.querySelector('[data-pass]').value = '';
+        } catch (err) { toast(err.message, 'err'); }
+      });
+
       on(root, '[data-remove]', async () => {
         const ok = await confirmSheet({
           title: 'Remove them?',
-          message: `${p.email || 'This person'} will lose access to these books. Everything they logged stays.`,
+          message: `${handle || 'This person'} will lose access to these books, and their account is deleted. Everything they logged stays.`,
           confirmLabel: 'Remove',
           danger: true,
         });
         if (!ok) return;
         try {
-          await removeMember(m.user_id);
+          await deleteStaffAccount(m.user_id);
           toast('Removed');
-          handle.close();
+          handle2.close();
           await back();
         } catch (err) { toast(err.message, 'err'); }
       });
@@ -1240,7 +1267,7 @@ function accountSheet(ctx, back) {
     body: `
       <div class="sheet-body">
         <div class="list" style="padding:2px 14px">
-          <div class="kv"><span>Signed in as</span><b>${esc(user ? user.email : '')}</b></div>
+          <div class="kv"><span>Signed in as</span><b>${esc(user ? accountLabel(user.email) : '')}</b></div>
         </div>
         <button class="btn danger sm" data-out>Sign out</button>
         <div class="hint">

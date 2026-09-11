@@ -25,3 +25,47 @@ export function cloudConfigured() {
 export function api(path) {
   return `${API_BASE}${path}`;
 }
+
+/* ── One owner, and the accounts they make ───────────────────
+ *
+ * These books have a single real account behind an email address:
+ * the owner's. Everybody else is made by the owner and signs in with
+ * a username and a password, nothing else — no inbox, no invite to
+ * accept, no confirmation link to chase on a workshop phone.
+ *
+ * GoTrue only knows how to authenticate an email address, so a
+ * username becomes one: `veer` signs in as `veer@staff.kontour.app`.
+ * The domain is never sent anything; it exists so two staff accounts
+ * cannot collide with a real address. The app shows the username back
+ * and keeps the rest to itself.
+ */
+
+export const OWNER_EMAIL = 'furniture@banavat-india.com';
+export const STAFF_EMAIL_DOMAIN = 'staff.kontour.app';
+
+/** The characters a username may be made of: a-z, 0-9, dot, dash. */
+export function cleanUsername(v) {
+  return String(v || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+}
+
+export function isStaffEmail(email) {
+  return String(email || '').toLowerCase().endsWith(`@${STAFF_EMAIL_DOMAIN}`);
+}
+
+/** Turns what someone typed into the address GoTrue will recognise. */
+export function loginEmail(identifier) {
+  const raw = String(identifier || '').trim();
+  if (raw.includes('@')) return raw.toLowerCase();
+  const u = cleanUsername(raw);
+  return u ? `${u}@${STAFF_EMAIL_DOMAIN}` : '';
+}
+
+/** The other direction: what to show a person about an account. */
+export function accountLabel(email) {
+  const e = String(email || '');
+  return isStaffEmail(e) ? e.slice(0, e.lastIndexOf('@')) : e;
+}
+
+export function isOwnerEmail(email) {
+  return String(email || '').trim().toLowerCase() === OWNER_EMAIL;
+}

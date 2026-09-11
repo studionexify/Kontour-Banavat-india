@@ -5,15 +5,18 @@
  * purpose: these are the two screens that stand in front of the books,
  * and they should read as the same door rather than two different ones.
  *
- * Three states, one screen: sign in, create an account, or name the
- * books when a first sign-in finds none.
+ * Sign in is a username and a password. Only one account has an email
+ * address behind it — the owner's — so only the owner sees the
+ * first-time setup and the reset link; every other account is made for
+ * its holder from Settings → People.
  */
 
 import { esc, toast } from '../ui.js';
 import {
-  signIn, signUp, sendPasswordReset, signOut,
+  signIn, signUpOwner, sendPasswordReset, signOut,
   myOrgs, createOrg, setCurrentOrg, currentUser,
 } from '../auth.js';
+import { OWNER_EMAIL, isOwnerEmail, accountLabel } from '../config.js';
 import { adoptLocalData, sync as syncLedger } from '../cloud.js';
 import { adoptLocalQuotes } from '../quotesync.js';
 import { adoptLocalShop } from '../shopsync.js';
@@ -22,7 +25,10 @@ import { quotes as allQuotes, load as loadQuotes } from '../quotes.js';
 import { lines as orderLines, load as loadOrders } from '../orders.js';
 import { partners as commissionPartners, load as loadCommissions } from '../commissions.js';
 
-let mode = 'in';        // 'in' | 'up' | 'forgot'
+/* 'in'     — a username (or the owner's email) and a password
+   'owner'  — the one-time making of the owner's own account
+   'forgot' — a reset link, which only the owner has an inbox for */
+let mode = 'in';
 
 /* Which books this device has already offered its own work to. An
    upload only has to happen once per org: after that every change
@@ -79,43 +85,56 @@ function shell(inner) {
 function paint(root, done) {
   const titles = {
     in: 'Sign in to Banavat India',
-    up: 'Create your account',
-    forgot: 'Reset your password',
+    owner: 'Set up the owner account',
+    forgot: 'Reset the owner password',
+  };
+  const labels = {
+    in: 'Sign in',
+    owner: 'Create owner account',
+    forgot: 'Send reset link',
   };
 
   root.innerHTML = shell(`
     <p class="gate-sub">${titles[mode]}</p>
     <form class="auth-form" novalidate>
-      ${mode === 'up' ? `
+      ${mode === 'owner' ? `
         <label class="auth-f">
           <span>Your name</span>
           <input class="control dark" name="name" autocomplete="name" placeholder="Veer Chaudhary">
         </label>` : ''}
 
       <label class="auth-f">
-        <span>Email</span>
-        <input class="control dark" name="email" type="email" inputmode="email"
-               autocomplete="username" placeholder="you@banavat-india.com" required>
+        <span>${mode === 'in' ? 'Username' : 'Owner email'}</span>
+        <input class="control dark" name="who"
+               type="${mode === 'in' ? 'text' : 'email'}"
+               inputmode="${mode === 'in' ? 'text' : 'email'}"
+               autocapitalize="none" autocorrect="off" spellcheck="false"
+               autocomplete="username"
+               placeholder="${mode === 'in' ? 'veer' : OWNER_EMAIL}" required>
       </label>
 
       ${mode !== 'forgot' ? `
         <label class="auth-f">
           <span>Password</span>
           <input class="control dark" name="password" type="password"
-                 autocomplete="${mode === 'up' ? 'new-password' : 'current-password'}"
-                 placeholder="${mode === 'up' ? 'At least 8 characters' : ''}" required>
+                 autocomplete="${mode === 'owner' ? 'new-password' : 'current-password'}"
+                 placeholder="${mode === 'owner' ? 'At least 8 characters' : ''}" required>
         </label>` : ''}
 
       <div class="auth-err" data-err hidden></div>
-      <button class="btn" type="submit" data-go>
-        ${mode === 'in' ? 'Sign in' : mode === 'up' ? 'Create account' : 'Send reset link'}
-      </button>
+      <button class="btn" type="submit" data-go>${labels[mode]}</button>
     </form>
+
+    ${mode === 'in' ? `
+      <p class="gate-note">
+        Staff sign in with the username and password the owner gave them.
+        The owner signs in with ${esc(OWNER_EMAIL)}.
+      </p>` : ''}
 
     <div class="auth-alt">
       ${mode === 'in' ? `
-        <button data-mode="up">Create an account</button>
-        <button data-mode="forgot">Forgot password</button>` : `
+        <button data-mode="forgot">Owner forgot password</button>
+        <button data-mode="owner">First-time owner setup</button>` : `
         <button data-mode="in">Back to sign in</button>`}
     </div>`);
 
@@ -127,7 +146,7 @@ function paint(root, done) {
     errBox.textContent = msg;
     errBox.hidden = false;
     button.disabled = false;
-    button.textContent = mode === 'in' ? 'Sign in' : mode === 'up' ? 'Create account' : 'Send reset link';
+    button.textContent = labels[mode];
   };
 
   root.querySelectorAll('[data-mode]').forEach((b) => {
@@ -139,11 +158,14 @@ function paint(root, done) {
     errBox.hidden = true;
 
     const data = new FormData(form);
-    const email = String(data.get('email') || '').trim();
+    const who = String(data.get('who') || '').trim();
     const password = String(data.get('password') || '');
     const name = String(data.get('name') || '').trim();
 
-    if (!email) return fail('Enter your email address.');
+    if (!who) return fail(mode === 'in' ? 'Enter your username.' : 'Enter the owner email address.');
+    if (mode !== 'in' && !isOwnerEmail(who)) {
+      return fail(`Only ${OWNER_EMAIL} can do that.`);
+    }
     if (mode !== 'forgot' && password.length < 8) {
       return fail('Passwords are at least 8 characters.');
     }
@@ -153,15 +175,15 @@ function paint(root, done) {
 
     try {
       if (mode === 'forgot') {
-        await sendPasswordReset(email);
+        await sendPasswordReset(who);
         mode = 'in';
         paint(root, done);
         toast('Check your email for the reset link');
         return;
       }
 
-      if (mode === 'up') {
-        const session = await signUp(email, password, name);
+      if (mode === 'owner') {
+        const session = await signUpOwner(who, password, name);
         if (!session) {
           // Email confirmation is on: there is no session to continue with.
           mode = 'in';
@@ -170,7 +192,7 @@ function paint(root, done) {
           return;
         }
       } else {
-        await signIn(email, password);
+        await signIn(who, password);
       }
 
       await chooseOrg(root, done);
@@ -183,8 +205,8 @@ function paint(root, done) {
 /** GoTrue's wording is for developers; this screen is not. */
 function friendly(e) {
   const m = (e && e.message ? e.message : '').toLowerCase();
-  if (m.includes('invalid login')) return 'That email and password do not match.';
-  if (m.includes('already registered')) return 'That email already has an account — sign in instead.';
+  if (m.includes('invalid login')) return 'That username and password do not match.';
+  if (m.includes('already registered')) return 'That account already exists — sign in instead.';
   if (m.includes('email not confirmed')) return 'Confirm your email address first, then sign in.';
   if (m.includes('rate limit') || m.includes('too many')) return 'Too many tries. Wait a minute and try again.';
   if (m.includes('failed to fetch') || m.includes('networkerror')) {
@@ -213,11 +235,18 @@ async function chooseOrg(root, done) {
   }
 
   if (orgs.length === 1) return enter(orgs[0], done);
-  if (orgs.length === 0) return nameBooks(root, done);
+  if (orgs.length === 0) {
+    // Only the owner can bring books into being. Anyone else with no
+    // books is an account whose membership has not been made yet, and
+    // the answer to that is the owner, not a second set of books.
+    const who = currentUser();
+    if (!isOwnerEmail(who && who.email)) return noBooks(root, done);
+    return nameBooks(root, done);
+  }
 
   const user = currentUser();
   root.innerHTML = shell(`
-    <p class="gate-sub">Signed in as ${esc(user ? user.email : '')}</p>
+    <p class="gate-sub">Signed in as ${esc(user ? accountLabel(user.email) : '')}</p>
     <p class="tray-lbl" style="color:var(--pine-200);text-align:left">Choose books</p>
     <div class="auth-orgs">
       ${orgs.map((o) => `
@@ -236,7 +265,23 @@ async function chooseOrg(root, done) {
   });
 }
 
-/** First person in: there are no books yet, so name them. */
+/** Signed in, but nobody has put this account on the books yet. */
+function noBooks(root, done) {
+  root.innerHTML = shell(`
+    <p class="gate-sub err">This account is not on any books yet.</p>
+    <p class="gate-note">
+      Ask the owner to add you from Settings → People, then sign in again.
+    </p>
+    <button class="btn" data-retry>Try again</button>
+    <div class="auth-alt"><button data-out>Sign out</button></div>`);
+
+  root.querySelector('[data-retry]').addEventListener('click', () => chooseOrg(root, done));
+  root.querySelector('[data-out]').addEventListener('click', async () => {
+    await signOut(); mode = 'in'; paint(root, done);
+  });
+}
+
+/** The owner's first time in: there are no books yet, so name them. */
 function nameBooks(root, done) {
   root.innerHTML = shell(`
     <p class="gate-sub">Name your books to finish setting up</p>
