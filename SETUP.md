@@ -14,17 +14,25 @@ Work through it in order. Each part depends on the one above it.
    close to India (Mumbai, `ap-south-1`) keeps the app responsive.
 2. Open **SQL Editor** and run every file in `supabase/migrations/`
    in order, one at a time: `0001_init.sql` creates the tables, the
-   roles, the invite wiring and the sync function; `0002` and `0003`
+   roles and the sync function; `0002` and `0003`
    add the quotations; `0004_shop_kinds.sql` adds the production line
-   and the commission book. Run them separately rather than pasting
+   and the commission book; `0006` the subcontractors; and
+   `0007_single_owner.sql` makes these books single-owner — only
+   furniture@banavat-india.com can create them, and every other account
+   is made by the owner from inside the app.
+
+   Run them separately rather than pasting
    them together — Postgres will not let a newly added type value be
    used in the transaction that added it.
 
-   If the books are already running and only `0004` is new, running
-   that one file is enough. Until it has been run, the production line
-   and the commission book stay on the device they were logged on; the
-   ledger and the quotations are unaffected, and Settings → Sync says
-   so.
+   If the books are already running, run only the files that are new —
+   `0007_single_owner.sql` is the one this change adds, and it is safe
+   to run on books that already have people on them: it changes who may
+   create books and accounts, nothing about the records.
+
+   Until `0004` has been run, the production line and the commission
+   book stay on the device they were logged on; the ledger and the
+   quotations are unaffected, and Settings → Sync says so.
 3. Open **Project Settings → API** and copy two values:
    - **Project URL**
    - **anon / public** key
@@ -47,22 +55,56 @@ Work through it in order. Each part depends on the one above it.
 > else in the browser. It ignores row level security entirely. It
 > belongs only in the Vercel environment variables below.
 
-### The first account
+### One owner, and everybody else
 
-The first person to sign up and create the books becomes their
-**owner**. Everyone after that is invited by the owner and arrives as
-**staff**.
+These books have exactly one account with an email address behind it:
+**furniture@banavat-india.com**. That account is the owner. It is the
+only one that can sign itself up, the only one that can create the
+books, and the only one that can reset a password by email.
+
+Everyone else is created **by the owner**, in the app, under
+**Settings → People → Create an account**. The owner types a name, a
+username and a password, picks what that person may do, and hands them
+the two words. There is no email address, no invite to accept and no
+confirmation link — they open Kontour on any device, type the username
+and password, and the books are there.
 
 | Role | Can do |
 |---|---|
-| `owner` | Everything, including managing people |
-| `admin` | Everything except removing the owner |
+| `owner` | Everything, including creating and removing accounts |
+| `admin` | Everything except managing accounts |
 | `staff` | Log, edit and delete entries |
 | `viewer` | Read the books; every write is refused |
 
-An invite works whether or not that person already has an account —
-if they do, they get access immediately; if they do not, they get it
-the moment they sign up with that email.
+A forgotten staff password is not a reset email — nothing can reach a
+username. The owner opens that person's row under **People** and sets a
+new one.
+
+Behind the scenes a username is stored as an address GoTrue will
+accept: `veer` becomes `veer@staff.kontour.app`. Nothing is ever sent
+there; the domain exists only so a username cannot collide with a real
+address. The app shows the username and keeps the rest to itself.
+
+#### The very first sign-in
+
+On a fresh project the owner account does not exist yet. On the sign-in
+screen tap **First-time owner setup**, enter
+`furniture@banavat-india.com` and a password, and name the books. Any
+other address is refused there, by the app and by the database
+(`0007_single_owner.sql`), so nobody can sign themselves into the
+business.
+
+#### Why the second device used to be empty
+
+Before this, anyone signing in for the first time who had no books was
+offered a fresh, empty set of their own. Two devices set up separately
+ended up in two sealed sets of books — the records were online the
+whole time, just not in the same place. Only the owner can create books
+now, and an account made for someone is put on the owner's books as it
+is made, so there is one set of books and every device lands in it.
+
+If that already happened, `supabase/migrations/0005_merge_orgs.sql`
+folds two sets into one; run it once and every device sees everything.
 
 ---
 
@@ -81,6 +123,8 @@ the moment they sign up with that email.
    | `ANTHROPIC_API_KEY` | For reading bills with Claude |
    | `GEMINI_API_KEY` | For reading bills with Gemini |
    | `ALLOWED_ORIGINS` | Leave unset while the app and API share a domain |
+   | `OWNER_EMAIL` | Optional — defaults to `furniture@banavat-india.com` |
+   | `STAFF_EMAIL_DOMAIN` | Optional — defaults to `staff.kontour.app` |
    | `SETUP_SECRET` | Only while connecting Drive — delete it afterwards |
 
    The Google variables come in part 3. Deploy without them first —
@@ -179,10 +223,13 @@ connect route above is not needed on this path.
 
 ## 4. Checks worth doing
 
-- Sign up, create the books, and confirm entries appear in Supabase
-  under **Table Editor → records**.
-- Invite a second email, sign in as that person on another device, and
-  confirm an entry logged on one appears on the other.
+- Sign in as the owner, create the books, and confirm entries appear in
+  Supabase under **Table Editor → records**.
+- Create an account under **Settings → People**, sign in as that
+  username on another device, and confirm an entry logged on one
+  appears on the other.
+- Confirm the second device lands on the same books — the ledger should
+  already be full when it opens, not empty.
 - Turn the phone to aeroplane mode, log an entry, turn it back on, and
   confirm it uploads on its own.
 - Set someone to `viewer` and confirm saving is refused.

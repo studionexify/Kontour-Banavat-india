@@ -11,7 +11,10 @@
  * lock is what stands between a borrowed phone and the books.
  */
 
-import { SUPABASE_URL, SUPABASE_ANON_KEY, cloudConfigured } from './config.js';
+import {
+  SUPABASE_URL, SUPABASE_ANON_KEY, cloudConfigured,
+  api, loginEmail, isOwnerEmail, OWNER_EMAIL,
+} from './config.js';
 import './legacy.js';   // moves pre-rename storage across; must load first
 
 const SESSION_KEY = 'kontour.session';
@@ -99,17 +102,31 @@ function store(out) {
   return session;
 }
 
-export async function signIn(email, password) {
+export async function signIn(identifier, password) {
+  const email = loginEmail(identifier);
+  if (!email) throw new Error('Enter your username.');
   const out = await gotrue('/token?grant_type=password', {
-    body: { email: String(email).trim(), password },
+    body: { email, password },
   });
   return store(out);
 }
 
-export async function signUp(email, password, fullName = '') {
+/**
+ * The owner's own account, and only theirs.
+ *
+ * Staff never come through here — the owner makes their accounts from
+ * Settings → People, server-side. This exists for the single moment at
+ * the beginning of the books' life when the owner's account does not
+ * exist yet, and it refuses any other address so that nobody can sign
+ * themselves up into the business.
+ */
+export async function signUpOwner(email, password, fullName = '') {
+  if (!isOwnerEmail(email)) {
+    throw new Error(`Only ${OWNER_EMAIL} can create the owner account.`);
+  }
   const out = await gotrue('/signup', {
     body: {
-      email: String(email).trim(),
+      email: String(email).trim().toLowerCase(),
       password,
       data: { full_name: fullName },
       // Without this GoTrue falls back to the Site URL configured in the
@@ -124,8 +141,13 @@ export async function signUp(email, password, fullName = '') {
   return out.access_token ? store(out) : null;
 }
 
+/* Only the owner has an inbox to send anything to. A staff password is
+   reset by the owner from Settings → People, not by email. */
 export async function sendPasswordReset(email) {
-  await gotrue('/recover', { body: { email: String(email).trim() } });
+  if (!isOwnerEmail(email)) {
+    throw new Error('Ask the owner to set you a new password.');
+  }
+  await gotrue('/recover', { body: { email: String(email).trim().toLowerCase() } });
 }
 
 export async function signOut() {
@@ -285,26 +307,57 @@ export function canWrite(role) {
   return ['owner', 'admin', 'staff'].includes(role);
 }
 
-/* ── People ────────────────────────────────────────────────── */
+/* ── People ────────────────────────────────────────────────
+ *
+ * There are no invites any more. The owner makes an account outright —
+ * a username, a password, and what that person may do — and the staff
+ * member signs in with it. Making an account needs the service role,
+ * which never comes near a browser, so these calls go to /api/admin/users
+ * and it does the work.
+ */
 
 export async function members(orgId = currentOrgId()) {
   return rest(`/memberships?select=role,user_id,profiles(email,full_name)&org_id=eq.${orgId}`);
 }
 
-export async function invite(email, role = 'staff', orgId = currentOrgId()) {
-  return rest('/invites', {
+/** A signed-in call to one of our own API routes. */
+async function adminApi(body) {
+  const token = await accessToken();
+  if (!token) throw new Error('Not signed in');
+
+  const res = await fetch(api('/api/admin/users'), {
     method: 'POST',
-    body: { org_id: orgId, email: String(email).trim().toLowerCase(), role },
-    headers: { prefer: 'return=representation' },
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ orgId: currentOrgId(), ...body }),
   });
+
+  const text = await res.text();
+  let out = null;
+  try { out = text ? JSON.parse(text) : null; } catch { out = null; }
+  if (!res.ok) {
+    const err = new Error((out && out.error) || `Request failed (${res.status})`);
+    err.status = res.status;
+    throw err;
+  }
+  return out;
 }
 
-export async function pendingInvites(orgId = currentOrgId()) {
-  return rest(`/invites?select=id,email,role,created_at&org_id=eq.${orgId}&accepted_at=is.null`);
+/** Makes the account and puts it straight on these books. */
+export async function createStaffAccount({ username, password, fullName = '', role = 'staff' }) {
+  return adminApi({ action: 'create', username, password, fullName, role });
 }
 
-export async function revokeInvite(id) {
-  return rest(`/invites?id=eq.${id}`, { method: 'DELETE' });
+/** The owner setting someone a new password, in place of a reset email. */
+export async function setStaffPassword(userId, password) {
+  return adminApi({ action: 'password', userId, password });
+}
+
+/** Removes the membership, and the account itself if it is a staff one. */
+export async function deleteStaffAccount(userId) {
+  return adminApi({ action: 'remove', userId });
 }
 
 export async function setRole(userId, role, orgId = currentOrgId()) {
@@ -314,6 +367,6 @@ export async function setRole(userId, role, orgId = currentOrgId()) {
   });
 }
 
-export async function removeMember(userId, orgId = currentOrgId()) {
-  return rest(`/memberships?org_id=eq.${orgId}&user_id=eq.${userId}`, { method: 'DELETE' });
+export async function removeMember(userId) {
+  return deleteStaffAccount(userId);
 }

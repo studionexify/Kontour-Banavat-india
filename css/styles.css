@@ -389,6 +389,13 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:
 .gate-inner.auth .gate-title { margin-inline:auto; text-align:center; }
 .gate-inner.auth .gate-sub { text-align:center; }
 
+/* The one line of explanation on the door: who signs in with what.
+   Quieter than the sub-heading, and it reads as prose, not a label. */
+.gate-note {
+  margin:18px 0 0; text-align:center;
+  font-size:12.5px; line-height:1.5; color:var(--pine-200);
+}
+
 .auth-form { display:flex; flex-direction:column; gap:13px; }
 .auth-f { display:block; }
 .auth-f span {
