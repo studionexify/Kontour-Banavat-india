@@ -238,9 +238,22 @@ export function setCurrentOrg(id) {
   } catch {}
 }
 
-/** Every org this account belongs to, with the role held in each. */
+/**
+ * Every org this account belongs to, with the role held in each.
+ *
+ * Filtered to this user's own id, not just left to RLS. The
+ * memberships_read policy deliberately shows every row in any org you
+ * belong to — that is what lets the People sheet list your
+ * teammates — so an unfiltered select here returns one row per
+ * person on the books, not one per org. With a single person on each
+ * set of books that was invisible; the moment a second account joins
+ * the same org (which is the entire point of Settings → People), it
+ * duplicated "Choose books" once per teammate for everyone signed in.
+ */
 export async function myOrgs() {
-  const rows = await rest('/memberships?select=role,org_id,orgs(id,name)');
+  const user = currentUser();
+  if (!user) return [];
+  const rows = await rest(`/memberships?select=role,org_id,orgs(id,name)&user_id=eq.${user.id}`);
   return (rows || []).map((r) => ({
     id: r.org_id,
     name: (r.orgs && r.orgs.name) || 'Books',
